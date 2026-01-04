@@ -1,0 +1,35 @@
+# Large data files
+*.parquet
+*.rds
+*.bin
+*.npy
+*.pkl
+
+# Model files
+cc.sv.300.bin
+cc.sv.300.vec
+
+# Output directories (keep structure, ignore contents)
+data/raw/*
+data/processed/*
+data/vectors/*
+results/figures/*
+results/tables/*
+
+# But track .gitkeep files
+!**/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# macOS
+.DS_Store
+
+# R
+.Rhistory
+.RData
+
+# Logs
+*.log
