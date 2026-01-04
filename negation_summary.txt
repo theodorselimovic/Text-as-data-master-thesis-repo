@@ -1,8 +1,0 @@
-NEGATION ANALYSIS SUMMARY
-============================================================
-
-Total sentences: 47,570
-Negated sentences: 29 (0.06%)
-Assessment: LOW
-
-Recommendation: Negation is not a major concern. Proceed with analysis as planned.

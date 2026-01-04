@@ -1,35 +1,118 @@
-# Large data files
-*.parquet
-*.rds
-*.bin
-*.npy
-*.pkl
-
-# Model files
-cc.sv.300.bin
-cc.sv.300.vec
-
-# Output directories (keep structure, ignore contents)
-data/raw/*
-data/processed/*
-data/vectors/*
-results/figures/*
-results/tables/*
-
-# But track .gitkeep files
-!**/.gitkeep
-
 # Python
 __pycache__/
-*.pyc
-.ipynb_checkpoints/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb_checkpoints/
+
+# pyenv
+.python-version
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.spyderproject
+.spyproject
 
 # macOS
 .DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Data files (too large for git, regenerable)
+*.parquet
+*.npy
+*.h5
+*.hdf5
+*.pkl
+*.pickle
+data/vectors/*.csv
+data/processed/*.parquet
+data/processed/*.rds
+sentences_lemmatized.parquet
+sentence_vectors.npy
+sentence_vectors_with_metadata.parquet
+
+# Keep expanded terms structure but ignore large versions
+data/expanded_terms/*.csv
+!data/expanded_terms/.gitkeep
+
+# Models (too large for git)
+*.bin
+*.vec
+models/*.bin
+models/*.vec
+
+# Results (regenerable)
+results/cooccurrence/*.csv
+results/cooccurrence/*.parquet
+results/figures/*.png
+results/figures/*.pdf
+results/negation_analysis/*.txt
+!results/**/.gitkeep
+
+# Logs
+logs/
+*.log
+ocr_output/
+*.log.*
 
 # R
 .Rhistory
 .RData
+.Rproj.user
+*.Rproj
 
-# Logs
-*.log
+# Temporary files
+*.tmp
+*.bak
+*.swp
+~$*
+.~*
+
+# Test outputs
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Documentation builds
+docs/_build/
+docs/.doctrees/
+
+# Keep directory structure with .gitkeep files
+!**/.gitkeep
