@@ -88,72 +88,6 @@ python scripts/05_analysis/cooccurrence_analysis.py \
     --output-dir results/cooccurrence
 ```
 
-**Total runtime**: ~30-40 minutes
-
-## 📊 Methodology
-
-### Theoretical Framework
-
-**Political Effects** (how risk analysis structures politics):
-- **Risk**: Core risk discourse and dependencies
-- **Accountability**: Responsibility delimitation
-- **Complexity**: Difficulty and local uniqueness
-- **Efficiency**: Rationalization and optimization
-- **Equality**: Standardization and equivalence
-
-**Institutional Actors**:
-- Kommun (municipality), Stat (state), Länsstyrelse (county), Region, Näringsliv (business), Civilsamhälle (civil society), Förening (association)
-
-### Analytical Approach
-
-1. **Seed Term Expansion**
-   - Start with theory-driven seed terms
-   - Use FastText Swedish embeddings to find similar words
-   - Lemmatize using Stanza Swedish NLP pipeline
-
-2. **Sentence Filtering**
-   - Filter corpus to sentences containing expanded terms
-   - Create category-sentence pairs (sentences can have multiple categories)
-   - Vectorize sentences (mean of word embeddings)
-
-3. **Co-occurrence Analysis**
-   - Chi-square tests of independence
-   - Cramér's V effect sizes
-   - Temporal analysis (2011-2024)
-   - Actor-effect associations
-
-4. **Future Steps**
-   - Correspondence analysis (2D mapping)
-   - Network analysis (co-occurrence networks)
-   - Log-linear models (three-way interactions)
-
-## 📈 Key Results (Expected)
-
-### H1: Effect Prominence
-```
-Risk:          ~75% of sentences (most prominent)
-Complexity:    ~30% of sentences
-Accountability: ~25% of sentences
-Efficiency:    ~18% of sentences
-Equality:       ~4% of sentences (least prominent)
-```
-
-### H2: Actor-Effect Associations
-```
-Efficiency × Kommun: χ²=487, p<0.001, V=0.21 (weak-moderate)
-→ Municipal action framed through efficiency discourse
-
-Accountability × Stat: χ²=234, p<0.001, V=0.18 (weak)
-→ State responsibility more emphasized
-```
-
-### H3: Temporal Change
-```
-Complexity 2011-2015: 28.3%
-Complexity 2020-2024: 35.9%
-→ +7.6 percentage points (supports H3)
-```
-
 ## 🛠️ Scripts Overview
 
 ### OCR Pipeline (`scripts/01_ocr/`)
@@ -208,11 +142,6 @@ Complexity 2020-2024: 35.9%
    - Reporting recommendations
 
 ## 🎓 Citation
-
-### Theoretical Framework
-- Power, M. (2007). *Organized Uncertainty: Designing a World of Risk Management*
-- Beck, U. (1992). *Risk Society: Towards a New Modernity*
-
 ### Methods
 - Mikolov, T., et al. (2013). "Distributed Representations of Words and Phrases"
 - Grave, E., et al. (2018). "Learning Word Vectors for 157 Languages"
@@ -234,7 +163,7 @@ Complexity 2020-2024: 35.9%
 This is a thesis project repository. For questions or collaboration:
 - Open an issue for bugs or questions
 - Submit pull requests for improvements
-- Contact: [Your email/contact]
+- Contact: theoselimovic@gmail.com
 
 ## 📜 License
 
@@ -257,7 +186,7 @@ This is a thesis project repository. For questions or collaboration:
 
 ## 📧 Contact
 
-**Project**: Swedish Risk Analysis Text-as-Data  
+**Project**: Theodor Selimovic Master Thesis
 **Institution**: Sciences Po  
 **Year**: 2024-2025
 
