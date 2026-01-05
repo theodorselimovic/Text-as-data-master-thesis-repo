@@ -67,6 +67,7 @@ data/processed/*.rds
 sentences_lemmatized.parquet
 sentence_vectors.npy
 sentence_vectors_with_metadata.parquet
+*.rds
 
 # Keep expanded terms structure but ignore large versions
 data/expanded_terms/*.csv
