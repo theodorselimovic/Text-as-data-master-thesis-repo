@@ -411,10 +411,38 @@ def extract_text_from_file(file_path: Path, config: ProcessingConfig) -> Extract
     file_type = detect_file_type(file_path)
     
     # Handle ZIP files (scanned PDFs)
+    # Some ZIP-based PDFs may still have a text layer accessible via standard methods
+    # Try standard PDF extraction first, then fall back to OCR
     if file_type == 'zip':
+        # First, try standard PDF extraction methods - some ZIP-based PDFs have text layers
+        methods = [
+            ('pypdf', extract_with_pypdf),
+            ('pdfplumber', extract_with_pdfplumber),
+            ('pdfminer', extract_with_pdfminer),
+        ]
+
+        for method_name, method_func in methods:
+            success, text, error = method_func(file_path)
+
+            # Check if extraction was successful and sufficient
+            if success and len(text) >= config.min_text_length:
+                processing_time = time.time() - start_time
+                logging.info(f"  ZIP file has text layer, extracted with {method_name}")
+                return ExtractionResult(
+                    filename=filename,
+                    success=True,
+                    text=text,
+                    method=f"zip_{method_name}",  # Indicate it was a ZIP with text layer
+                    file_type=file_type,
+                    error_message="",
+                    processing_time=processing_time
+                )
+
+        # Standard methods failed or produced insufficient text - fall back to OCR
+        logging.info(f"  ZIP file has no usable text layer, trying OCR...")
         success, text, error, page_count = extract_from_zip_pdf(file_path, config)
         processing_time = time.time() - start_time
-        
+
         return ExtractionResult(
             filename=filename,
             success=success and len(text) >= config.min_text_length,
@@ -610,40 +638,71 @@ def process_directory(
 def save_results(
     results: List[ExtractionResult],
     summary: Dict,
-    output_dir: Path
+    output_dir: Path,
+    actor: str = None,
+    merge_with: Path = None
 ):
     """
     Save processing results to various output formats.
-    
+
     Args:
         results: List of extraction results
         summary: Summary statistics
         output_dir: Output directory
+        actor: Actor identifier (e.g., 'kommun', 'länsstyrelse')
+        merge_with: Path to existing parquet file to merge with
     """
     # 1. Save successful extractions in preprocessing-compatible format
-    # Column names: 'file' and 'text' (exactly as preprocessing.py expects)
+    # Column names: 'file', 'text', and optionally 'actor'
     successful = [r for r in results if r.success]
     if successful:
-        df_readtext = pd.DataFrame({
+        df_new = pd.DataFrame({
             'file': [r.filename for r in successful],
             'text': [r.text for r in successful]
         })
+
+        # Add actor column if specified
+        if actor:
+            df_new['actor'] = actor
+
+        # Merge with existing data if specified
+        if merge_with and merge_with.exists():
+            try:
+                df_existing = pd.read_parquet(merge_with)
+                print(f"✓ Loaded existing data: {len(df_existing)} documents from {merge_with}")
+
+                # Ensure actor column exists in both
+                if 'actor' not in df_existing.columns and actor:
+                    print(f"  Warning: Existing data has no 'actor' column, adding 'unknown'")
+                    df_existing['actor'] = 'unknown'
+
+                df_readtext = pd.concat([df_existing, df_new], ignore_index=True)
+                print(f"✓ Merged: {len(df_existing)} existing + {len(df_new)} new = {len(df_readtext)} total")
+            except Exception as e:
+                print(f"  Warning: Could not merge with {merge_with}: {e}")
+                df_readtext = df_new
+        else:
+            df_readtext = df_new
+
         # Try parquet first, fall back to CSV
         try:
             readtext_path = output_dir / "pdf_texts.parquet"
             df_readtext.to_parquet(readtext_path, index=False)
-            print(f"✓ Saved {len(successful)} texts for preprocessing: {readtext_path}")
-            print(f"  Format: Parquet with columns ['file', 'text']")
+            print(f"✓ Saved {len(df_readtext)} texts for preprocessing: {readtext_path}")
+            cols = list(df_readtext.columns)
+            print(f"  Format: Parquet with columns {cols}")
             print(f"  Ready for: python preprocessing.py --input {readtext_path}")
         except:
             readtext_path = output_dir / "pdf_texts.csv"
             df_readtext.to_csv(readtext_path, index=False)
-            print(f"✓ Saved {len(successful)} texts for preprocessing: {readtext_path}")
-            print(f"  Format: CSV with columns ['file', 'text']")
+            print(f"✓ Saved {len(df_readtext)} texts for preprocessing: {readtext_path}")
+            print(f"  Format: CSV with columns {list(df_readtext.columns)}")
             print(f"  Note: Use updated preprocessing.py that accepts CSV")
     
     # 2. Save full results with metadata
     df_full = pd.DataFrame([asdict(r) for r in results])
+    if actor:
+        df_full['actor'] = actor
     # Try parquet first, fall back to CSV
     try:
         full_path = output_dir / "pdf_extraction_full.parquet"
@@ -694,22 +753,33 @@ def create_parser() -> argparse.ArgumentParser:
 Examples:
     # Basic extraction (no OCR)
     python pdf_reader_enhanced.py --input-dir ./pdfs --output-dir ./output
-    
+
+    # Extract municipal documents with actor label
+    python pdf_reader_enhanced.py --input-dir ./kommun_pdfs --output-dir ./output --actor kommun
+
+    # Extract länsstyrelse documents and merge with existing data
+    python pdf_reader_enhanced.py --input-dir ./lan_pdfs --output-dir ./output \\
+        --actor länsstyrelse --merge-with ./output/pdf_texts.parquet
+
     # With OCR for scanned documents
-    python pdf_reader_enhanced.py --input-dir ./pdfs --output-dir ./output --ocr
-    
-    # Custom minimum text length
-    python pdf_reader_enhanced.py --input-dir ./pdfs --output-dir ./output --min-length 1000 --ocr
+    python pdf_reader_enhanced.py --input-dir ./pdfs --output-dir ./output --ocr --actor kommun
+
+Multi-Source Workflow:
+    1. First run for municipal documents:
+       python pdf_reader_enhanced.py --input-dir ./kommun --output-dir ./output --actor kommun
+
+    2. Second run for länsstyrelse, merging with existing:
+       python pdf_reader_enhanced.py --input-dir ./lansstyrelse --output-dir ./output \\
+           --actor länsstyrelse --merge-with ./output/pdf_texts.parquet
 
 Output Files:
     pdf_texts.parquet              - Main output, ready for preprocessing.py
-                                     Format: columns ['file', 'text']
+                                     Format: columns ['file', 'text', 'actor']
                                      Usage: python preprocessing.py --input pdf_texts.parquet
-    pdf_extraction_full.csv        - Full results with all metadata
+    pdf_extraction_full.parquet    - Full results with all metadata
     processing_summary.json        - Summary statistics
     failed_files.txt              - List of files that failed
     failed_files_details.csv      - Detailed failure information
-    processing.log                - Detailed processing log
 
 File Type Detection:
     The script automatically detects:
@@ -770,7 +840,20 @@ Extraction Methods:
         action='store_true',
         help='Enable verbose logging'
     )
-    
+
+    parser.add_argument(
+        '--actor',
+        type=str,
+        choices=['kommun', 'länsstyrelse', 'MCF'],
+        help='Actor/source identifier for the documents (kommun, länsstyrelse, or MCF)'
+    )
+
+    parser.add_argument(
+        '--merge-with',
+        type=Path,
+        help='Path to existing parquet file to merge results with (for multi-source processing)'
+    )
+
     return parser
 
 
@@ -806,20 +889,29 @@ def main():
     # Process files
     print(f"\n{'='*60}")
     print("Enhanced PDF Text Extraction")
-    print(f"{'='*60}\n")
-    
+    print(f"{'='*60}")
+    if args.actor:
+        print(f"Actor: {args.actor}")
+    if args.merge_with:
+        print(f"Merging with: {args.merge_with}")
+    print()
+
     results, summary = process_directory(args.input_dir, args.output_dir, config)
-    
+
     # Save results
     print(f"\n{'='*60}")
     print("Saving Results")
     print(f"{'='*60}\n")
-    save_results(results, summary, args.output_dir)
-    
+    save_results(
+        results, summary, args.output_dir,
+        actor=args.actor,
+        merge_with=args.merge_with
+    )
+
     print(f"\n{'='*60}")
     print("Processing Complete!")
     print(f"{'='*60}\n")
-    
+
     return 0 if summary['successful'] > 0 else 1
 
 
