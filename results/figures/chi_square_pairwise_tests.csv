@@ -1,0 +1,13 @@
+Test,Comparison,Chi-square,p-value,p-value (Bonferroni),Degrees of freedom,Significant (p<0.05),Significant (Bonferroni)
+Risk categories,MCF vs Municipality,341.97494058169923,3.1604167875921594e-68,9.481250362776478e-68,9,Yes,Yes
+Risk categories,MCF vs Prefecture,657.2172741912815,1.0825564072655732e-135,3.2476692217967196e-135,9,Yes,Yes
+Risk categories,Municipality vs Prefecture,1561.8559775298856,0.0,0.0,9,Yes,Yes
+Sannolikhet qualifications,MCF vs Municipality,105.00276344265521,9.966944863288419e-20,2.9900834589865255e-19,7,Yes,Yes
+Sannolikhet qualifications,MCF vs Prefecture,77.82724181849436,3.817427778875736e-14,1.1452283336627207e-13,7,Yes,Yes
+Sannolikhet qualifications,Municipality vs Prefecture,45.914399047952614,9.083736856863661e-08,2.7251210570590986e-07,7,Yes,Yes
+Konsekvens qualifications,MCF vs Municipality,75.02254134896097,1.4190866989694594e-13,4.257260096908378e-13,7,Yes,Yes
+Konsekvens qualifications,MCF vs Prefecture,66.19492879899448,2.458903028937826e-12,7.376709086813479e-12,6,Yes,Yes
+Konsekvens qualifications,Municipality vs Prefecture,26.384949926896933,0.00042979830572651594,0.0012893949171795477,7,Yes,Yes
+Risk qualifications,MCF vs Municipality,30.878638981332976,6.546114608939826e-05,0.00019638343826819477,7,Yes,Yes
+Risk qualifications,MCF vs Prefecture,34.65242433736879,1.2998333943994886e-05,3.899500183198466e-05,7,Yes,Yes
+Risk qualifications,Municipality vs Prefecture,103.88475228948438,1.6979983422279156e-19,5.093995026683747e-19,7,Yes,Yes

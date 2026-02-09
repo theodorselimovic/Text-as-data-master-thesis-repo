@@ -1,0 +1,14 @@
+{
+  "total_files": 11,
+  "successful": 11,
+  "failed": 0,
+  "success_rate": 100.0,
+  "methods_used": {
+    "pypdf": 11
+  },
+  "file_types": {
+    "pdf": 11
+  },
+  "total_chars_extracted": 1584284,
+  "total_processing_time": 6.172342538833618
+}

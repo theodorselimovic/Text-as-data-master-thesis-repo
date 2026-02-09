@@ -1,0 +1,121 @@
+Pairwise Chi-Square Tests: Actor Comparison
+============================================================
+
+Number of actor pairs: 3
+Bonferroni-corrected alpha: 0.0167
+
+Interpretation:
+- Chi-square tests whether the distribution of categories differs between two groups
+- A significant result means the groups have different patterns of category usage
+- Bonferroni correction adjusts for multiple comparisons to reduce false positives
+
+============================================================
+
+
+Risk categories:
+----------------------------------------
+
+  MCF vs Municipality:
+    Chi-square: 341.97
+    p-value: 0.000000
+    p-value (Bonferroni-adjusted): 0.000000
+    Degrees of freedom: 9
+    Significant (raw p<0.05): Yes
+    Significant (Bonferroni): Yes
+
+  MCF vs Prefecture:
+    Chi-square: 657.22
+    p-value: 0.000000
+    p-value (Bonferroni-adjusted): 0.000000
+    Degrees of freedom: 9
+    Significant (raw p<0.05): Yes
+    Significant (Bonferroni): Yes
+
+  Municipality vs Prefecture:
+    Chi-square: 1561.86
+    p-value: 0.000000
+    p-value (Bonferroni-adjusted): 0.000000
+    Degrees of freedom: 9
+    Significant (raw p<0.05): Yes
+    Significant (Bonferroni): Yes
+
+Sannolikhet qualifications:
+----------------------------------------
+
+  MCF vs Municipality:
+    Chi-square: 105.00
+    p-value: 0.000000
+    p-value (Bonferroni-adjusted): 0.000000
+    Degrees of freedom: 7
+    Significant (raw p<0.05): Yes
+    Significant (Bonferroni): Yes
+
+  MCF vs Prefecture:
+    Chi-square: 77.83
+    p-value: 0.000000
+    p-value (Bonferroni-adjusted): 0.000000
+    Degrees of freedom: 7
+    Significant (raw p<0.05): Yes
+    Significant (Bonferroni): Yes
+
+  Municipality vs Prefecture:
+    Chi-square: 45.91
+    p-value: 0.000000
+    p-value (Bonferroni-adjusted): 0.000000
+    Degrees of freedom: 7
+    Significant (raw p<0.05): Yes
+    Significant (Bonferroni): Yes
+
+Konsekvens qualifications:
+----------------------------------------
+
+  MCF vs Municipality:
+    Chi-square: 75.02
+    p-value: 0.000000
+    p-value (Bonferroni-adjusted): 0.000000
+    Degrees of freedom: 7
+    Significant (raw p<0.05): Yes
+    Significant (Bonferroni): Yes
+
+  MCF vs Prefecture:
+    Chi-square: 66.19
+    p-value: 0.000000
+    p-value (Bonferroni-adjusted): 0.000000
+    Degrees of freedom: 6
+    Significant (raw p<0.05): Yes
+    Significant (Bonferroni): Yes
+
+  Municipality vs Prefecture:
+    Chi-square: 26.38
+    p-value: 0.000430
+    p-value (Bonferroni-adjusted): 0.001289
+    Degrees of freedom: 7
+    Significant (raw p<0.05): Yes
+    Significant (Bonferroni): Yes
+
+Risk qualifications:
+----------------------------------------
+
+  MCF vs Municipality:
+    Chi-square: 30.88
+    p-value: 0.000065
+    p-value (Bonferroni-adjusted): 0.000196
+    Degrees of freedom: 7
+    Significant (raw p<0.05): Yes
+    Significant (Bonferroni): Yes
+
+  MCF vs Prefecture:
+    Chi-square: 34.65
+    p-value: 0.000013
+    p-value (Bonferroni-adjusted): 0.000039
+    Degrees of freedom: 7
+    Significant (raw p<0.05): Yes
+    Significant (Bonferroni): Yes
+
+  Municipality vs Prefecture:
+    Chi-square: 103.88
+    p-value: 0.000000
+    p-value (Bonferroni-adjusted): 0.000000
+    Degrees of freedom: 7
+    Significant (raw p<0.05): Yes
+    Significant (Bonferroni): Yes

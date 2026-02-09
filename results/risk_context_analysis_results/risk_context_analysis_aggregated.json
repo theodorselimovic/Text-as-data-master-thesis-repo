@@ -1,0 +1,2644 @@
+{
+  "total_documents": 582,
+  "risk_counts": {
+    "total": 89394,
+    "by_category": {
+      "naturhot": 29812,
+      "biologiska_hot": 14160,
+      "olyckor": 7358,
+      "antagonistiska_hot": 9535,
+      "cyber_hot": 1216,
+      "sociala_risker": 2549,
+      "teknisk_infrastruktur": 13014,
+      "brand": 7881,
+      "miljö_klimat": 3676,
+      "ekonomi": 193
+    }
+  },
+  "qualifications": {
+    "sannolikhet": {
+      "total": 8704,
+      "by_level": {
+        "UNKNOWN": 3959,
+        "uncertainty": 307,
+        "low": 772,
+        "change": 507,
+        "very_low": 613,
+        "medium": 904,
+        "high": 1087,
+        "very_high": 546,
+        "acceptability": 9
+      },
+      "raw_distribution": {
+        "UNKNOWN": 3959,
+        "osäkerhet": 128,
+        "liten": 83,
+        "minska": 125,
+        "svårt": 43,
+        "låg": 686,
+        "mycket låg": 503,
+        "medelhög": 735,
+        "hög": 677,
+        "mycket hög": 439,
+        "ökar": 152,
+        "stor": 410,
+        "mellan": 48,
+        "stora": 99,
+        "osannolik": 63,
+        "säkerhet": 65,
+        "ökad": 58,
+        "förändras": 4,
+        "möjlig": 121,
+        "minskande": 9,
+        "svår": 40,
+        "mycket liten": 26,
+        "sällsynt": 21,
+        "öka": 80,
+        "minskar": 32,
+        "förändrad": 26,
+        "mycket stora": 8,
+        "osäkert": 2,
+        "säker": 6,
+        "oacceptabel": 3,
+        "stiger": 1,
+        "svåra": 14,
+        "osäker": 3,
+        "ökande": 8,
+        "små": 3,
+        "lätt": 1,
+        "lättare": 1,
+        "säkra": 2,
+        "lätta": 1,
+        "acceptabel": 6,
+        "minskad": 11,
+        "osäkra": 1,
+        "sjunker": 1
+      },
+      "unknown_examples": [
+        {
+          "context": "Risk  \nEn sammanvägning av sannolikheten för att en händelse ska inträffa och de konsekvenser",
+          "before": "Risk En sammanvägning av",
+          "middle": "för att en händelse ska",
+          "after": "inträffa och de konsekvenser",
+          "doc_id": "doc_0"
+        },
+        {
+          "context": "sätta särskilda värden för sannolikhet respektive konsekvens för de \nidentifierade hoten utan bedömer att",
+          "before": "sätta särskilda värden för",
+          "middle": "respektive konsekvens för de identifierade",
+          "after": "hoten utan bedömer att",
+          "doc_id": "doc_0"
+        },
+        {
+          "context": "på egendom \noch miljö. \nSannolikheten har bedömts utifrån följande kriterier: \n Minst 1 gång",
+          "before": "på egendom och miljö.",
+          "middle": "har bedömts utifrån följande kriterier:",
+          "after": " Minst 1 gång",
+          "doc_id": "doc_1"
+        },
+        {
+          "context": "verksamheten? \n• Vad är sannolikheten att de inträffar? \n• Vilka skulle konsekvenserna bli om",
+          "before": "verksamheten? • Vad är",
+          "middle": "att de inträffar? • Vilka",
+          "after": "skulle konsekvenserna bli om",
+          "doc_id": "doc_2"
+        },
+        {
+          "context": "avgöra risken. \nBedömning av sannolikhet",
+          "before": "avgöra risken. Bedömning av",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_2"
+        },
+        {
+          "context": "topografi. Markens \nstabilitet och sannolikheten för skred varierar därför kraftigt även inom korta avstånd.",
+          "before": "topografi. Markens stabilitet och",
+          "middle": "för skred varierar därför kraftigt",
+          "after": "även inom korta avstånd.",
+          "doc_id": "doc_2"
+        },
+        {
+          "context": "1-3 mm per år.  \nSannolikheten för skred har beräknats med utgångspunkt från kartlagda och",
+          "before": "1-3 mm per år.",
+          "middle": "för skred har beräknats med",
+          "after": "utgångspunkt från kartlagda och",
+          "doc_id": "doc_2"
+        },
+        {
+          "context": "representativa för sin omgivning. Sannolikheten för \nskred har delats upp i fem klasser, S1-S5.",
+          "before": "representativa för sin omgivning.",
+          "middle": "för skred har delats upp",
+          "after": "i fem klasser, S1-S5.",
+          "doc_id": "doc_2"
+        },
+        {
+          "context": "d.vs. en kombination av \nsannolikhet och konsekvens, finns i området vid Kexfabriken och vid",
+          "before": "d.vs. en kombination av",
+          "middle": "och konsekvens, finns i området",
+          "after": "vid Kexfabriken och vid",
+          "doc_id": "doc_2"
+        },
+        {
+          "context": "när den når land. \nSannolikhet  \nPå grund av landhöjningen förekommer jordbävningar eller jordskalv i",
+          "before": "när den når land.",
+          "middle": "På grund av landhöjningen förekommer",
+          "after": "jordbävningar eller jordskalv i",
+          "doc_id": "doc_2"
+        },
+        {
+          "context": "med mycket begränsade \nkonsekvenser. Sannolikheten för ett jordbävning med större konsekvenser bedöms som mycket",
+          "before": "med mycket begränsade konsekvenser.",
+          "middle": "för ett jordbävning med större",
+          "after": "konsekvenser bedöms som mycket",
+          "doc_id": "doc_2"
+        },
+        {
+          "context": "på \nen jordbävning med sannolikheten en gång på hundratusen år.  \nKonsekvenserna av de jordbävningar",
+          "before": "på en jordbävning med",
+          "middle": "en gång på hundratusen år.",
+          "after": "Konsekvenserna av de jordbävningar",
+          "doc_id": "doc_2"
+        },
+        {
+          "context": "med lastning och lossning.   \nSannolikheten för en olycka med farlig godstransport inom Kungälvs kommun",
+          "before": "med lastning och lossning.",
+          "middle": "för en olycka med farlig",
+          "after": "godstransport inom Kungälvs kommun",
+          "doc_id": "doc_2"
+        },
+        {
+          "context": "9.6 Riskvärdering ...................................................................................................42  \n9.6.1 Sannolikhet ..........................................................................................42  \n\n \n  \nSida 4 av 65 \n \n  \n \n \n9.6.2 Konsekvens ..........................................................................................42  \n9.6.3",
+          "before": "9.6 Riskvärdering ...................................................................................................42 9.6.1",
+          "middle": "..........................................................................................42 Sida 4 av 65",
+          "after": "9.6.2 Konsekvens ..........................................................................................42 9.6.3",
+          "doc_id": "doc_3"
+        },
+        {
+          "context": "– En sammanvägning av sannolikheten för att en händelse ska inträffa och de \nkonsekvenser",
+          "before": "– En sammanvägning av",
+          "middle": "för att en händelse ska",
+          "after": "inträffa och de konsekvenser",
+          "doc_id": "doc_3"
+        },
+        {
+          "context": "En social risk är sannolikheten för oönskade händelser, beteenden \neller tillstånd med ursprung i",
+          "before": "En social risk är",
+          "middle": "för oönskade händelser, beteenden eller",
+          "after": "tillstånd med ursprung i",
+          "doc_id": "doc_3"
+        },
+        {
+          "context": "annat åska i framtiden.14 Sannolikheten för åska som i sin tur kan orsaka \nhårdvarufel,",
+          "before": "annat åska i framtiden.14",
+          "middle": "för åska som i sin",
+          "after": "tur kan orsaka hårdvarufel,",
+          "doc_id": "doc_3"
+        },
+        {
+          "context": "av elförsörjning och datatrafik. Sannolikheten för störningar i de \n\n \n  \nSida 33 av 65 \n \n  \n \n \nfinansiella",
+          "before": "av elförsörjning och datatrafik.",
+          "middle": "för störningar i de Sida",
+          "after": "33 av 65 finansiella",
+          "doc_id": "doc_3"
+        },
+        {
+          "context": "eller komma över pengar. Sannolikheten för störningar i elektroniska \n\n \n  \nSida 35 av 65 \n \n  \n \n \nkommunikationer",
+          "before": "eller komma över pengar.",
+          "middle": "för störningar i elektroniska Sida",
+          "after": "35 av 65 kommunikationer",
+          "doc_id": "doc_3"
+        },
+        {
+          "context": "oro i hela kommunen. Sannolikheten för att någon av dessa \nhändelser skulle kunna inträffa",
+          "before": "oro i hela kommunen.",
+          "middle": "för att någon av dessa",
+          "after": "händelser skulle kunna inträffa",
+          "doc_id": "doc_3"
+        },
+        {
+          "context": "förmåga till psykosocialt omhändertagande. Sannolikheten för någon slags \nvansinnesdåd eller pågående dödligt våld skulle",
+          "before": "förmåga till psykosocialt omhändertagande.",
+          "middle": "för någon slags vansinnesdåd eller",
+          "after": "pågående dödligt våld skulle",
+          "doc_id": "doc_3"
+        },
+        {
+          "context": "Riskerna har \nvärderats utifrån sannolikheten för att de ska inträffa och förväntade konsekvenser \nom",
+          "before": "Riskerna har värderats utifrån",
+          "middle": "för att de ska inträffa",
+          "after": "och förväntade konsekvenser om",
+          "doc_id": "doc_3"
+        },
+        {
+          "context": "skulle inträffa. Värderingen av sannolikhet och konsekvens har genomförts \nenligt en femgradig skala (se",
+          "before": "skulle inträffa. Värderingen av",
+          "middle": "och konsekvens har genomförts enligt",
+          "after": "en femgradig skala (se",
+          "doc_id": "doc_3"
+        },
+        {
+          "context": "- En sammanvägning av sannolikheten för att en händelse ska inträffa och de \nkonsekvenser",
+          "before": "- En sammanvägning av",
+          "middle": "för att en händelse ska",
+          "after": "inträffa och de konsekvenser",
+          "doc_id": "doc_7"
+        },
+        {
+          "context": "En social risk är sannolikheten för oönskade händelser, beteenden eller \ntillstånd med ursprung i",
+          "before": "En social risk är",
+          "middle": "för oönskade händelser, beteenden eller",
+          "after": "tillstånd med ursprung i",
+          "doc_id": "doc_7"
+        },
+        {
+          "context": "är den så kallade Sannolikhets",
+          "before": "är den så kallade",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_7"
+        },
+        {
+          "context": "beroende av dessa system. Sannolikhet",
+          "before": "beroende av dessa system.",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_8"
+        },
+        {
+          "context": "Sannolikhet",
+          "before": "",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_8"
+        },
+        {
+          "context": "beaktas i hela organisationen. Sannolikhet",
+          "before": "beaktas i hela organisationen.",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_8"
+        },
+        {
+          "context": "Sannolikhet",
+          "before": "",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_8"
+        },
+        {
+          "context": "utrymning av särskilda boenden. Sannolikhet",
+          "before": "utrymning av särskilda boenden.",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_8"
+        },
+        {
+          "context": "användas alltmer i framtiden. Sannolikhet",
+          "before": "användas alltmer i framtiden.",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_8"
+        },
+        {
+          "context": "större inom området krisberedskap. Sannolikhet",
+          "before": "större inom området krisberedskap.",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_8"
+        },
+        {
+          "context": "och sårbarheter, åtgärdsbehov\nsamt sannolikhets och konsekvensbedömningar med hjälp av befintlig riskmatris (se bilaga",
+          "before": "och sårbarheter, åtgärdsbehov samt",
+          "middle": "och konsekvensbedömningar med hjälp av",
+          "after": "befintlig riskmatris (se bilaga",
+          "doc_id": "doc_9"
+        },
+        {
+          "context": "mer\ndetaljerad form. För sannolikhet och konsekvensbedömningar rörande specifika risker samt\nfullständig riskidentifiering hänvisas",
+          "before": "mer detaljerad form. För",
+          "middle": "och konsekvensbedömningar rörande specifika risker",
+          "after": "samt fullständig riskidentifiering hänvisas",
+          "doc_id": "doc_9"
+        },
+        {
+          "context": "information om riskbedömning samt sannolikhet och konsekvensbedömning hänvisas till\nsekretessbelagd bilaga 1,2 och 3.",
+          "before": "information om riskbedömning samt",
+          "middle": "och konsekvensbedömning hänvisas till sekretessbelagd",
+          "after": "bilaga 1,2 och 3.",
+          "doc_id": "doc_9"
+        },
+        {
+          "context": "i landsbygdsområden\n\nFör fullständig sannolikhets och konsekvensbedömning hänvisas till sekretessbelagda bilagorna\n\nSabotage\n\nSabotage innebär",
+          "before": "i landsbygdsområden För fullständig",
+          "middle": "och konsekvensbedömning hänvisas till sekretessbelagda",
+          "after": "bilagorna Sabotage Sabotage innebär",
+          "doc_id": "doc_9"
+        },
+        {
+          "context": "mer detaljerad information om sannolikhet och konsekvensbedömningar hänvisas till bilaga I\noch 4.\n\nHot",
+          "before": "mer detaljerad information om",
+          "middle": "och konsekvensbedömningar hänvisas till bilaga",
+          "after": "I och 4. Hot",
+          "doc_id": "doc_9"
+        },
+        {
+          "context": "För mer information om sannolikhets och konsekvensbedömningar hänvisas till sekretessbelagd\nbilaga kallad 4 och",
+          "before": "För mer information om",
+          "middle": "och konsekvensbedömningar hänvisas till sekretessbelagd",
+          "after": "bilaga kallad 4 och",
+          "doc_id": "doc_9"
+        },
+        {
+          "context": "Bilaga 1. Riskmatris för sannolikhet och konsekvensbedömningar\n\nSekretess enligt offentlighet och\nsekretesslagen (2009:400)kap18$13.\n\n33",
+          "before": "Bilaga 1. Riskmatris för",
+          "middle": "och konsekvensbedömningar Sekretess enligt offentlighet",
+          "after": "och sekretesslagen (2009:400)kap18$13. 33",
+          "doc_id": "doc_9"
+        },
+        {
+          "context": "Bilaga 2. Sannolikhet och konsekvens bedömningar\n\nSekretess enligt offentlighet och\nsekretesslagen (2009:400)kap18813.",
+          "before": "Bilaga 2.",
+          "middle": "och konsekvens bedömningar Sekretess enligt",
+          "after": "offentlighet och sekretesslagen (2009:400)kap18813.",
+          "doc_id": "doc_9"
+        },
+        {
+          "context": "Risk \nEn sammanvägning av sannolikheten för att \nen händelse ska inträffa och de konsekvenser",
+          "before": "Risk En sammanvägning av",
+          "middle": "för att en händelse ska",
+          "after": "inträffa och de konsekvenser",
+          "doc_id": "doc_11"
+        },
+        {
+          "context": "identifieras ger svar på \nsannolikhet och konsekvens (5)  \n \n ,    \n  regleras i lag. \nSveriges kommuner",
+          "before": "identifieras ger svar på",
+          "middle": "och konsekvens (5) , regleras",
+          "after": "i lag. Sveriges kommuner",
+          "doc_id": "doc_11"
+        },
+        {
+          "context": "Sammanfattande bedömning av konsekvens, sannolikhet",
+          "before": "Sammanfattande bedömning av konsekvens,",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_11"
+        },
+        {
+          "context": "Sammanfattande bedömning av konsekvens, sannolikhet",
+          "before": "Sammanfattande bedömning av konsekvens,",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_11"
+        },
+        {
+          "context": "förmågebedömning och bedömning av sannolikhet och \nklimatpåverkan av de risker som listas i kapitel",
+          "before": "förmågebedömning och bedömning av",
+          "middle": "och klimatpåverkan av de risker",
+          "after": "som listas i kapitel",
+          "doc_id": "doc_11"
+        },
+        {
+          "context": "har riskerna prioriterats utifrån \nsannolikhet och konsekvens. De risker som tagits upp här är",
+          "before": "har riskerna prioriterats utifrån",
+          "middle": "och konsekvens. De risker som",
+          "after": "tagits upp här är",
+          "doc_id": "doc_12"
+        },
+        {
+          "context": "är en prioriterad fråga. \n \nSannolikhet för att elbortfall skall inträffa varierar beroende av grad",
+          "before": "är en prioriterad fråga.",
+          "middle": "för att elbortfall skall inträffa",
+          "after": "varierar beroende av grad",
+          "doc_id": "doc_12"
+        },
+        {
+          "context": "inträffa inom flera \nsamhällssektioner. \n \nSannolikheten för yttre hot varierar. Angrepp på IT-system eller styrsystem",
+          "before": "inträffa inom flera samhällssektioner.",
+          "middle": "för yttre hot varierar. Angrepp",
+          "after": "på IT-system eller styrsystem",
+          "doc_id": "doc_12"
+        },
+        {
+          "context": "eller miljö. \n \n  \n\n23 \n \n \n \nRiskmatris \nSannolikhet \n \n5 \n \n \n \n    \n \n4 \n \n \n \n    \n \n3 \n \n \n \n    \n \n2 \n \n \n \n    \n \n1 \n \n \n \n    \n   \n1 \n \n \n2 \n \n3 \n \n4",
+          "before": "eller miljö. 23 Riskmatris",
+          "middle": "5 4 3 2 1",
+          "after": "1 2 3 4",
+          "doc_id": "doc_13"
+        },
+        {
+          "context": "........................................14 \n4.4. Risker och sannolikhet .................................................................................15 \n4.5. Sårbarheter och scenarier. ...........................................................................17 \n5. Behov av",
+          "before": "........................................14 4.4. Risker och",
+          "middle": ".................................................................................15 4.5. Sårbarheter och scenarier.",
+          "after": "...........................................................................17 5. Behov av",
+          "doc_id": "doc_14"
+        },
+        {
+          "context": "Risk \nEn sammanvägning av sannolikheten för att en händelse ska inträffa och de \nkonsekvenser",
+          "before": "Risk En sammanvägning av",
+          "middle": "för att en händelse ska",
+          "after": "inträffa och de konsekvenser",
+          "doc_id": "doc_14"
+        },
+        {
+          "context": "15 \n \n4.4. Risker och sannolikhet \nFör att på ett likvärdigt sätt bedöma sannolikheten att",
+          "before": "15 4.4. Risker och",
+          "middle": "För att på ett likvärdigt",
+          "after": "sätt bedöma sannolikheten att",
+          "doc_id": "doc_14"
+        },
+        {
+          "context": "nedan.  \n \nNedan redovisas vilken sannolikhet för verksamheterna som bedöms för mer omfattande \nstörningar i",
+          "before": "nedan. Nedan redovisas vilken",
+          "middle": "för verksamheterna som bedöms för",
+          "after": "mer omfattande störningar i",
+          "doc_id": "doc_14"
+        },
+        {
+          "context": "också utifrån dessa som sannolikhet har bedömts.\n\nDet här dokumentet är en sammanfattning av",
+          "before": "också utifrån dessa som",
+          "middle": "har bedömts. Det här dokumentet",
+          "after": "är en sammanfattning av",
+          "doc_id": "doc_15"
+        },
+        {
+          "context": "lagar, förordningar och föreskrifter.\n\nSannolikheten för en olycka likt den i scenariot bedöms som",
+          "before": "lagar, förordningar och föreskrifter.",
+          "middle": "för en olycka likt den",
+          "after": "i scenariot bedöms som",
+          "doc_id": "doc_15"
+        },
+        {
+          "context": "olycksrisker för Botniabanan beräknas sannolikheten\nför en tågolycka med utsläpp av giftig gas som",
+          "before": "olycksrisker för Botniabanan beräknas",
+          "middle": "för en tågolycka med utsläpp",
+          "after": "av giftig gas som",
+          "doc_id": "doc_15"
+        },
+        {
+          "context": "som når kommunens kust.\n\nSannolikhet kan inte bedömas, allvarliga konsekvenser för ekonomiska\nvärden och",
+          "before": "som når kommunens kust.",
+          "middle": "kan inte bedömas, allvarliga konsekvenser",
+          "after": "för ekonomiska värden och",
+          "doc_id": "doc_15"
+        },
+        {
+          "context": "underlag för att bedöma sannolikhet",
+          "before": "underlag för att bedöma",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_15"
+        },
+        {
+          "context": "framträdande roll i hanteringen.\n\nSannolikhets och konsekvensbedömningen grundar sig på en händelse med\nflera",
+          "before": "framträdande roll i hanteringen.",
+          "middle": "och konsekvensbedömningen grundar sig på",
+          "after": "en händelse med flera",
+          "doc_id": "doc_15"
+        },
+        {
+          "context": "underlag för att bedöma sannolikhet",
+          "before": "underlag för att bedöma",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_15"
+        },
+        {
+          "context": "underlag för att bedöma sannolikhet",
+          "before": "underlag för att bedöma",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_15"
+        },
+        {
+          "context": "både liv och egendom.\n\nSannolikhets",
+          "before": "både liv och egendom.",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_15"
+        },
+        {
+          "context": "ett förändrat klimat på sannolikhet och konsekvenser.\n\n\nSEKRETESS\nEnligt 18 Kap 138 Offentlighets och",
+          "before": "ett förändrat klimat på",
+          "middle": "och konsekvenser. SEKRETESS Enligt 18",
+          "after": "Kap 138 Offentlighets och",
+          "doc_id": "doc_15"
+        },
+        {
+          "context": "Risk  \nEn sammanvägning av sannolikheten för att en händelse ska inträffa och de (negativa)",
+          "before": "Risk En sammanvägning av",
+          "middle": "för att en händelse ska",
+          "after": "inträffa och de (negativa)",
+          "doc_id": "doc_16"
+        },
+        {
+          "context": "sannolikhet × konsekvens \nStyrel  \nEn planeringsprocess som leder till att",
+          "before": "",
+          "middle": "× konsekvens Styrel En planeringsprocess",
+          "after": "som leder till att",
+          "doc_id": "doc_16"
+        },
+        {
+          "context": "sedan utifrån skalor för sannolikhet och konsekvens. Skalorna \nmotsvarar de som används i den",
+          "before": "sedan utifrån skalor för",
+          "middle": "och konsekvens. Skalorna motsvarar de",
+          "after": "som används i den",
+          "doc_id": "doc_16"
+        },
+        {
+          "context": "Baserat på värderingarna av sannolikhet och konsekvens togs ett riskvärde fram \ngenom att multiplicera",
+          "before": "Baserat på värderingarna av",
+          "middle": "och konsekvens togs ett riskvärde",
+          "after": "fram genom att multiplicera",
+          "doc_id": "doc_16"
+        },
+        {
+          "context": "sannolikhet och konsekvens. Utifrån riskvärdet placerades \nrisken därefter in i",
+          "before": "",
+          "middle": "och konsekvens. Utifrån riskvärdet placerades",
+          "after": "risken därefter in i",
+          "doc_id": "doc_16"
+        },
+        {
+          "context": "Skala för bedömning av sannolikhet \nKvalitativ skala för sannolikhet Kvantitativ skala för sannolikhet \n5",
+          "before": "Skala för bedömning av",
+          "middle": "Kvalitativ skala för sannolikhet Kvantitativ",
+          "after": "skala för sannolikhet 5",
+          "doc_id": "doc_16"
+        },
+        {
+          "context": "en utmaning att bedöma sannolikhet för, och konsekvens av de identifierade \nriskerna. Kommunens samlade",
+          "before": "en utmaning att bedöma",
+          "middle": "för, och konsekvens av de",
+          "after": "identifierade riskerna. Kommunens samlade",
+          "doc_id": "doc_16"
+        },
+        {
+          "context": "utsläpp av farliga ämnen. \nSannolikheten för att ett utsläpp av farliga ämnen som får",
+          "before": "utsläpp av farliga ämnen.",
+          "middle": "för att ett utsläpp av",
+          "after": "farliga ämnen som får",
+          "doc_id": "doc_16"
+        },
+        {
+          "context": "Skala för bedömning av sannolikhet och konsekvens .............................................. 13 \n7.1.1 Skala för sannolikhetsbedömning ........................................................................................",
+          "before": "Skala för bedömning av",
+          "middle": "och konsekvens .............................................. 13 7.1.1",
+          "after": "Skala för sannolikhetsbedömning ........................................................................................",
+          "doc_id": "doc_17"
+        },
+        {
+          "context": "använda samma bedömningsmatris för sannolikhet och konsekvens-\nbedömningar \n göra gemensamma sannolikhets- och konsekvensbedömningar",
+          "before": "använda samma bedömningsmatris för",
+          "middle": "och konsekvens- bedömningar  göra",
+          "after": "gemensamma sannolikhets- och konsekvensbedömningar",
+          "doc_id": "doc_17"
+        },
+        {
+          "context": "kommunen.  \nFör att bedöma sannolikheten för att en händelse ska inträffa behöver den definieras.",
+          "before": "kommunen. För att bedöma",
+          "middle": "för att en händelse ska",
+          "after": "inträffa behöver den definieras.",
+          "doc_id": "doc_17"
+        },
+        {
+          "context": "Riskmatris för Uppvidinge kommun \nSannolikhet \n5. Vanlig \n> En gång \nper år \n     \n4. Mindre",
+          "before": "Riskmatris för Uppvidinge kommun",
+          "middle": "5. Vanlig > En gång",
+          "after": "per år 4. Mindre",
+          "doc_id": "doc_17"
+        },
+        {
+          "context": "flyktingfrågorna kan påverka både \nsannolikhet för, och konsekvens av, nya flyktingströmmar till vårt land.",
+          "before": "flyktingfrågorna kan påverka både",
+          "middle": "för, och konsekvens av, nya",
+          "after": "flyktingströmmar till vårt land.",
+          "doc_id": "doc_17"
+        },
+        {
+          "context": "störningen är många, höjs sannolikheten från 2 till 3 i 2023 års  . Konsekvensen",
+          "before": "störningen är många, höjs",
+          "middle": "från 2 till 3 i",
+          "after": "2023 års . Konsekvensen",
+          "doc_id": "doc_17"
+        },
+        {
+          "context": "vi valt att höja sannolikheten för att pandemier inträffar. Åren med \ncovid-19-pandemin gav vidare",
+          "before": "vi valt att höja",
+          "middle": "för att pandemier inträffar. Åren",
+          "after": "med covid-19-pandemin gav vidare",
+          "doc_id": "doc_17"
+        },
+        {
+          "context": "inte är bedömda utifrån sannolikhet och konsekvens \nmen ändå bedöms viktiga, nämns här:  \n•",
+          "before": "inte är bedömda utifrån",
+          "middle": "och konsekvens men ändå bedöms",
+          "after": "viktiga, nämns här: •",
+          "doc_id": "doc_17"
+        },
+        {
+          "context": "i samhället. Klimatförändringar \npåverkar sannolikheten för allvarliga naturhändelser. Även klimatanpassning och omställning, till \nexempel",
+          "before": "i samhället. Klimatförändringar påverkar",
+          "middle": "för allvarliga naturhändelser. Även klimatanpassning",
+          "after": "och omställning, till exempel",
+          "doc_id": "doc_17"
+        },
+        {
+          "context": "kan inträffa i \nkommunen. Sannolikhet och konsekvenser av krigshandlingar har inte bedömts i denna",
+          "before": "kan inträffa i kommunen.",
+          "middle": "och konsekvenser av krigshandlingar har",
+          "after": "inte bedömts i denna",
+          "doc_id": "doc_17"
+        },
+        {
+          "context": "Risk En sammanvägning av sannolikheten för att en händelse ska inträffa \noch de konsekvenser",
+          "before": "Risk En sammanvägning av",
+          "middle": "för att en händelse ska",
+          "after": "inträffa och de konsekvenser",
+          "doc_id": "doc_18"
+        },
+        {
+          "context": "ackumulerade risken avsevärt större. \nSannolikheten är 63 procent att ett hundraårsflöde skall ske någon",
+          "before": "ackumulerade risken avsevärt större.",
+          "middle": "är 63 procent att ett",
+          "after": "hundraårsflöde skall ske någon",
+          "doc_id": "doc_18"
+        },
+        {
+          "context": "B. Klassningen \ninnebär att sannolikheten för förlust av människoliv eller för allvarlig personskada är",
+          "before": "B. Klassningen innebär att",
+          "middle": "för förlust av människoliv eller",
+          "after": "för allvarlig personskada är",
+          "doc_id": "doc_18"
+        },
+        {
+          "context": "Alternativt innebär klassningen att sannolikheten är beaktansvärd för allvarlig skada på \nviktiga samhällsanläggningar, betydande",
+          "before": "Alternativt innebär klassningen att",
+          "middle": "är beaktansvärd för allvarlig skada",
+          "after": "på viktiga samhällsanläggningar, betydande",
+          "doc_id": "doc_18"
+        },
+        {
+          "context": "åtaganden, och sedan;\n\neVärderat sannolikheten att de inträffar\n\noVärderat konsekvenserna om de inträffar\n\nSedan",
+          "before": "åtaganden, och sedan; eVärderat",
+          "middle": "att de inträffar oVärderat konsekvenserna",
+          "after": "om de inträffar Sedan",
+          "doc_id": "doc_19"
+        },
+        {
+          "context": "som personer besitter.\n\nFaktorerna sannolikhet",
+          "before": "som personer besitter. Faktorerna",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_19"
+        },
+        {
+          "context": "på egendom\noch miljö.\n\nSannolikheten har bedömts utifrån följande kriterier:\n\nMinst 1 gång/år\n\n1",
+          "before": "på egendom och miljö.",
+          "middle": "har bedömts utifrån följande kriterier:",
+          "after": "Minst 1 gång/år 1",
+          "doc_id": "doc_19"
+        },
+        {
+          "context": "– en sammanvägning av sannolikheten för att en händelse ska inträffa och de \nkonsekvenser",
+          "before": "– en sammanvägning av",
+          "middle": "för att en händelse ska",
+          "after": "inträffa och de konsekvenser",
+          "doc_id": "doc_21"
+        },
+        {
+          "context": "en social risk är sannolikheten för oönskade händelser, beteenden eller \ntillstånd med ursprung i",
+          "before": "en social risk är",
+          "middle": "för oönskade händelser, beteenden eller",
+          "after": "tillstånd med ursprung i",
+          "doc_id": "doc_21"
+        },
+        {
+          "context": "kommunens geografiska område, \nsamt sannolikhets",
+          "before": "kommunens geografiska område, samt",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_21"
+        },
+        {
+          "context": "konsekvenserna för riskområdena \nsamt sannolikheten för att det ska inträffa. \n \nNedan presenteras identifierade riskområden",
+          "before": "konsekvenserna för riskområdena samt",
+          "middle": "för att det ska inträffa.",
+          "after": "Nedan presenteras identifierade riskområden",
+          "doc_id": "doc_21"
+        },
+        {
+          "context": "Nivåerna i riskmatrisen för sannolikhets",
+          "before": "Nivåerna i riskmatrisen för",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_21"
+        },
+        {
+          "context": "ger denna bedömning en sannolikhets",
+          "before": "ger denna bedömning en",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_21"
+        },
+        {
+          "context": "man återställer normal drift. \n \nSannolikheten för att ett liknande scenario som leder till förorenat",
+          "before": "man återställer normal drift.",
+          "middle": "för att ett liknande scenario",
+          "after": "som leder till förorenat",
+          "doc_id": "doc_21"
+        },
+        {
+          "context": "Sammanlagt ger bedömningen en \nsannolikhets",
+          "before": "Sammanlagt ger bedömningen en",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_21"
+        },
+        {
+          "context": "ger denna bedömning en sannolikhets",
+          "before": "ger denna bedömning en",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_21"
+        },
+        {
+          "context": "Sammanlagt ger bedömningen en sannolikhets",
+          "before": "Sammanlagt ger bedömningen en",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_21"
+        },
+        {
+          "context": "principen identifiering, värdering utifrån \nsannolikhet och konsekvens, samt hantering \nutifrån förmåga, i enlighet med",
+          "before": "principen identifiering, värdering utifrån",
+          "middle": "och konsekvens, samt hantering utifrån",
+          "after": "förmåga, i enlighet med",
+          "doc_id": "doc_22"
+        }
+      ]
+    },
+    "konsekvens": {
+      "total": 16105,
+      "by_level": {
+        "UNKNOWN": 8515,
+        "uncertainty": 322,
+        "high": 4982,
+        "medium": 280,
+        "low": 450,
+        "very_high": 1020,
+        "very_low": 198,
+        "change": 316,
+        "acceptability": 22
+      },
+      "raw_distribution": {
+        "UNKNOWN": 8515,
+        "osäkerhet": 114,
+        "allvarliga": 1935,
+        "direkta": 250,
+        "stora": 1588,
+        "svåra": 186,
+        "liten": 45,
+        "kännbara": 20,
+        "mycket stora": 97,
+        "svårt att bedöma": 35,
+        "säkerhet": 145,
+        "betydande": 211,
+        "omfattande": 360,
+        "mycket allvarliga": 526,
+        "mycket begränsade": 196,
+        "ökad": 90,
+        "stor": 516,
+        "begränsade": 342,
+        "minska": 76,
+        "ökar": 39,
+        "katastrofala": 300,
+        "mycket allvarlig": 29,
+        "allvarlig": 186,
+        "katastrofal": 49,
+        "lindriga": 12,
+        "säker": 14,
+        "säkert": 3,
+        "mycket omfattande": 19,
+        "ökande": 4,
+        "små": 51,
+        "öka": 70,
+        "osäkra": 5,
+        "förändras": 8,
+        "minskar": 14,
+        "oacceptabel": 4,
+        "förändrad": 5,
+        "måttliga": 10,
+        "minskad": 8,
+        "säkra": 3,
+        "acceptabel": 18,
+        "försumbara": 2,
+        "sjunker": 2,
+        "osäkert": 1,
+        "osäker": 2
+      },
+      "unknown_examples": [
+        {
+          "context": "ska inträffa och de konsekvenser händelsen \nkan leda till. \n \nSamhällsviktig verksamhet \nEn verksamhet som",
+          "before": "ska inträffa och de",
+          "middle": "händelsen kan leda till. Samhällsviktig",
+          "after": "verksamhet En verksamhet som",
+          "doc_id": "doc_0"
+        },
+        {
+          "context": "(internt krisnätverk). Analys av konsekvenser och \nberoenden har därefter genomförts förvaltnings- och bolagsvis. Vidare",
+          "before": "(internt krisnätverk). Analys av",
+          "middle": "och beroenden har därefter genomförts",
+          "after": "förvaltnings- och bolagsvis. Vidare",
+          "doc_id": "doc_0"
+        },
+        {
+          "context": "värden för sannolikhet respektive konsekvens för de \nidentifierade hoten utan bedömer att händelserna är",
+          "before": "värden för sannolikhet respektive",
+          "middle": "för de identifierade hoten utan",
+          "after": "bedömer att händelserna är",
+          "doc_id": "doc_0"
+        },
+        {
+          "context": "mera troliga.  \nVad gäller konsekvenser så förs ett liknande resonemang - att kvantifiera mängden",
+          "before": "mera troliga. Vad gäller",
+          "middle": "så förs ett liknande resonemang",
+          "after": "- att kvantifiera mängden",
+          "doc_id": "doc_0"
+        },
+        {
+          "context": "geografiska område \n \n Hot Var Konsekvens 1 Konsekvens 2 Ansvar 1 * Ansvar 2 Beroenden1",
+          "before": "geografiska område Hot Var",
+          "middle": "1 Konsekvens 2 Ansvar 1",
+          "after": "* Ansvar 2 Beroenden1",
+          "doc_id": "doc_0"
+        },
+        {
+          "context": "kommun skyfall som gav konsekvenser på \ninfrastrukturen. Båda underfarterna till centrum blev stående i",
+          "before": "kommun skyfall som gav",
+          "middle": "på infrastrukturen. Båda underfarterna till",
+          "after": "centrum blev stående i",
+          "doc_id": "doc_1"
+        },
+        {
+          "context": "erfarenheter från omständigheter och konsekvenser från översvämningarna 2006 har även en \nplanering gjorts för",
+          "before": "erfarenheter från omständigheter och",
+          "middle": "från översvämningarna 2006 har även",
+          "after": "en planering gjorts för",
+          "doc_id": "doc_1"
+        },
+        {
+          "context": "brand skulle få störst konsekvenser har man under de senaste åren färdigställt \nbrandposterna så",
+          "before": "brand skulle få störst",
+          "middle": "har man under de senaste",
+          "after": "åren färdigställt brandposterna så",
+          "doc_id": "doc_1"
+        },
+        {
+          "context": "kan få mycket förödande konsekvenser",
+          "before": "kan få mycket förödande",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_1"
+        },
+        {
+          "context": "värderats utifrån sannolikhet och konsekvens",
+          "before": "värderats utifrån sannolikhet och",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_2"
+        },
+        {
+          "context": "vattenmängden skulle kunna \nge konsekvenser även på vattenförsörjningen då kommunens största vattenverk Dösebacka ligger",
+          "before": "vattenmängden skulle kunna ge",
+          "middle": "även på vattenförsörjningen då kommunens",
+          "after": "största vattenverk Dösebacka ligger",
+          "doc_id": "doc_2"
+        },
+        {
+          "context": "dagar vid seklets slut. \n  \n \nKonsekvenser och följdhändelser  \nOlika länder hanterar värme olika bra och",
+          "before": "dagar vid seklets slut.",
+          "middle": "och följdhändelser Olika länder hanterar",
+          "after": "värme olika bra och",
+          "doc_id": "doc_2"
+        },
+        {
+          "context": "av utan några större konsekvenser",
+          "before": "av utan några större",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_2"
+        },
+        {
+          "context": "och hus översvämmade. Störst konsekvenser ger översvämningar i Göta älv och Nordre älv i",
+          "before": "och hus översvämmade. Störst",
+          "middle": "ger översvämningar i Göta älv",
+          "after": "och Nordre älv i",
+          "doc_id": "doc_2"
+        },
+        {
+          "context": "enigt vattendomen. \n\n\n  2016-2019   \n45 \n \n \nKonsekvenser och följdhändelser vad kraftigt flöde i älven  \nBostäder och",
+          "before": "enigt vattendomen. 2016-2019 45",
+          "middle": "och följdhändelser vad kraftigt flöde",
+          "after": "i älven Bostäder och",
+          "doc_id": "doc_2"
+        },
+        {
+          "context": "behöva \nstängas vilket får konsekvenser för vattenleveranserna till kommunen.  \n \nKommunerna Ale och Lilla Edet",
+          "before": "behöva stängas vilket får",
+          "middle": "för vattenleveranserna till kommunen. Kommunerna",
+          "after": "Ale och Lilla Edet",
+          "doc_id": "doc_2"
+        },
+        {
+          "context": "terrängen. \n\n  2016-2019   \n46 \n \nSannolika konsekvenser är att vatten strömmar in i fastigheter via ledningar",
+          "before": "terrängen. 2016-2019 46 Sannolika",
+          "middle": "är att vatten strömmar in",
+          "after": "i fastigheter via ledningar",
+          "doc_id": "doc_2"
+        },
+        {
+          "context": "vid kusten. \nDessa ger konsekvenser på de samhällen som ligger längs kusten, exempelvis Rörtången,",
+          "before": "vid kusten. Dessa ger",
+          "middle": "på de samhällen som ligger",
+          "after": "längs kusten, exempelvis Rörtången,",
+          "doc_id": "doc_2"
+        },
+        {
+          "context": "både Koön och Marstrandsön.   \nKonsekvenser vid hög havsvattennivå \nVid mycket högt vattenstånd, vilket innebär",
+          "before": "både Koön och Marstrandsön.",
+          "middle": "vid hög havsvattennivå Vid mycket",
+          "after": "högt vattenstånd, vilket innebär",
+          "doc_id": "doc_2"
+        },
+        {
+          "context": "ska inträffa och de \nkonsekvenser händelsen kan leda till. \nKritiska beroenden – Beroenden som",
+          "before": "ska inträffa och de",
+          "middle": "händelsen kan leda till. Kritiska",
+          "after": "beroenden – Beroenden som",
+          "doc_id": "doc_3"
+        },
+        {
+          "context": "och som har negativa \nkonsekvenser för det som bedöms vara skyddsvärt. \nSocial oro –",
+          "before": "och som har negativa",
+          "middle": "för det som bedöms vara",
+          "after": "skyddsvärt. Social oro –",
+          "doc_id": "doc_3"
+        },
+        {
+          "context": "definiera händelsens \nomfattning och konsekvenser",
+          "before": "definiera händelsens omfattning och",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_3"
+        },
+        {
+          "context": "i så fall ge konsekvenser på vägar, jordbruk och infrastruktur. Frekvensen på \növersvämningarna väntas",
+          "before": "i så fall ge",
+          "middle": "på vägar, jordbruk och infrastruktur.",
+          "after": "Frekvensen på översvämningarna väntas",
+          "doc_id": "doc_3"
+        },
+        {
+          "context": "En skogsbrand får framförallt konsekvenser för i \nförsta hand den skog där den härjar,",
+          "before": "En skogsbrand får framförallt",
+          "middle": "för i första hand den",
+          "after": "skog där den härjar,",
+          "doc_id": "doc_3"
+        },
+        {
+          "context": "med ekonomiska konsekvenser för markägaren. \nIbland drabbar den även enstaka fristående byggnader",
+          "before": "med ekonomiska",
+          "middle": "för markägaren. Ibland drabbar den",
+          "after": "även enstaka fristående byggnader",
+          "doc_id": "doc_3"
+        },
+        {
+          "context": "åskkänslig.13 Åska ger \nframförallt konsekvenser för Sydnärkes IT-förvaltning men detta kan i sin tur",
+          "before": "åskkänslig.13 Åska ger framförallt",
+          "middle": "för Sydnärkes IT-förvaltning men detta",
+          "after": "kan i sin tur",
+          "doc_id": "doc_3"
+        },
+        {
+          "context": "för skadehändelsen och möjliga konsekvenser om en olycka inträffar. I \nförsta hand påverkas de",
+          "before": "för skadehändelsen och möjliga",
+          "middle": "om en olycka inträffar. I",
+          "after": "första hand påverkas de",
+          "doc_id": "doc_3"
+        },
+        {
+          "context": "som kan ge förödande konsekvenser",
+          "before": "som kan ge förödande",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_3"
+        },
+        {
+          "context": "det självfallet få förödande konsekvenser med många döda, \nbränder, trafikproblem mm. \nSannolikheten för en",
+          "before": "det självfallet få förödande",
+          "middle": "med många döda, bränder, trafikproblem",
+          "after": "mm. Sannolikheten för en",
+          "doc_id": "doc_3"
+        },
+        {
+          "context": "olika händelser samt\nvilka konsekvenser händelserna kan få, så att det förebyggande\narbetet och",
+          "before": "olika händelser samt vilka",
+          "middle": "händelserna kan få, så att",
+          "after": "det förebyggande arbetet och",
+          "doc_id": "doc_4"
+        },
+        {
+          "context": "vilket också kan få konsekvenser för vår\nlivsmedelsförsörjning. Om olyckan skulle ske så nåra",
+          "before": "vilket också kan få",
+          "middle": "för vår livsmedelsförsörjning. Om olyckan",
+          "after": "skulle ske så nåra",
+          "doc_id": "doc_4"
+        },
+        {
+          "context": "i kommunens mobiltelefonsystem med\nkonsekvensen att kommunens samtliga mobiltelefoner slås ut.\n- Nyckelperson som",
+          "before": "i kommunens mobiltelefonsystem med",
+          "middle": "att kommunens samtliga mobiltelefoner slås",
+          "after": "ut. - Nyckelperson som",
+          "doc_id": "doc_4"
+        },
+        {
+          "context": "det få mycket\nlångtgående konsekvenser",
+          "before": "det få mycket långtgående",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_4"
+        },
+        {
+          "context": "bedömdes kunnabli extraordinärahändelservärderades\nutifrånsannolikhetoch konsekvens",
+          "before": "bedömdes kunnabli extraordinärahändelservärderades utifrånsannolikhetoch",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_5"
+        },
+        {
+          "context": "extraordinära händelser\nNivåerna försannoliketoch konsekvens är intesamma som vid bedömningen av oönskade\nhändelser.\nNivåer",
+          "before": "extraordinära händelser Nivåerna försannoliketoch",
+          "middle": "är intesamma som vid bedömningen",
+          "after": "av oönskade händelser. Nivåer",
+          "doc_id": "doc_5"
+        },
+        {
+          "context": "för extraordinära händelser\n \n| Konsekvens\n \n  \n  \n \n   \nSannolikhet\n$4 - hög\n|7,9,15,17,18,19,24,32,\n$3 — medel |",
+          "before": "för extraordinära händelser |",
+          "middle": "Sannolikhet $4 - hög |7,9,15,17,18,19,24,32,",
+          "after": "$3 — medel |",
+          "doc_id": "doc_5"
+        },
+        {
+          "context": "- mycket lag\n  5.10 Konsekvenser för kommunen vid extraordinära händelser\nHändelsernasom hamnadei de rödafältenvidriskvärderingenärväderhändelser.Dessa",
+          "before": "- mycket lag 5.10",
+          "middle": "för kommunen vid extraordinära händelser",
+          "after": "Händelsernasom hamnadei de rödafältenvidriskvärderingenärväderhändelser.Dessa",
+          "doc_id": "doc_5"
+        },
+        {
+          "context": "ska inträffa och de \nkonsekvenser händelsen kan leda till. \n \nSårbarhet - De egenskaper eller",
+          "before": "ska inträffa och de",
+          "middle": "händelsen kan leda till. Sårbarhet",
+          "after": "- De egenskaper eller",
+          "doc_id": "doc_7"
+        },
+        {
+          "context": "och som har negativa konsekvenser för det som \nbedöms vara skyddsvärt. \n \nSocial oro -",
+          "before": "och som har negativa",
+          "middle": "för det som bedöms vara",
+          "after": "skyddsvärt. Social oro -",
+          "doc_id": "doc_7"
+        },
+        {
+          "context": "annan plats kan \nfå konsekvenser på andra platser. Händelser som de som nämns kan",
+          "before": "annan plats kan få",
+          "middle": "på andra platser. Händelser som",
+          "after": "de som nämns kan",
+          "doc_id": "doc_7"
+        },
+        {
+          "context": "Störningar i transporter  \nKlimatförändringarnas konsekvenser för vägnätet kommer, enligt klimat- och sårbarhets-\nutredningen, att",
+          "before": "Störningar i transporter Klimatförändringarnas",
+          "middle": "för vägnätet kommer, enligt klimat-",
+          "after": "och sårbarhets- utredningen, att",
+          "doc_id": "doc_7"
+        },
+        {
+          "context": "(1 ggr per år) \n \nKonsekvens \nUtgångspunkten för konsekvensbedömningen är befolkningens liv och hälsa, skador",
+          "before": "(1 ggr per år)",
+          "middle": "Utgångspunkten för konsekvensbedömningen är befolkningens",
+          "after": "liv och hälsa, skador",
+          "doc_id": "doc_7"
+        },
+        {
+          "context": "döda och/eller 5 drabbade  \n \nKonsekvens ekonomi/miljö/skador på egendom och miljö \nKatastrof >50 000 000",
+          "before": "döda och/eller 5 drabbade",
+          "middle": "ekonomi/miljö/skador på egendom och miljö",
+          "after": "Katastrof >50 000 000",
+          "doc_id": "doc_7"
+        },
+        {
+          "context": "förtal, missnöjesyttringar i medier \n \nKonsekvens Samhällets funktionalitet \nViktig samhällsfunktion är ett samlingsbegrepp för de",
+          "before": "förtal, missnöjesyttringar i medier",
+          "middle": "Samhällets funktionalitet Viktig samhällsfunktion är",
+          "after": "ett samlingsbegrepp för de",
+          "doc_id": "doc_7"
+        },
+        {
+          "context": "i dessa situationer. Då konsekvensen liknar det som man finner i vanliga krishändelser har",
+          "before": "i dessa situationer. Då",
+          "middle": "liknar det som man finner",
+          "after": "i vanliga krishändelser har",
+          "doc_id": "doc_8"
+        },
+        {
+          "context": "det mottagande uppdraget lösas. Konsekvensen är dock mindre än för exempelvis elavbrott men anses",
+          "before": "det mottagande uppdraget lösas.",
+          "middle": "är dock mindre än för",
+          "after": "exempelvis elavbrott men anses",
+          "doc_id": "doc_8"
+        },
+        {
+          "context": "berör förmågor och sårbarheter, konsekvens och sannolikhetsbedömningar\nsamt åtgärdsbehov belagts med sekretess enligt OSL",
+          "before": "berör förmågor och sårbarheter,",
+          "middle": "och sannolikhetsbedömningar samt åtgärdsbehov belagts",
+          "after": "med sekretess enligt OSL",
+          "doc_id": "doc_9"
+        },
+        {
+          "context": "som finns samt vilka konsekvenser\ndessa kan få om de inträffar för dom samhällsviktiga",
+          "before": "som finns samt vilka",
+          "middle": "dessa kan få om de",
+          "after": "inträffar för dom samhällsviktiga",
+          "doc_id": "doc_9"
+        },
+        {
+          "context": "att analysera\nsannolikheter och konsekvenser av dessa risker.\n\n2023 års   har genomförts med hjälp",
+          "before": "att analysera sannolikheter och",
+          "middle": "av dessa risker. 2023 års",
+          "after": "har genomförts med hjälp",
+          "doc_id": "doc_9"
+        },
+        {
+          "context": "och sårbarheter samt dess konsekvenser för samhällsviktig verksamhet inom\nLycksele kommuns geografiska område.\n\n15",
+          "before": "och sårbarheter samt dess",
+          "middle": "för samhällsviktig verksamhet inom Lycksele",
+          "after": "kommuns geografiska område. 15",
+          "doc_id": "doc_9"
+        },
+        {
+          "context": "riskerar att medföra långtgående\nkonsekvenser för den samhällsviktiga verksamheten att bedriva samhällsviktiga uppdrag och",
+          "before": "riskerar att medföra långtgående",
+          "middle": "för den samhällsviktiga verksamheten att",
+          "after": "bedriva samhällsviktiga uppdrag och",
+          "doc_id": "doc_9"
+        },
+        {
+          "context": "en enskild händelse, en konsekvens\nav en inträffad händelse eller ett sabotage som utförts",
+          "before": "en enskild händelse, en",
+          "middle": "av en inträffad händelse eller",
+          "after": "ett sabotage som utförts",
+          "doc_id": "doc_9"
+        },
+        {
+          "context": "mycket från varandra beträffande konsekvenser för den enskilde och samhället. Spanska\nsjukan började spridas",
+          "before": "mycket från varandra beträffande",
+          "middle": "för den enskilde och samhället.",
+          "after": "Spanska sjukan började spridas",
+          "doc_id": "doc_9"
+        },
+        {
+          "context": "Epizooti skulle få liknande konsekvenser för befolkningen som pandemisk influensa. Skillnaden är i\natt",
+          "before": "Epizooti skulle få liknande",
+          "middle": "för befolkningen som pandemisk influensa.",
+          "after": "Skillnaden är i att",
+          "doc_id": "doc_9"
+        },
+        {
+          "context": "uppstå främst som en konsekvens av andra nationers agerande. Rysslands krig\nmot Ukraina har",
+          "before": "uppstå främst som en",
+          "middle": "av andra nationers agerande. Rysslands",
+          "after": "krig mot Ukraina har",
+          "doc_id": "doc_9"
+        },
+        {
+          "context": "annan plats även få konsekvenser för Lycksele. Exempel på detta är tsunamikatastrofen i\n\nThailand",
+          "before": "annan plats även få",
+          "middle": "för Lycksele. Exempel på detta",
+          "after": "är tsunamikatastrofen i Thailand",
+          "doc_id": "doc_9"
+        },
+        {
+          "context": "noder, la\ndet få konsekvenser för kommunens verksamheter.\n\nommunens viktiga system går via eller",
+          "before": "noder, la det få",
+          "middle": "för kommunens verksamheter. ommunens viktiga",
+          "after": "system går via eller",
+          "doc_id": "doc_10"
+        },
+        {
+          "context": "risker. Här bedöms möjliga konsekvenser på liv och \nhälsa, samhällets funktionalitet, grundläggande värden som",
+          "before": "risker. Här bedöms möjliga",
+          "middle": "på liv och hälsa, samhällets",
+          "after": "funktionalitet, grundläggande värden som",
+          "doc_id": "doc_11"
+        },
+        {
+          "context": "ska inträffa och de konsekvenser \nhändelsen kan leda till (2).   \n \nRiskanalys  \nProcess för att",
+          "before": "ska inträffa och de",
+          "middle": "händelsen kan leda till (2).",
+          "after": "Riskanalys Process för att",
+          "doc_id": "doc_11"
+        },
+        {
+          "context": "svar på \nsannolikhet och konsekvens (5)  \n \n ,    \n  regleras i lag. \nSveriges kommuner ska analysera",
+          "before": "svar på sannolikhet och",
+          "middle": "(5) , regleras i lag.",
+          "after": "Sveriges kommuner ska analysera",
+          "doc_id": "doc_11"
+        },
+        {
+          "context": "3. \nBedömningarna görs på konsekvenser på liv \noch hälsa, samhällets funktionalitet, påverkan \npå demokrati",
+          "before": "3. Bedömningarna görs på",
+          "middle": "på liv och hälsa, samhällets",
+          "after": "funktionalitet, påverkan på demokrati",
+          "doc_id": "doc_11"
+        },
+        {
+          "context": "- Sammanfattande bedömning av konsekvens",
+          "before": "- Sammanfattande bedömning av",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_11"
+        },
+        {
+          "context": "- Sammanfattande bedömning av konsekvens",
+          "before": "- Sammanfattande bedömning av",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_11"
+        },
+        {
+          "context": "identifieras och som ger \nkonsekvenser inom Ronneby kommuns geografiska område för närvarande. \nDet redogörs",
+          "before": "identifieras och som ger",
+          "middle": "inom Ronneby kommuns geografiska område",
+          "after": "för närvarande. Det redogörs",
+          "doc_id": "doc_12"
+        },
+        {
+          "context": "tagits till redan kända konsekvenser",
+          "before": "tagits till redan kända",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_12"
+        },
+        {
+          "context": "prioriterats utifrån \nsannolikhet och konsekvens",
+          "before": "prioriterats utifrån sannolikhet och",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_12"
+        },
+        {
+          "context": "framtagen för att beskriva konsekvenser i den egna \nverksamheten. Det innebär att en verksamhet",
+          "before": "framtagen för att beskriva",
+          "middle": "i den egna verksamheten. Det",
+          "after": "innebär att en verksamhet",
+          "doc_id": "doc_12"
+        },
+        {
+          "context": "fullständigt elbortfall får \nförödande konsekvenser för alla förvaltningar och bolag. Det innebär att \nsärskild",
+          "before": "fullständigt elbortfall får förödande",
+          "middle": "för alla förvaltningar och bolag.",
+          "after": "Det innebär att särskild",
+          "doc_id": "doc_12"
+        },
+        {
+          "context": "elavbrott har ingen större konsekvens förutom \nför dem inom vården som beroende av teknik",
+          "before": "elavbrott har ingen större",
+          "middle": "förutom för dem inom vården",
+          "after": "som beroende av teknik",
+          "doc_id": "doc_12"
+        },
+        {
+          "context": "och journalföring kan få konsekvenser vid kortare avbrott. Ju längre ett \navbrott är, ju",
+          "before": "och journalföring kan få",
+          "middle": "vid kortare avbrott. Ju längre",
+          "after": "ett avbrott är, ju",
+          "doc_id": "doc_12"
+        },
+        {
+          "context": "kan upprätthållas med \nmindre konsekvenser än totalt bortfall. \n \nOtjänligt vatten på grund av bakterier",
+          "before": "kan upprätthållas med mindre",
+          "middle": "än totalt bortfall. Otjänligt vatten",
+          "after": "på grund av bakterier",
+          "doc_id": "doc_12"
+        },
+        {
+          "context": "ger konsekvenser i hälsa med många \nsjuka, och även dödsfall, vilket",
+          "before": "ger",
+          "middle": "i hälsa med många sjuka,",
+          "after": "och även dödsfall, vilket",
+          "doc_id": "doc_12"
+        },
+        {
+          "context": "elbortfall, IT-bortfall, transportproblem m.m. \nKonsekvensen av sådana händelser är att livsmedel är svårtillgängligt \neftersom",
+          "before": "elbortfall, IT-bortfall, transportproblem m.m.",
+          "middle": "av sådana händelser är att",
+          "after": "livsmedel är svårtillgängligt eftersom",
+          "doc_id": "doc_12"
+        },
+        {
+          "context": "hög risk” utifrån de konsekvenser som skulle bli om händelsen inträffade, trots att \nverksamheterna",
+          "before": "hög risk” utifrån de",
+          "middle": "som skulle bli om händelsen",
+          "after": "inträffade, trots att verksamheterna",
+          "doc_id": "doc_13"
+        },
+        {
+          "context": "få \nett flertal negativa konsekvenser",
+          "before": "få ett flertal negativa",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_13"
+        },
+        {
+          "context": "verksamhet kan få förödande konsekvenser",
+          "before": "verksamhet kan få förödande",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_13"
+        },
+        {
+          "context": "spridning av skadlig kod. Konsekvenser som \nkan uppstå till följd av ett lyckat angrepp",
+          "before": "spridning av skadlig kod.",
+          "middle": "som kan uppstå till följd",
+          "after": "av ett lyckat angrepp",
+          "doc_id": "doc_13"
+        },
+        {
+          "context": "kan också vara en konsekvens av att mobbning och trakasserier \ntrappats upp under en",
+          "before": "kan också vara en",
+          "middle": "av att mobbning och trakasserier",
+          "after": "trappats upp under en",
+          "doc_id": "doc_13"
+        },
+        {
+          "context": "2 \n \n3 \n \n4 \n \n5 \n  Konsekvens \n \nTotal riskbedömning \nBedömning Grad av sannolikhet \n Mycket hög \n Hög",
+          "before": "2 3 4 5",
+          "middle": "Total riskbedömning Bedömning Grad av",
+          "after": "sannolikhet Mycket hög Hög",
+          "doc_id": "doc_13"
+        },
+        {
+          "context": "ska inträffa och de \nkonsekvenser händelsen kan leda till. \nSamhällsviktig verksamhet \nEn verksamhet som",
+          "before": "ska inträffa och de",
+          "middle": "händelsen kan leda till. Samhällsviktig",
+          "after": "verksamhet En verksamhet som",
+          "doc_id": "doc_14"
+        },
+        {
+          "context": "exempel. Rapport: MSB1135. https://rib.msb.se/filer/pdf/28469.pdf \nKonsekvens Beskrivning \nIngen påverkan \n1. Verksamheten genomförs enligt plan, lagstadgade",
+          "before": "exempel. Rapport: MSB1135. https://rib.msb.se/filer/pdf/28469.pdf",
+          "middle": "Beskrivning Ingen påverkan 1. Verksamheten",
+          "after": "genomförs enligt plan, lagstadgade",
+          "doc_id": "doc_14"
+        },
+        {
+          "context": "i kommunen och vilka\nkonsekvenser dessa kan förväntas ge för den egna verksamheten. Dessutom",
+          "before": "i kommunen och vilka",
+          "middle": "dessa kan förväntas ge för",
+          "after": "den egna verksamheten. Dessutom",
+          "doc_id": "doc_15"
+        },
+        {
+          "context": "någon heltäckande inventering av\nkonsekvenser",
+          "before": "någon heltäckande inventering av",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_15"
+        },
+        {
+          "context": "med\nlokala och begränsad konsekvenser",
+          "before": "med lokala och begränsad",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_15"
+        },
+        {
+          "context": "Konsekvenser och behov av åtgärder -\nKlimatförändringar i Härnösands kommun,",
+          "before": "",
+          "middle": "och behov av åtgärder -",
+          "after": "Klimatförändringar i Härnösands kommun,",
+          "doc_id": "doc_15"
+        },
+        {
+          "context": "för att klimatanpassa\ndessa.\n\nKonsekvens",
+          "before": "för att klimatanpassa dessa.",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_15"
+        },
+        {
+          "context": "En värmebölja kan få konsekvenser för liv och hälsa såväl som för\nsamhällets funktionalitet.",
+          "before": "En värmebölja kan få",
+          "middle": "för liv och hälsa såväl",
+          "after": "som för samhällets funktionalitet.",
+          "doc_id": "doc_15"
+        },
+        {
+          "context": "ishalka kan få liknande konsekvenser för\nsamhället.\n\n\nSEKRETESS\n\nEnligt 18 Kap 138 Offentlighets och",
+          "before": "ishalka kan få liknande",
+          "middle": "för samhället. SEKRETESS Enligt 18",
+          "after": "Kap 138 Offentlighets och",
+          "doc_id": "doc_15"
+        },
+        {
+          "context": "skulle kunna få liknande\nkonsekvenser",
+          "before": "skulle kunna få liknande",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_15"
+        },
+        {
+          "context": "vanligen utan några större konsekvenser annat än för berörda skogsägare.\nSkogsbranden i Västmanlands län",
+          "before": "vanligen utan några större",
+          "middle": "annat än för berörda skogsägare.",
+          "after": "Skogsbranden i Västmanlands län",
+          "doc_id": "doc_15"
+        },
+        {
+          "context": "klimat på sannolikhet och konsekvenser",
+          "before": "klimat på sannolikhet och",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_15"
+        },
+        {
+          "context": "inträffa och de (negativa) \nkonsekvenser händelsen kan leda till.  \nRisk=sannolikhet × konsekvens \nStyrel  \nEn",
+          "before": "inträffa och de (negativa)",
+          "middle": "händelsen kan leda till. Risk=sannolikhet",
+          "after": "× konsekvens Styrel En",
+          "doc_id": "doc_16"
+        },
+        {
+          "context": "som ska förhindra negativa \nkonsekvenser",
+          "before": "som ska förhindra negativa",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_16"
+        },
+        {
+          "context": "upp i orsaker och konsekvenser",
+          "before": "upp i orsaker och",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_16"
+        },
+        {
+          "context": "skalor för sannolikhet och konsekvens",
+          "before": "skalor för sannolikhet och",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_16"
+        },
+        {
+          "context": "värderingarna av sannolikhet och konsekvens togs ett riskvärde fram \ngenom att multiplicera sannolikhet och",
+          "before": "värderingarna av sannolikhet och",
+          "middle": "togs ett riskvärde fram genom",
+          "after": "att multiplicera sannolikhet och",
+          "doc_id": "doc_16"
+        },
+        {
+          "context": "konsekvens",
+          "before": "",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_16"
+        },
+        {
+          "context": "bedöma sannolikhet för, och konsekvens av de identifierade \nriskerna. Kommunens samlade kompetens, andra aktörers",
+          "before": "bedöma sannolikhet för, och",
+          "middle": "av de identifierade riskerna. Kommunens",
+          "after": "samlade kompetens, andra aktörers",
+          "doc_id": "doc_16"
+        },
+        {
+          "context": "orsaka en rad olika konsekvenser så som förorenat \ndricksvatten, ras och skred, avskuret vägnät,",
+          "before": "orsaka en rad olika",
+          "middle": "så som förorenat dricksvatten, ras",
+          "after": "och skred, avskuret vägnät,",
+          "doc_id": "doc_16"
+        },
+        {
+          "context": "andra länder till \nkonsekvenser för Sverige genom exempelvis påverkan på global handel och",
+          "before": "andra länder till",
+          "middle": "för Sverige genom exempelvis påverkan",
+          "after": "på global handel och",
+          "doc_id": "doc_16"
+        }
+      ]
+    },
+    "risk": {
+      "total": 26745,
+      "by_level": {
+        "UNKNOWN": 20323,
+        "high": 2055,
+        "change": 2788,
+        "very_low": 106,
+        "low": 345,
+        "medium": 395,
+        "very_high": 175,
+        "uncertainty": 528,
+        "acceptability": 30
+      },
+      "raw_distribution": {
+        "UNKNOWN": 20323,
+        "stor": 850,
+        "ökad": 884,
+        "ökar": 656,
+        "minska": 444,
+        "öka": 472,
+        "mycket låg": 85,
+        "låg": 251,
+        "hög": 665,
+        "medelhög": 291,
+        "mycket hög": 146,
+        "minskad": 70,
+        "säker": 31,
+        "säkerhet": 363,
+        "små": 41,
+        "minskar": 168,
+        "stora": 329,
+        "osäkerhet": 94,
+        "mycket stora": 23,
+        "förändrad": 23,
+        "omfattande": 211,
+        "förändras": 33,
+        "mellan": 104,
+        "mycket liten": 21,
+        "ökande": 12,
+        "osäker": 5,
+        "stigande": 17,
+        "acceptabel": 24,
+        "liten": 53,
+        "svårt att bedöma": 14,
+        "sjunkande": 1,
+        "stiger": 5,
+        "säkra": 14,
+        "osäkert": 1,
+        "oacceptabel": 6,
+        "mycket omfattande": 6,
+        "säkert": 3,
+        "osäkra": 3,
+        "sjunker": 3
+      },
+      "unknown_examples": [
+        {
+          "context": "beaktats i redovisningen av risk",
+          "before": "beaktats i redovisningen av",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_0"
+        },
+        {
+          "context": "6. Identifierade och analyserade risker för kommunen och kommunens .................................................................... 14 \ngeografiska område ..................................................................................................................................................................",
+          "before": "6. Identifierade och analyserade",
+          "middle": "för kommunen och kommunens ....................................................................",
+          "after": "14 geografiska område ..................................................................................................................................................................",
+          "doc_id": "doc_0"
+        },
+        {
+          "context": "en extraordinär händelse inträffar. \n \nRisk  \nEn sammanvägning av sannolikheten för att en händelse ska",
+          "before": "en extraordinär händelse inträffar.",
+          "middle": "En sammanvägning av sannolikheten för",
+          "after": "att en händelse ska",
+          "doc_id": "doc_0"
+        },
+        {
+          "context": "ständigt en \nkunskapsinhämtning och risker diskuteras i ett antal samverkansforum. Slutsatser och åtgärdsförslag \ngrundar",
+          "before": "ständigt en kunskapsinhämtning och",
+          "middle": "diskuteras i ett antal samverkansforum.",
+          "after": "Slutsatser och åtgärdsförslag grundar",
+          "doc_id": "doc_0"
+        },
+        {
+          "context": "6. Identifierade och analyserade risker för kommunen och kommunens \ngeografiska område \n \n Hot Var Konsekvens",
+          "before": "6. Identifierade och analyserade",
+          "middle": "för kommunen och kommunens geografiska",
+          "after": "område Hot Var Konsekvens",
+          "doc_id": "doc_0"
+        },
+        {
+          "context": "15 \n \n  \n Flygolycka Falmark. Största \nrisker vid \nstart/landning \nMånga skadade och \ndöda \nBehov av psykosoc",
+          "before": "15 Flygolycka Falmark. Största",
+          "middle": "vid start/landning Många skadade och",
+          "after": "döda Behov av psykosoc",
+          "doc_id": "doc_0"
+        },
+        {
+          "context": "Flygoperatör \n Tågolycka Stambanan. Störst \nrisk vid \nplankorsningar \nMånga skadade och \ndöda \nBehov av \npsykosocialt",
+          "before": "Flygoperatör Tågolycka Stambanan. Störst",
+          "middle": "vid plankorsningar Många skadade och",
+          "after": "döda Behov av psykosocialt",
+          "doc_id": "doc_0"
+        },
+        {
+          "context": "24 timmar \n(vinter) innebär risker för liv och hälsa. Enskilda \nelanvändare bör sträva efter",
+          "before": "24 timmar (vinter) innebär",
+          "middle": "för liv och hälsa. Enskilda",
+          "after": "elanvändare bör sträva efter",
+          "doc_id": "doc_0"
+        },
+        {
+          "context": "är en påtaglig daglig \nrisk",
+          "before": "är en påtaglig daglig",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_0"
+        },
+        {
+          "context": "24 timmar (vinter) innebär risker för liv och \nhälsa. Enskilda elanvändare bör sträva efter",
+          "before": "24 timmar (vinter) innebär",
+          "middle": "för liv och hälsa. Enskilda",
+          "after": "elanvändare bör sträva efter",
+          "doc_id": "doc_0"
+        },
+        {
+          "context": "5. Identifierade och analyserade risker för kommunen och kommunens geografiska område ....... 15 \n5.1",
+          "before": "5. Identifierade och analyserade",
+          "middle": "för kommunen och kommunens geografiska",
+          "after": "område ....... 15 5.1",
+          "doc_id": "doc_1"
+        },
+        {
+          "context": "vilka allvarliga hot och risker som finns i \nkommun. Analysen ska också ge en",
+          "before": "vilka allvarliga hot och",
+          "middle": "som finns i kommun. Analysen",
+          "after": "ska också ge en",
+          "doc_id": "doc_1"
+        },
+        {
+          "context": "värdera och analysera \nsina risker och sårbarheter i en sammanställd  . År 2008 tog",
+          "before": "värdera och analysera sina",
+          "middle": "och sårbarheter i en sammanställd",
+          "after": ". År 2008 tog",
+          "doc_id": "doc_1"
+        },
+        {
+          "context": "Framtagandet av kommunens övergripande risk",
+          "before": "Framtagandet av kommunens övergripande",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_1"
+        },
+        {
+          "context": "då vi delar flertalet risker",
+          "before": "då vi delar flertalet",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_1"
+        },
+        {
+          "context": "hand att endast de risker",
+          "before": "hand att endast de",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_1"
+        },
+        {
+          "context": "ett hot eller en risk",
+          "before": "ett hot eller en",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_1"
+        },
+        {
+          "context": "kritiska beroenden och de risker som identifierats \nenligt punkterna under analysprocessen. Redovisningen avser behov",
+          "before": "kritiska beroenden och de",
+          "middle": "som identifierats enligt punkterna under",
+          "after": "analysprocessen. Redovisningen avser behov",
+          "doc_id": "doc_1"
+        },
+        {
+          "context": "värdera och analysera \nsina risker och sårbarheter i en sammanställd  .  \nÅr 2008 tog",
+          "before": "värdera och analysera sina",
+          "middle": "och sårbarheter i en sammanställd",
+          "after": ". År 2008 tog",
+          "doc_id": "doc_1"
+        },
+        {
+          "context": "förutsättningar för att bedöma risker",
+          "before": "förutsättningar för att bedöma",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_1"
+        },
+        {
+          "context": "6 Identifierade och analyserade risker för kommunen och kommunens geografiska område ............ 38 \n6.1",
+          "before": "6 Identifierade och analyserade",
+          "middle": "för kommunen och kommunens geografiska",
+          "after": "område ............ 38 6.1",
+          "doc_id": "doc_2"
+        },
+        {
+          "context": ".................................................................................. 78 \n6.4 Sociala risker och antagonistiska hot .......................................................................................... 79 \n6.4.1 Sociala risker .........................................................................................................................",
+          "before": ".................................................................................. 78 6.4 Sociala",
+          "middle": "och antagonistiska hot .......................................................................................... 79",
+          "after": "6.4.1 Sociala risker .........................................................................................................................",
+          "doc_id": "doc_2"
+        },
+        {
+          "context": "av värmeböljor vilket ger risk för översvämningar, skred och överhettning av både \nmänniskor och",
+          "before": "av värmeböljor vilket ger",
+          "middle": "för översvämningar, skred och överhettning",
+          "after": "av både människor och",
+          "doc_id": "doc_2"
+        },
+        {
+          "context": "och verksamhetsansvariga om hot, risker och sårbarheter inom \ndet egna verksamhetsområdet samt att skapa",
+          "before": "och verksamhetsansvariga om hot,",
+          "middle": "och sårbarheter inom det egna",
+          "after": "verksamhetsområdet samt att skapa",
+          "doc_id": "doc_2"
+        },
+        {
+          "context": "utifrån identifierade hot och risker",
+          "before": "utifrån identifierade hot och",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_2"
+        },
+        {
+          "context": "kommunfullmäktige för att identifiera risker inom kommunens olika verksamheter. \nArbetsmetoden, som kallas FO ,",
+          "before": "kommunfullmäktige för att identifiera",
+          "middle": "inom kommunens olika verksamheter. Arbetsmetoden,",
+          "after": "som kallas FO ,",
+          "doc_id": "doc_2"
+        },
+        {
+          "context": "sektorledningarna medveten om verksamheternas risker och ge dom möjlighet att vara med och \nta",
+          "before": "sektorledningarna medveten om verksamheternas",
+          "middle": "och ge dom möjlighet att",
+          "after": "vara med och ta",
+          "doc_id": "doc_2"
+        },
+        {
+          "context": "inventering och analys av risker och sårbarheter som kan \nleda till en extraordinär händelse",
+          "before": "inventering och analys av",
+          "middle": "och sårbarheter som kan leda",
+          "after": "till en extraordinär händelse",
+          "doc_id": "doc_2"
+        },
+        {
+          "context": "Den utelämnar \ndärför de risker som kan leda till räddningsinsatser med begränsad skada för",
+          "before": "Den utelämnar därför de",
+          "middle": "som kan leda till räddningsinsatser",
+          "after": "med begränsad skada för",
+          "doc_id": "doc_2"
+        },
+        {
+          "context": "under \nidentifierade och analyserade risker",
+          "before": "under identifierade och analyserade",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_2"
+        },
+        {
+          "context": "9 Identifierade och analyserade risker för kommunen och kommunens \ngeografiska område ...............................................................................................21 \n9.1 Identifierade",
+          "before": "9 Identifierade och analyserade",
+          "middle": "för kommunen och kommunens geografiska",
+          "after": "område ...............................................................................................21 9.1 Identifierade",
+          "doc_id": "doc_3"
+        },
+        {
+          "context": "Åtgärder kopplat till sociala risker ...................................................................51  \n13.3 Behov av tekniska åtgärder ..............................................................................52  \n13.4 Behov",
+          "before": "Åtgärder kopplat till sociala",
+          "middle": "...................................................................51 13.3 Behov av tekniska",
+          "after": "åtgärder ..............................................................................52 13.4 Behov",
+          "doc_id": "doc_3"
+        },
+        {
+          "context": "2 – Scenarier sociala risker ...............................................................61  \n16.1 Scenario 1 - Oro, bilbränder och skadegörelse",
+          "before": "2 – Scenarier sociala",
+          "middle": "...............................................................61 16.1 Scenario 1 -",
+          "after": "Oro, bilbränder och skadegörelse",
+          "doc_id": "doc_3"
+        },
+        {
+          "context": "finns en medvetenhet om risker och sårbarheter och det bedrivs ett kontinuerligt \nförebyggande arbete",
+          "before": "finns en medvetenhet om",
+          "middle": "och sårbarheter och det bedrivs",
+          "after": "ett kontinuerligt förebyggande arbete",
+          "doc_id": "doc_3"
+        },
+        {
+          "context": "allvarlig störning eller överhängande risk för en allvarlig störning i \nviktiga \n• samhällsfunktioner \n•",
+          "before": "allvarlig störning eller överhängande",
+          "middle": "för en allvarlig störning i",
+          "after": "viktiga • samhällsfunktioner •",
+          "doc_id": "doc_3"
+        },
+        {
+          "context": "I analysen kartläggs hot, risker och \nsårbarheter inom kommunens geografiska område. Analysen syftar till",
+          "before": "I analysen kartläggs hot,",
+          "middle": "och sårbarheter inom kommunens geografiska",
+          "after": "område. Analysen syftar till",
+          "doc_id": "doc_3"
+        },
+        {
+          "context": "att reducera \nrisker",
+          "before": "att reducera",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_3"
+        },
+        {
+          "context": "Inledning \nDet finns många risker och samhällsstörningar, eller typer av risker, där man kan",
+          "before": "Inledning Det finns många",
+          "middle": "och samhällsstörningar, eller typer av",
+          "after": "risker, där man kan",
+          "doc_id": "doc_3"
+        },
+        {
+          "context": "kommunens identifierade och värderade risker",
+          "before": "kommunens identifierade och värderade",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_3"
+        },
+        {
+          "context": "av samhällsviktiga elanvändare. \nSociala risker – En social risk är sannolikheten för oönskade händelser,",
+          "before": "av samhällsviktiga elanvändare. Sociala",
+          "middle": "– En social risk är",
+          "after": "sannolikheten för oönskade händelser,",
+          "doc_id": "doc_3"
+        },
+        {
+          "context": "OCHHÖJD\nBEREDSKAP\n\ná\n\n3(38)\nRisk",
+          "before": "OCHHÖJD BEREDSKAP á 3(38)",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_4"
+        },
+        {
+          "context": "att uppfyllalagensmeningom en sådan\nrisk",
+          "before": "att uppfyllalagensmeningom en sådan",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_4"
+        },
+        {
+          "context": "GEOGRAFISKA OMRÅDE .................................................................................................................. ..\nRisker koppladetill MSB:snationellarisklista .............................................................................\nPandemi\nStörningari\nStörningarieiektriska\nStörningari eüiirsörjnfngen ....................",
+          "before": "GEOGRAFISKA OMRÅDE .................................................................................................................. ..",
+          "middle": "koppladetill MSB:snationellarisklista ............................................................................. Pandemi Störningari",
+          "after": "Störningarieiektriska Störningari eüiirsörjnfngen ....................",
+          "doc_id": "doc_4"
+        },
+        {
+          "context": "ÅTGÄRDER MED ANLEDNING AV RISK",
+          "before": "ÅTGÄRDER MED ANLEDNING AV",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_4"
+        },
+        {
+          "context": "1 BESKRiVNINGÖVERSALA KOMMUNOCHDESSGEOGRAFISKAOMRÅDE\n\n12(33)\nRisk",
+          "before": "1 BESKRiVNINGÖVERSALA KOMMUNOCHDESSGEOGRAFISKAOMRÅDE 12(33)",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_4"
+        },
+        {
+          "context": "ÖVERSALAKOMMUNOCHDESSGEOGRAFISKA OMRÅDE\n\n14 (as)\nRisk",
+          "before": "ÖVERSALAKOMMUNOCHDESSGEOGRAFISKA OMRÅDE 14 (as)",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_4"
+        },
+        {
+          "context": "och sammanställas i en\nrisk och särbarhetsanalys som redovisas skriftligen till länsstyrelsen.\nMed extraordinär",
+          "before": "och sammanställas i en",
+          "middle": "och särbarhetsanalys som redovisas skriftligen",
+          "after": "till länsstyrelsen. Med extraordinär",
+          "doc_id": "doc_4"
+        },
+        {
+          "context": "allvarlig störning eller överhängande risk för\nen allvarlig störning i viktiga samhällsfunktioner och kräver",
+          "before": "allvarlig störning eller överhängande",
+          "middle": "för en allvarlig störning i",
+          "after": "viktiga samhällsfunktioner och kräver",
+          "doc_id": "doc_4"
+        },
+        {
+          "context": "och syfte\nSyftet med risk",
+          "before": "och syfte Syftet med",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_4"
+        },
+        {
+          "context": "samlad bild av de risker och den krishanteringsförmäga som finns\ndär.\nMålet med risk-",
+          "before": "samlad bild av de",
+          "middle": "och den krishanteringsförmäga som finns",
+          "after": "där. Målet med risk-",
+          "doc_id": "doc_4"
+        },
+        {
+          "context": "god kännedom om kommunens risker och sårbarheterförattkunna\nverka förattreduceraantaletinträffadeolyckor och andra oönskade händelser.\nEn",
+          "before": "god kännedom om kommunens",
+          "middle": "och sårbarheterförattkunna verka förattreduceraantaletinträffadeolyckor och",
+          "after": "andra oönskade händelser. En",
+          "doc_id": "doc_5"
+        },
+        {
+          "context": "inventeringoch analysav kommunens risker och sårbarheterfungeraräven som underlag för\nattutveckla förmågan atthantera oönskade",
+          "before": "inventeringoch analysav kommunens",
+          "middle": "och sårbarheterfungeraräven som underlag för",
+          "after": "attutveckla förmågan atthantera oönskade",
+          "doc_id": "doc_5"
+        },
+        {
+          "context": "Riskområden\n5.2 Definitionoönskadehändelser\n5.3 Risker som kanleda till oönskade händelser\n5.4 Nivåer försannolikhets-och konsekvensbedömning",
+          "before": "Riskområden 5.2 Definitionoönskadehändelser 5.3",
+          "middle": "som kanleda till oönskade händelser",
+          "after": "5.4 Nivåer försannolikhets-och konsekvensbedömning",
+          "doc_id": "doc_5"
+        },
+        {
+          "context": "händelser\n5.6 Definitionextraordinärhändelse\n5.7 Risker som kanleda till extraordinärahändelser\n5.8 Nivåer försannolikhets-och konsekvensbedömning av",
+          "before": "händelser 5.6 Definitionextraordinärhändelse 5.7",
+          "middle": "som kanleda till extraordinärahändelser 5.8",
+          "after": "Nivåer försannolikhets-och konsekvensbedömning av",
+          "doc_id": "doc_5"
+        },
+        {
+          "context": "beredskaps föreskrifter\nom kommuners Risk",
+          "before": "beredskaps föreskrifter om kommuners",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_5"
+        },
+        {
+          "context": "ISF ska byggas upp.\nRisken för en utbredd social oro i kommunen bedömsidag vara",
+          "before": "ISF ska byggas upp.",
+          "middle": "för en utbredd social oro",
+          "after": "i kommunen bedömsidag vara",
+          "doc_id": "doc_6"
+        },
+        {
+          "context": "19(26)\n \n \n \nMask\n \n \n \n \n \n \n \n \nantagonistiska hot risk för och effekter av hot och 2020 BoU förvaltning",
+          "before": "19(26) Mask antagonistiska hot",
+          "middle": "för och effekter av hot",
+          "after": "och 2020 BoU förvaltning",
+          "doc_id": "doc_6"
+        },
+        {
+          "context": "9 \nIdentifierade och analyserade risker för kommunen och kommunens geografiska område  9 \nTyphändelser 10",
+          "before": "9 Identifierade och analyserade",
+          "middle": "för kommunen och kommunens geografiska",
+          "after": "område 9 Typhändelser 10",
+          "doc_id": "doc_7"
+        },
+        {
+          "context": "social oro 15 \nSociala risker 16 \nSjukdomar 16 \nRiskvärdering 17 \nRiskmatriser 18 \nBeskrivning av",
+          "before": "social oro 15 Sociala",
+          "middle": "16 Sjukdomar 16 Riskvärdering 17",
+          "after": "Riskmatriser 18 Beskrivning av",
+          "doc_id": "doc_7"
+        },
+        {
+          "context": "allvarlig \nstörning eller överhängande risk för en allvarlig störning i viktiga samhällsfunktioner och \nkräver",
+          "before": "allvarlig störning eller överhängande",
+          "middle": "för en allvarlig störning i",
+          "after": "viktiga samhällsfunktioner och kräver",
+          "doc_id": "doc_7"
+        },
+        {
+          "context": "av samhällsviktiga elanvändare. \n \nSociala risker - En social risk är sannolikheten för oönskade händelser,",
+          "before": "av samhällsviktiga elanvändare. Sociala",
+          "middle": "- En social risk är",
+          "after": "sannolikheten för oönskade händelser,",
+          "doc_id": "doc_7"
+        },
+        {
+          "context": "att:  \n• Kartlägga hot, risker och sårbarheter inom kommunen  \n• Utgöra en grund i",
+          "before": "att: • Kartlägga hot,",
+          "middle": "och sårbarheter inom kommunen •",
+          "after": "Utgöra en grund i",
+          "doc_id": "doc_7"
+        },
+        {
+          "context": "för information om samhällets risker till allmänheten och anställda  \n• Ge underlag för samhällsplanering",
+          "before": "för information om samhällets",
+          "middle": "till allmänheten och anställda •",
+          "after": "Ge underlag för samhällsplanering",
+          "doc_id": "doc_7"
+        },
+        {
+          "context": "arbetet med kartläggningen av \nrisker",
+          "before": "arbetet med kartläggningen av",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_7"
+        },
+        {
+          "context": "förmåga att hantera olika risker",
+          "before": "förmåga att hantera olika",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_7"
+        },
+        {
+          "context": "förmågebedömning av alla identifierade risker och hot är \ntids- och resurskrävande och är inte",
+          "before": "förmågebedömning av alla identifierade",
+          "middle": "och hot är tids- och",
+          "after": "resurskrävande och är inte",
+          "doc_id": "doc_7"
+        },
+        {
+          "context": "viktigt \natt alternera analyserade risker och hot från år till år så att fler",
+          "before": "viktigt att alternera analyserade",
+          "middle": "och hot från år till",
+          "after": "år så att fler",
+          "doc_id": "doc_7"
+        },
+        {
+          "context": "samhällsviktiga verksamheter....................................................97Identifierade och analyserade risker för kommunen och kommunens geografiska område............108Identifierade sårbarheter och brister",
+          "before": "samhällsviktiga verksamheter....................................................97Identifierade och analyserade",
+          "middle": "för kommunen och kommunens geografiska",
+          "after": "område............108Identifierade sårbarheter och brister",
+          "doc_id": "doc_8"
+        },
+        {
+          "context": "av lokala analyser avseende risker",
+          "before": "av lokala analyser avseende",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_8"
+        },
+        {
+          "context": "8(16)2021-10-27\nnormala fritids-sysselsättningar förstärker risker som utanförskap och i förlängningen social oro. Kultur och",
+          "before": "8(16)2021-10-27 normala fritids-sysselsättningar förstärker",
+          "middle": "som utanförskap och i förlängningen",
+          "after": "social oro. Kultur och",
+          "doc_id": "doc_8"
+        },
+        {
+          "context": "skyddsåtgärder.7 Identifierade och analyserade risker för kommunen och kommunens geografiska område.Med de identifierande riskerna",
+          "before": "skyddsåtgärder.7 Identifierade och analyserade",
+          "middle": "för kommunen och kommunens geografiska",
+          "after": "område.Med de identifierande riskerna",
+          "doc_id": "doc_8"
+        },
+        {
+          "context": "risker anses vara uppgifter för enskilda \n\n11(16)2021-10-27\nverksamheter eller förvaltningar",
+          "before": "",
+          "middle": "anses vara uppgifter för enskilda",
+          "after": "11(16)2021-10-27 verksamheter eller förvaltningar",
+          "doc_id": "doc_8"
+        },
+        {
+          "context": "18\nIdentifierade och analyserade risker för Lycksele kommuns geografiska område ...........ssssoesessss0 18\nAntagonistiska hot",
+          "before": "18 Identifierade och analyserade",
+          "middle": "för Lycksele kommuns geografiska område",
+          "after": "...........ssssoesessss0 18 Antagonistiska hot",
+          "doc_id": "doc_9"
+        },
+        {
+          "context": "och sociala risker ss sreeeeseresesrsrsrssrsrsrsrnnsnnrrnrnnnnenrnnrsr en enrnrn reser n nr ennen ene",
+          "before": "och sociala",
+          "middle": "ss sreeeeseresesrsrsrssrsrsrsrnnsnnrrnrnnnnenrnnrsr en enrnrn reser",
+          "after": "n nr ennen ene",
+          "doc_id": "doc_9"
+        },
+        {
+          "context": "ennen nen 20\nSjukdomsrelaterade risker",
+          "before": "ennen nen 20 Sjukdomsrelaterade",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_9"
+        },
+        {
+          "context": "40\nBilaga 6. Identifierade risker i Lyckseles geografiska OMFåde .......ssesesorsnsnssernnenooons sno nssönnnnnsnnnnssnet 42\n\n\n\nInledning",
+          "before": "40 Bilaga 6. Identifierade",
+          "middle": "i Lyckseles geografiska OMFåde .......ssesesorsnsnssernnenooons",
+          "after": "sno nssönnnnnsnnnnssnet 42 Inledning",
+          "doc_id": "doc_9"
+        },
+        {
+          "context": "5. Identifierade och analyserade risker för kommunen och kommunens geografiska område.\n\n6. Beskrivning av",
+          "before": "5. Identifierade och analyserade",
+          "middle": "för kommunen och kommunens geografiska",
+          "after": "område. 6. Beskrivning av",
+          "doc_id": "doc_9"
+        },
+        {
+          "context": "beaktas i analysen av risker och sårbarheter\n\nKrisberedskap\nTotalförsvaret är till för att förbereda",
+          "before": "beaktas i analysen av",
+          "middle": "och sårbarheter Krisberedskap Totalförsvaret är",
+          "after": "till för att förbereda",
+          "doc_id": "doc_9"
+        },
+        {
+          "context": "kommunens geografiska områdesansvar, vilka risker som finns samt vilka konsekvenser\ndessa kan få om",
+          "before": "kommunens geografiska områdesansvar, vilka",
+          "middle": "som finns samt vilka konsekvenser",
+          "after": "dessa kan få om",
+          "doc_id": "doc_9"
+        },
+        {
+          "context": "om att systematiskt identifiera risker inom kommunens\nlokala geografiska områdesansvar. Lycksele kommun ansvarar också",
+          "before": "om att systematiskt identifiera",
+          "middle": "inom kommunens lokala geografiska områdesansvar.",
+          "after": "Lycksele kommun ansvarar också",
+          "doc_id": "doc_9"
+        },
+        {
+          "context": "och konsekvenser av dessa risker",
+          "before": "och konsekvenser av dessa",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_9"
+        },
+        {
+          "context": "frågor såsom identifiering av risker och sårbarheter, åtgärdsbehov\nsamt sannolikhets och konsekvensbedömningar med hjälp",
+          "before": "frågor såsom identifiering av",
+          "middle": "och sårbarheter, åtgärdsbehov samt sannolikhets",
+          "after": "och konsekvensbedömningar med hjälp",
+          "doc_id": "doc_9"
+        },
+        {
+          "context": "1\nIdentifierade och värderade risker",
+          "before": "1 Identifierade och värderade",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_10"
+        },
+        {
+          "context": "3\nUtvalda hot och risker samt kommunens krishanteringsförmåga ..........e...-sesswwssssssswemsmusessmssnsnsrnnn 3\nSAK ba lVOlGL 555005",
+          "before": "3 Utvalda hot och",
+          "middle": "samt kommunens krishanteringsförmåga ..........e...-sesswwssssssswemsmusessmssnsnsrnnn 3",
+          "after": "SAK ba lVOlGL 555005",
+          "doc_id": "doc_10"
+        },
+        {
+          "context": "tid där hot och risker i närområdet, i regionen eller i det\nglobala perspektivet",
+          "before": "tid där hot och",
+          "middle": "i närområdet, i regionen eller",
+          "after": "i det globala perspektivet",
+          "doc_id": "doc_10"
+        },
+        {
+          "context": "informationsfunktioner.\n\n\n\nIdentifierade och värderade risker",
+          "before": "informationsfunktioner. Identifierade och värderade",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_10"
+        },
+        {
+          "context": "ser som sin\nstörsta risk gällande ett förändrat klimat inom deras verksamhet. Utgångspunkterna för",
+          "before": "ser som sin största",
+          "middle": "gällande ett förändrat klimat inom",
+          "after": "deras verksamhet. Utgångspunkterna för",
+          "doc_id": "doc_10"
+        },
+        {
+          "context": "värmebölja\n\nUtvalda hot och risker samt kommunens krishanteringsförmåga\n\nStörning i dricksvattenförsörjningen\n\nAnsvarsförhållanden\n\nTekniska förvaltningen",
+          "before": "värmebölja Utvalda hot och",
+          "middle": "samt kommunens krishanteringsförmåga Störning i",
+          "after": "dricksvattenförsörjningen Ansvarsförhållanden Tekniska förvaltningen",
+          "doc_id": "doc_10"
+        },
+        {
+          "context": "skulle kunna\nutgöra en risk för skärgården utanför kommunen. I samband med ett utsläpp",
+          "before": "skulle kunna utgöra en",
+          "middle": "för skärgården utanför kommunen. I",
+          "after": "samband med ett utsläpp",
+          "doc_id": "doc_10"
+        },
+        {
+          "context": ") är att kartlägga risker och sårbarheter för att kommunen ska ha kännedom \nom",
+          "before": ") är att kartlägga",
+          "middle": "och sårbarheter för att kommunen",
+          "after": "ska ha kännedom om",
+          "doc_id": "doc_11"
+        },
+        {
+          "context": "i förmågan att hantera risker",
+          "before": "i förmågan att hantera",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_11"
+        },
+        {
+          "context": "kontinuitetshantering ......................................................................... 20 \n7 Risk",
+          "before": "kontinuitetshantering ......................................................................... 20 7",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_11"
+        },
+        {
+          "context": "arbete exempelvis) eller \növerhängande risk för en allvarlig störning i \nviktiga samhällsfunktioner.  \nHändelsen kräver",
+          "before": "arbete exempelvis) eller överhängande",
+          "middle": "för en allvarlig störning i",
+          "after": "viktiga samhällsfunktioner. Händelsen kräver",
+          "doc_id": "doc_11"
+        },
+        {
+          "context": "en så kallad nollnivå.  \n \nRisk \nEn sammanvägning av sannolikheten för att \nen händelse ska",
+          "before": "en så kallad nollnivå.",
+          "middle": "En sammanvägning av sannolikheten för",
+          "after": "att en händelse ska",
+          "doc_id": "doc_11"
+        },
+        {
+          "context": "Process för att förstå riskens natur och \nbedöma risken. Analys av scenarion och \nriskkällor",
+          "before": "Process för att förstå",
+          "middle": "natur och bedöma risken. Analys",
+          "after": "av scenarion och riskkällor",
+          "doc_id": "doc_11"
+        },
+        {
+          "context": "(Sendai framework for \nDisaster Risk Redcution 2015–2030)  \nSendairamverket (2015–2030) är en \ninternationell, icke bindande,",
+          "before": "(Sendai framework for Disaster",
+          "middle": "Redcution 2015–2030) Sendairamverket (2015–2030) är",
+          "after": "en internationell, icke bindande,",
+          "doc_id": "doc_11"
+        },
+        {
+          "context": "ett \nbrett spektrum av risker",
+          "before": "ett brett spektrum av",
+          "middle": "",
+          "after": "",
+          "doc_id": "doc_11"
+        },
+        {
+          "context": "analysera och värdera de risker och \nsårbarheter som finns i kommunens \ngeografiska område samt",
+          "before": "analysera och värdera de",
+          "middle": "och sårbarheter som finns i",
+          "after": "kommunens geografiska område samt",
+          "doc_id": "doc_11"
+        },
+        {
+          "context": "för information \nom samhällets risker till allmänheten \noch anställda \n• Utgöra ett underlag för",
+          "before": "för information om samhällets",
+          "middle": "till allmänheten och anställda •",
+          "after": "Utgöra ett underlag för",
+          "doc_id": "doc_11"
+        },
+        {
+          "context": "samlad bild av de risker som kan identifieras och som ger \nkonsekvenser inom Ronneby",
+          "before": "samlad bild av de",
+          "middle": "som kan identifieras och som",
+          "after": "ger konsekvenser inom Ronneby",
+          "doc_id": "doc_12"
+        }
+      ]
+    }
+  },
+  "level_mapping": {
+    "sannolikhet": {
+      "very_low": [
+        "mycket låg",
+        "mycket liten",
+        "osannolik",
+        "sällsynt"
+      ],
+      "low": [
+        "låg",
+        "liten",
+        "små"
+      ],
+      "medium": [
+        "medelhög",
+        "mellan",
+        "möjlig"
+      ],
+      "high": [
+        "hög",
+        "stor"
+      ],
+      "very_high": [
+        "mycket hög",
+        "mycket stora",
+        "stora"
+      ],
+      "change": [
+        "minska",
+        "minskar",
+        "minskad",
+        "minskande",
+        "öka",
+        "ökar",
+        "ökad",
+        "ökande",
+        "förändras",
+        "förändrad",
+        "stiger",
+        "stigande",
+        "sjunker",
+        "sjunkande"
+      ],
+      "uncertainty": [
+        "svår",
+        "svårt",
+        "svåra",
+        "lätt",
+        "lätta",
+        "lättare",
+        "osäker",
+        "osäkert",
+        "osäkra",
+        "osäkerhet",
+        "säker",
+        "säkert",
+        "säkra",
+        "säkerhet"
+      ],
+      "acceptability": [
+        "acceptabel",
+        "oacceptabel"
+      ]
+    },
+    "konsekvens": {
+      "very_low": [
+        "mycket begränsade",
+        "mycket liten",
+        "försumbara"
+      ],
+      "low": [
+        "begränsade",
+        "lindriga",
+        "liten",
+        "små"
+      ],
+      "medium": [
+        "kännbara",
+        "måttliga",
+        "direkta"
+      ],
+      "high": [
+        "allvarlig",
+        "allvarliga",
+        "betydande",
+        "stor",
+        "stora",
+        "omfattande",
+        "svåra"
+      ],
+      "very_high": [
+        "mycket allvarlig",
+        "mycket allvarliga",
+        "mycket stora",
+        "mycket omfattande",
+        "katastrofal",
+        "katastrofala"
+      ],
+      "change": [
+        "minska",
+        "minskar",
+        "minskad",
+        "minskande",
+        "öka",
+        "ökar",
+        "ökad",
+        "ökande",
+        "förändras",
+        "förändrad",
+        "stiger",
+        "stigande",
+        "sjunker",
+        "sjunkande"
+      ],
+      "uncertainty": [
+        "osäker",
+        "osäkert",
+        "osäkra",
+        "osäkerhet",
+        "säker",
+        "säkert",
+        "säkra",
+        "säkerhet"
+      ],
+      "acceptability": [
+        "acceptabel",
+        "oacceptabel"
+      ]
+    },
+    "risk": {
+      "very_low": [
+        "mycket låg",
+        "mycket liten"
+      ],
+      "low": [
+        "låg",
+        "liten",
+        "små"
+      ],
+      "medium": [
+        "medelhög",
+        "mellan"
+      ],
+      "high": [
+        "hög",
+        "stor",
+        "stora",
+        "omfattande"
+      ],
+      "very_high": [
+        "mycket hög",
+        "mycket stora",
+        "mycket omfattande"
+      ],
+      "change": [
+        "minska",
+        "minskar",
+        "minskad",
+        "minskande",
+        "öka",
+        "ökar",
+        "ökad",
+        "ökande",
+        "förändras",
+        "förändrad",
+        "stiger",
+        "stigande",
+        "sjunker",
+        "sjunkande"
+      ],
+      "uncertainty": [
+        "osäker",
+        "osäkert",
+        "osäkra",
+        "osäkerhet",
+        "säker",
+        "säkert",
+        "säkra",
+        "säkerhet"
+      ],
+      "acceptability": [
+        "acceptabel",
+        "oacceptabel",
+        "tolerabel",
+        "intolerabel"
+      ]
+    }
+  },
+  "by_actor": {
+    "kommun": {
+      "doc_count": 488,
+      "risk_counts": {
+        "total": 65679,
+        "by_category": {
+          "naturhot": 21022,
+          "biologiska_hot": 9943,
+          "olyckor": 5103,
+          "antagonistiska_hot": 8011,
+          "cyber_hot": 893,
+          "sociala_risker": 1915,
+          "teknisk_infrastruktur": 10034,
+          "brand": 6332,
+          "miljö_klimat": 2277,
+          "ekonomi": 149
+        }
+      },
+      "qualifications": {
+        "sannolikhet": {
+          "UNKNOWN": 2981,
+          "uncertainty": 220,
+          "low": 600,
+          "change": 373,
+          "very_low": 523,
+          "medium": 644,
+          "high": 850,
+          "very_high": 453,
+          "acceptability": 8
+        },
+        "konsekvens": {
+          "UNKNOWN": 6189,
+          "uncertainty": 231,
+          "high": 3741,
+          "medium": 204,
+          "low": 362,
+          "very_high": 723,
+          "very_low": 166,
+          "change": 239,
+          "acceptability": 22
+        },
+        "risk": {
+          "UNKNOWN": 12841,
+          "high": 1357,
+          "change": 2052,
+          "very_low": 76,
+          "low": 238,
+          "medium": 205,
+          "very_high": 131,
+          "uncertainty": 345,
+          "acceptability": 24
+        }
+      }
+    },
+    "länsstyrelse": {
+      "doc_count": 83,
+      "risk_counts": {
+        "total": 21293,
+        "by_category": {
+          "naturhot": 8062,
+          "biologiska_hot": 3845,
+          "olyckor": 2164,
+          "antagonistiska_hot": 1196,
+          "cyber_hot": 226,
+          "sociala_risker": 472,
+          "teknisk_infrastruktur": 2656,
+          "brand": 1381,
+          "miljö_klimat": 1255,
+          "ekonomi": 36
+        }
+      },
+      "qualifications": {
+        "sannolikhet": {
+          "UNKNOWN": 767,
+          "uncertainty": 56,
+          "high": 209,
+          "low": 159,
+          "very_low": 84,
+          "change": 105,
+          "very_high": 92,
+          "medium": 239,
+          "acceptability": 1
+        },
+        "konsekvens": {
+          "high": 1037,
+          "change": 67,
+          "UNKNOWN": 1935,
+          "very_high": 212,
+          "very_low": 28,
+          "medium": 46,
+          "low": 61,
+          "uncertainty": 57
+        },
+        "risk": {
+          "UNKNOWN": 6625,
+          "high": 643,
+          "change": 670,
+          "uncertainty": 154,
+          "medium": 185,
+          "low": 100,
+          "very_low": 30,
+          "acceptability": 4,
+          "very_high": 44
+        }
+      }
+    },
+    "MCF": {
+      "doc_count": 11,
+      "risk_counts": {
+        "total": 2422,
+        "by_category": {
+          "naturhot": 728,
+          "biologiska_hot": 372,
+          "olyckor": 91,
+          "antagonistiska_hot": 328,
+          "cyber_hot": 97,
+          "sociala_risker": 162,
+          "teknisk_infrastruktur": 324,
+          "brand": 168,
+          "miljö_klimat": 144,
+          "ekonomi": 8
+        }
+      },
+      "qualifications": {
+        "sannolikhet": {
+          "UNKNOWN": 211,
+          "change": 29,
+          "high": 28,
+          "medium": 21,
+          "uncertainty": 31,
+          "very_high": 1,
+          "low": 13,
+          "very_low": 6
+        },
+        "konsekvens": {
+          "high": 204,
+          "uncertainty": 34,
+          "UNKNOWN": 391,
+          "change": 10,
+          "very_high": 85,
+          "medium": 30,
+          "low": 27,
+          "very_low": 4
+        },
+        "risk": {
+          "UNKNOWN": 857,
+          "high": 55,
+          "uncertainty": 29,
+          "change": 66,
+          "low": 7,
+          "medium": 5,
+          "acceptability": 2
+        }
+      }
+    }
+  }
+}

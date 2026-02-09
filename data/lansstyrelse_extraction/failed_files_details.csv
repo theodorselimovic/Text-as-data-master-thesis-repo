@@ -1,0 +1,6 @@
+filename,file_type,method_attempted,error_message
+RSA Kalmar Län 2009.pdf,pdf,all_failed,All extraction methods failed or produced <500 chars (OCR disabled - use --ocr flag)
+RSA Kalmar Län 2008.pdf,pdf,all_failed,All extraction methods failed or produced <500 chars (OCR disabled - use --ocr flag)
+RSA Kalmar Län 2011.pdf,pdf,all_failed,All extraction methods failed or produced <500 chars (OCR disabled - use --ocr flag)
+RSA Kalmar Län 2010.pdf,pdf,all_failed,All extraction methods failed or produced <500 chars (OCR disabled - use --ocr flag)
+RSA Kalmar Län 2012.pdf,pdf,all_failed,All extraction methods failed or produced <500 chars (OCR disabled - use --ocr flag)

@@ -1,0 +1,799 @@
+================================================================================
+RISK CONTEXT ANALYSIS - COMPREHENSIVE REPORT
+================================================================================
+
+Total documents analyzed: 582
+
+----------------------------------------
+METHODOLOGY NOTES:
+----------------------------------------
+- 'risk- och sårbarhetsanalys' phrases excluded from analysis
+- Qualifications grouped into 5 severity levels: very_low, low, medium, high, very_high
+- Additional categories: 'change' (minska/öka), 'uncertainty', 'acceptability'
+- For konsekvens: 'svårt att bedöma' pattern detected for uncertainty
+- For sannolikhet: 'svår/lätt' alone indicates uncertainty
+
+================================================================================
+RISK TERM COUNTS (from dictionary)
+================================================================================
+
+Total risk term mentions: 89394
+
+By category:
+  naturhot                      :  29812 ( 33.3%)
+  biologiska_hot                :  14160 ( 15.8%)
+  teknisk_infrastruktur         :  13014 ( 14.6%)
+  antagonistiska_hot            :   9535 ( 10.7%)
+  brand                         :   7881 (  8.8%)
+  olyckor                       :   7358 (  8.2%)
+  miljö_klimat                  :   3676 (  4.1%)
+  sociala_risker                :   2549 (  2.9%)
+  cyber_hot                     :   1216 (  1.4%)
+  ekonomi                       :    193 (  0.2%)
+
+================================================================================
+QUALIFICATION ANALYSIS (5-level scale)
+================================================================================
+
+SANNOLIKHET:
+  Total qualified mentions: 8704
+
+  Distribution by level:
+    very_low       :   613 (  7.0%)
+    low            :   772 (  8.9%)
+    medium         :   904 ( 10.4%)
+    high           :  1087 ( 12.5%)
+    very_high      :   546 (  6.3%)
+    change         :   507 (  5.8%)
+    uncertainty    :   307 (  3.5%)
+    acceptability  :     9 (  0.1%)
+    UNKNOWN        :  3959 ( 45.5%)
+
+  Raw term breakdown:
+    medelhög             -> medium    :   735
+    låg                  -> low       :   686
+    hög                  -> high      :   677
+    mycket låg           -> very_low  :   503
+    mycket hög           -> very_high :   439
+    stor                 -> high      :   410
+    ökar                 -> change    :   152
+    osäkerhet            -> uncertainty:   128
+    minska               -> change    :   125
+    möjlig               -> medium    :   121
+    stora                -> very_high :    99
+    liten                -> low       :    83
+    öka                  -> change    :    80
+    säkerhet             -> uncertainty:    65
+    osannolik            -> very_low  :    63
+    ökad                 -> change    :    58
+    mellan               -> medium    :    48
+    svårt                -> uncertainty:    43
+    svår                 -> uncertainty:    40
+    minskar              -> change    :    32
+    mycket liten         -> very_low  :    26
+    förändrad            -> change    :    26
+    sällsynt             -> very_low  :    21
+    svåra                -> uncertainty:    14
+    minskad              -> change    :    11
+    minskande            -> change    :     9
+    mycket stora         -> very_high :     8
+    ökande               -> change    :     8
+    säker                -> uncertainty:     6
+    acceptabel           -> acceptability:     6
+    förändras            -> change    :     4
+    oacceptabel          -> acceptability:     3
+    osäker               -> uncertainty:     3
+    små                  -> low       :     3
+    osäkert              -> uncertainty:     2
+    säkra                -> uncertainty:     2
+    stiger               -> change    :     1
+    lätt                 -> uncertainty:     1
+    lättare              -> uncertainty:     1
+    lätta                -> uncertainty:     1
+    osäkra               -> uncertainty:     1
+    sjunker              -> change    :     1
+
+  UNKNOWN QUALIFICATIONS (3959 total, 45.5%):
+  20 randomly sampled examples to help identify missing terms:
+
+    Example 1:
+      Doc: doc_2
+      Context: topografi. Markens 
+stabilitet och sannolikheten för skred varierar därför kraftigt även inom korta avstånd.
+      Words before: topografi. Markens stabilitet och
+      Words in middle: för skred varierar därför kraftigt
+
+    Example 2:
+      Doc: doc_18
+      Context: B. Klassningen 
+innebär att sannolikheten för förlust av människoliv eller för allvarlig personskada är
+      Words before: B. Klassningen innebär att
+      Words in middle: för förlust av människoliv eller
+
+    Example 3:
+      Doc: doc_17
+      Context: störningen är många, höjs sannolikheten från 2 till 3 i 2023 års  . Konsekvensen
+      Words before: störningen är många, höjs
+      Words in middle: från 2 till 3 i
+
+    Example 4:
+      Doc: doc_17
+      Context: kommunen.  
+För att bedöma sannolikheten för att en händelse ska inträffa behöver den definieras.
+      Words before: kommunen. För att bedöma
+      Words in middle: för att en händelse ska
+
+    Example 5:
+      Doc: doc_1
+      Context: på egendom 
+och miljö. 
+Sannolikheten har bedömts utifrån följande kriterier: 
+ Minst 1 gång
+      Words before: på egendom och miljö.
+      Words in middle: har bedömts utifrån följande kriterier:
+
+    Example 6:
+      Doc: doc_13
+      Context: eller miljö. 
+ 
+  
+
+23 
+ 
+ 
+ 
+Riskmatris 
+Sannolikhet 
+ 
+5 
+ 
+ 
+ 
+    
+ 
+4 
+ 
+ 
+ 
+    
+ 
+3 
+ 
+ 
+ 
+    
+ 
+2 
+ 
+ 
+ 
+    
+ 
+1 
+ 
+ 
+ 
+    
+   
+1 
+ 
+ 
+2 
+ 
+3 
+ 
+4
+      Words before: eller miljö. 23 Riskmatris
+      Words in middle: 5 4 3 2 1
+
+    Example 7:
+      Doc: doc_8
+      Context: Sannolikhet
+
+    Example 8:
+      Doc: doc_15
+      Context: underlag för att bedöma sannolikhet
+      Words before: underlag för att bedöma
+
+    Example 9:
+      Doc: doc_11
+      Context: Sammanfattande bedömning av konsekvens, sannolikhet
+      Words before: Sammanfattande bedömning av konsekvens,
+
+    Example 10:
+      Doc: doc_2
+      Context: verksamheten? 
+• Vad är sannolikheten att de inträffar? 
+• Vilka skulle konsekvenserna bli om
+      Words before: verksamheten? • Vad är
+      Words in middle: att de inträffar? • Vilka
+
+    Example 11:
+      Doc: doc_14
+      Context: Risk 
+En sammanvägning av sannolikheten för att en händelse ska inträffa och de 
+konsekvenser
+      Words before: Risk En sammanvägning av
+      Words in middle: för att en händelse ska
+
+    Example 12:
+      Doc: doc_8
+      Context: användas alltmer i framtiden. Sannolikhet
+      Words before: användas alltmer i framtiden.
+
+    Example 13:
+      Doc: doc_2
+      Context: avgöra risken. 
+Bedömning av sannolikhet
+      Words before: avgöra risken. Bedömning av
+
+    Example 14:
+      Doc: doc_21
+      Context: Nivåerna i riskmatrisen för sannolikhets
+      Words before: Nivåerna i riskmatrisen för
+
+    Example 15:
+      Doc: doc_11
+      Context: identifieras ger svar på 
+sannolikhet och konsekvens (5)  
+ 
+ ,    
+  regleras i lag. 
+Sveriges kommuner
+      Words before: identifieras ger svar på
+      Words in middle: och konsekvens (5) , regleras
+
+    Example 16:
+      Doc: doc_18
+      Context: Risk En sammanvägning av sannolikheten för att en händelse ska inträffa 
+och de konsekvenser
+      Words before: Risk En sammanvägning av
+      Words in middle: för att en händelse ska
+
+    Example 17:
+      Doc: doc_14
+      Context: 15 
+ 
+4.4. Risker och sannolikhet 
+För att på ett likvärdigt sätt bedöma sannolikheten att
+      Words before: 15 4.4. Risker och
+      Words in middle: För att på ett likvärdigt
+
+    Example 18:
+      Doc: doc_3
+      Context: En social risk är sannolikheten för oönskade händelser, beteenden 
+eller tillstånd med ursprung i
+      Words before: En social risk är
+      Words in middle: för oönskade händelser, beteenden eller
+
+    Example 19:
+      Doc: doc_16
+      Context: sannolikhet × konsekvens 
+Styrel  
+En planeringsprocess som leder till att
+      Words in middle: × konsekvens Styrel En planeringsprocess
+
+    Example 20:
+      Doc: doc_21
+      Context: kommunens geografiska område, 
+samt sannolikhets
+      Words before: kommunens geografiska område, samt
+
+KONSEKVENS:
+  Total qualified mentions: 16105
+
+  Distribution by level:
+    very_low       :   198 (  1.2%)
+    low            :   450 (  2.8%)
+    medium         :   280 (  1.7%)
+    high           :  4982 ( 30.9%)
+    very_high      :  1020 (  6.3%)
+    change         :   316 (  2.0%)
+    uncertainty    :   322 (  2.0%)
+    acceptability  :    22 (  0.1%)
+    UNKNOWN        :  8515 ( 52.9%)
+
+  Raw term breakdown:
+    allvarliga           -> high      :  1935
+    stora                -> high      :  1588
+    mycket allvarliga    -> very_high :   526
+    stor                 -> high      :   516
+    omfattande           -> high      :   360
+    begränsade           -> low       :   342
+    katastrofala         -> very_high :   300
+    direkta              -> medium    :   250
+    betydande            -> high      :   211
+    mycket begränsade    -> very_low  :   196
+    svåra                -> high      :   186
+    allvarlig            -> high      :   186
+    säkerhet             -> uncertainty:   145
+    osäkerhet            -> uncertainty:   114
+    mycket stora         -> very_high :    97
+    ökad                 -> change    :    90
+    minska               -> change    :    76
+    öka                  -> change    :    70
+    små                  -> low       :    51
+    katastrofal          -> very_high :    49
+    liten                -> low       :    45
+    ökar                 -> change    :    39
+    svårt att bedöma     -> other     :    35
+    mycket allvarlig     -> very_high :    29
+    kännbara             -> medium    :    20
+    mycket omfattande    -> very_high :    19
+    acceptabel           -> acceptability:    18
+    säker                -> uncertainty:    14
+    minskar              -> change    :    14
+    lindriga             -> low       :    12
+    måttliga             -> medium    :    10
+    förändras            -> change    :     8
+    minskad              -> change    :     8
+    osäkra               -> uncertainty:     5
+    förändrad            -> change    :     5
+    ökande               -> change    :     4
+    oacceptabel          -> acceptability:     4
+    säkert               -> uncertainty:     3
+    säkra                -> uncertainty:     3
+    försumbara           -> very_low  :     2
+    sjunker              -> change    :     2
+    osäker               -> uncertainty:     2
+    osäkert              -> uncertainty:     1
+
+  UNKNOWN QUALIFICATIONS (8515 total, 52.9%):
+  20 randomly sampled examples to help identify missing terms:
+
+    Example 1:
+      Doc: doc_5
+      Context: - mycket lag
+  5.10 Konsekvenser för kommunen vid extraordinära händelser
+Händelsernasom hamnadei de rödafältenvidriskvärderingenärväderhändelser.Dessa
+      Words before: - mycket lag 5.10
+      Words in middle: för kommunen vid extraordinära händelser
+
+    Example 2:
+      Doc: doc_1
+      Context: brand skulle få störst konsekvenser har man under de senaste åren färdigställt 
+brandposterna så
+      Words before: brand skulle få störst
+      Words in middle: har man under de senaste
+
+    Example 3:
+      Doc: doc_16
+      Context: andra länder till 
+konsekvenser för Sverige genom exempelvis påverkan på global handel och
+      Words before: andra länder till
+      Words in middle: för Sverige genom exempelvis påverkan
+
+    Example 4:
+      Doc: doc_5
+      Context: bedömdes kunnabli extraordinärahändelservärderades
+utifrånsannolikhetoch konsekvens
+      Words before: bedömdes kunnabli extraordinärahändelservärderades utifrånsannolikhetoch
+
+    Example 5:
+      Doc: doc_15
+      Context: En värmebölja kan få konsekvenser för liv och hälsa såväl som för
+samhällets funktionalitet.
+      Words before: En värmebölja kan få
+      Words in middle: för liv och hälsa såväl
+
+    Example 6:
+      Doc: doc_16
+      Context: upp i orsaker och konsekvenser
+      Words before: upp i orsaker och
+
+    Example 7:
+      Doc: doc_0
+      Context: värden för sannolikhet respektive konsekvens för de 
+identifierade hoten utan bedömer att händelserna är
+      Words before: värden för sannolikhet respektive
+      Words in middle: för de identifierade hoten utan
+
+    Example 8:
+      Doc: doc_11
+      Context: ska inträffa och de konsekvenser 
+händelsen kan leda till (2).   
+ 
+Riskanalys  
+Process för att
+      Words before: ska inträffa och de
+      Words in middle: händelsen kan leda till (2).
+
+    Example 9:
+      Doc: doc_8
+      Context: i dessa situationer. Då konsekvensen liknar det som man finner i vanliga krishändelser har
+      Words before: i dessa situationer. Då
+      Words in middle: liknar det som man finner
+
+    Example 10:
+      Doc: doc_2
+      Context: vattenmängden skulle kunna 
+ge konsekvenser även på vattenförsörjningen då kommunens största vattenverk Dösebacka ligger
+      Words before: vattenmängden skulle kunna ge
+      Words in middle: även på vattenförsörjningen då kommunens
+
+    Example 11:
+      Doc: doc_16
+      Context: konsekvens
+
+    Example 12:
+      Doc: doc_10
+      Context: noder, la
+det få konsekvenser för kommunens verksamheter.
+
+ommunens viktiga system går via eller
+      Words before: noder, la det få
+      Words in middle: för kommunens verksamheter. ommunens viktiga
+
+    Example 13:
+      Doc: doc_9
+      Context: mycket från varandra beträffande konsekvenser för den enskilde och samhället. Spanska
+sjukan började spridas
+      Words before: mycket från varandra beträffande
+      Words in middle: för den enskilde och samhället.
+
+    Example 14:
+      Doc: doc_12
+      Context: tagits till redan kända konsekvenser
+      Words before: tagits till redan kända
+
+    Example 15:
+      Doc: doc_7
+      Context: döda och/eller 5 drabbade  
+ 
+Konsekvens ekonomi/miljö/skador på egendom och miljö 
+Katastrof >50 000 000
+      Words before: döda och/eller 5 drabbade
+      Words in middle: ekonomi/miljö/skador på egendom och miljö
+
+    Example 16:
+      Doc: doc_11
+      Context: - Sammanfattande bedömning av konsekvens
+      Words before: - Sammanfattande bedömning av
+
+    Example 17:
+      Doc: doc_9
+      Context: uppstå främst som en konsekvens av andra nationers agerande. Rysslands krig
+mot Ukraina har
+      Words before: uppstå främst som en
+      Words in middle: av andra nationers agerande. Rysslands
+
+    Example 18:
+      Doc: doc_9
+      Context: som finns samt vilka konsekvenser
+dessa kan få om de inträffar för dom samhällsviktiga
+      Words before: som finns samt vilka
+      Words in middle: dessa kan få om de
+
+    Example 19:
+      Doc: doc_9
+      Context: att analysera
+sannolikheter och konsekvenser av dessa risker.
+
+2023 års   har genomförts med hjälp
+      Words before: att analysera sannolikheter och
+      Words in middle: av dessa risker. 2023 års
+
+    Example 20:
+      Doc: doc_15
+      Context: Konsekvenser och behov av åtgärder -
+Klimatförändringar i Härnösands kommun,
+      Words in middle: och behov av åtgärder -
+
+RISK:
+  Total qualified mentions: 26745
+
+  Distribution by level:
+    very_low       :   106 (  0.4%)
+    low            :   345 (  1.3%)
+    medium         :   395 (  1.5%)
+    high           :  2055 (  7.7%)
+    very_high      :   175 (  0.7%)
+    change         :  2788 ( 10.4%)
+    uncertainty    :   528 (  2.0%)
+    acceptability  :    30 (  0.1%)
+    UNKNOWN        : 20323 ( 76.0%)
+
+  Raw term breakdown:
+    ökad                 -> change    :   884
+    stor                 -> high      :   850
+    hög                  -> high      :   665
+    ökar                 -> change    :   656
+    öka                  -> change    :   472
+    minska               -> change    :   444
+    säkerhet             -> uncertainty:   363
+    stora                -> high      :   329
+    medelhög             -> medium    :   291
+    låg                  -> low       :   251
+    omfattande           -> high      :   211
+    minskar              -> change    :   168
+    mycket hög           -> very_high :   146
+    mellan               -> medium    :   104
+    osäkerhet            -> uncertainty:    94
+    mycket låg           -> very_low  :    85
+    minskad              -> change    :    70
+    liten                -> low       :    53
+    små                  -> low       :    41
+    förändras            -> change    :    33
+    säker                -> uncertainty:    31
+    acceptabel           -> acceptability:    24
+    mycket stora         -> very_high :    23
+    förändrad            -> change    :    23
+    mycket liten         -> very_low  :    21
+    stigande             -> change    :    17
+    svårt att bedöma     -> other     :    14
+    säkra                -> uncertainty:    14
+    ökande               -> change    :    12
+    oacceptabel          -> acceptability:     6
+    mycket omfattande    -> very_high :     6
+    osäker               -> uncertainty:     5
+    stiger               -> change    :     5
+    säkert               -> uncertainty:     3
+    osäkra               -> uncertainty:     3
+    sjunker              -> change    :     3
+    sjunkande            -> change    :     1
+    osäkert              -> uncertainty:     1
+
+  UNKNOWN QUALIFICATIONS (20323 total, 76.0%):
+  20 randomly sampled examples to help identify missing terms:
+
+    Example 1:
+      Doc: doc_2
+      Context: 6 Identifierade och analyserade risker för kommunen och kommunens geografiska område ............ 38 
+6.1
+      Words before: 6 Identifierade och analyserade
+      Words in middle: för kommunen och kommunens geografiska
+
+    Example 2:
+      Doc: doc_1
+      Context: kritiska beroenden och de risker som identifierats 
+enligt punkterna under analysprocessen. Redovisningen avser behov
+      Words before: kritiska beroenden och de
+      Words in middle: som identifierats enligt punkterna under
+
+    Example 3:
+      Doc: doc_4
+      Context: att uppfyllalagensmeningom en sådan
+risk
+      Words before: att uppfyllalagensmeningom en sådan
+
+    Example 4:
+      Doc: doc_7
+      Context: allvarlig 
+störning eller överhängande risk för en allvarlig störning i viktiga samhällsfunktioner och 
+kräver
+      Words before: allvarlig störning eller överhängande
+      Words in middle: för en allvarlig störning i
+
+    Example 5:
+      Doc: doc_9
+      Context: och konsekvenser av dessa risker
+      Words before: och konsekvenser av dessa
+
+    Example 6:
+      Doc: doc_3
+      Context: Åtgärder kopplat till sociala risker ...................................................................51  
+13.3 Behov av tekniska åtgärder ..............................................................................52  
+13.4 Behov
+      Words before: Åtgärder kopplat till sociala
+      Words in middle: ...................................................................51 13.3 Behov av tekniska
+
+    Example 7:
+      Doc: doc_2
+      Context: Den utelämnar 
+därför de risker som kan leda till räddningsinsatser med begränsad skada för
+      Words before: Den utelämnar därför de
+      Words in middle: som kan leda till räddningsinsatser
+
+    Example 8:
+      Doc: doc_4
+      Context: och syfte
+Syftet med risk
+      Words before: och syfte Syftet med
+
+    Example 9:
+      Doc: doc_1
+      Context: Framtagandet av kommunens övergripande risk
+      Words before: Framtagandet av kommunens övergripande
+
+    Example 10:
+      Doc: doc_9
+      Context: kommunens geografiska områdesansvar, vilka risker som finns samt vilka konsekvenser
+dessa kan få om
+      Words before: kommunens geografiska områdesansvar, vilka
+      Words in middle: som finns samt vilka konsekvenser
+
+    Example 11:
+      Doc: doc_0
+      Context: ständigt en 
+kunskapsinhämtning och risker diskuteras i ett antal samverkansforum. Slutsatser och åtgärdsförslag 
+grundar
+      Words before: ständigt en kunskapsinhämtning och
+      Words in middle: diskuteras i ett antal samverkansforum.
+
+    Example 12:
+      Doc: doc_7
+      Context: förmåga att hantera olika risker
+      Words before: förmåga att hantera olika
+
+    Example 13:
+      Doc: doc_4
+      Context: ÅTGÄRDER MED ANLEDNING AV RISK
+      Words before: ÅTGÄRDER MED ANLEDNING AV
+
+    Example 14:
+      Doc: doc_7
+      Context: 9 
+Identifierade och analyserade risker för kommunen och kommunens geografiska område  9 
+Typhändelser 10
+      Words before: 9 Identifierade och analyserade
+      Words in middle: för kommunen och kommunens geografiska
+
+    Example 15:
+      Doc: doc_7
+      Context: social oro 15 
+Sociala risker 16 
+Sjukdomar 16 
+Riskvärdering 17 
+Riskmatriser 18 
+Beskrivning av
+      Words before: social oro 15 Sociala
+      Words in middle: 16 Sjukdomar 16 Riskvärdering 17
+
+    Example 16:
+      Doc: doc_2
+      Context: av värmeböljor vilket ger risk för översvämningar, skred och överhettning av både 
+människor och
+      Words before: av värmeböljor vilket ger
+      Words in middle: för översvämningar, skred och överhettning
+
+    Example 17:
+      Doc: doc_9
+      Context: ennen nen 20
+Sjukdomsrelaterade risker
+      Words before: ennen nen 20 Sjukdomsrelaterade
+
+    Example 18:
+      Doc: doc_4
+      Context: 1 BESKRiVNINGÖVERSALA KOMMUNOCHDESSGEOGRAFISKAOMRÅDE
+
+12(33)
+Risk
+      Words before: 1 BESKRiVNINGÖVERSALA KOMMUNOCHDESSGEOGRAFISKAOMRÅDE 12(33)
+
+    Example 19:
+      Doc: doc_0
+      Context: 6. Identifierade och analyserade risker för kommunen och kommunens .................................................................... 14 
+geografiska område ..................................................................................................................................................................
+      Words before: 6. Identifierade och analyserade
+      Words in middle: för kommunen och kommunens ....................................................................
+
+    Example 20:
+      Doc: doc_0
+      Context: beaktats i redovisningen av risk
+      Words before: beaktats i redovisningen av
+
+================================================================================
+ACTOR COMPARISON
+================================================================================
+
+Actors found: kommun, länsstyrelse, MCF
+
+Document counts:
+  kommun: 488
+  länsstyrelse: 83
+  MCF: 11
+
+Risk mentions by category (per document average):
+
+  antagonistiska_hot:
+    kommun: 8011 total (16.42 per doc)
+    länsstyrelse: 1196 total (14.41 per doc)
+    MCF: 328 total (29.82 per doc)
+
+  biologiska_hot:
+    kommun: 9943 total (20.38 per doc)
+    länsstyrelse: 3845 total (46.33 per doc)
+    MCF: 372 total (33.82 per doc)
+
+  brand:
+    kommun: 6332 total (12.98 per doc)
+    länsstyrelse: 1381 total (16.64 per doc)
+    MCF: 168 total (15.27 per doc)
+
+  cyber_hot:
+    kommun: 893 total (1.83 per doc)
+    länsstyrelse: 226 total (2.72 per doc)
+    MCF: 97 total (8.82 per doc)
+
+  ekonomi:
+    kommun: 149 total (0.31 per doc)
+    länsstyrelse: 36 total (0.43 per doc)
+    MCF: 8 total (0.73 per doc)
+
+  miljö_klimat:
+    kommun: 2277 total (4.67 per doc)
+    länsstyrelse: 1255 total (15.12 per doc)
+    MCF: 144 total (13.09 per doc)
+
+  naturhot:
+    kommun: 21022 total (43.08 per doc)
+    länsstyrelse: 8062 total (97.13 per doc)
+    MCF: 728 total (66.18 per doc)
+
+  olyckor:
+    kommun: 5103 total (10.46 per doc)
+    länsstyrelse: 2164 total (26.07 per doc)
+    MCF: 91 total (8.27 per doc)
+
+  sociala_risker:
+    kommun: 1915 total (3.92 per doc)
+    länsstyrelse: 472 total (5.69 per doc)
+    MCF: 162 total (14.73 per doc)
+
+  teknisk_infrastruktur:
+    kommun: 10034 total (20.56 per doc)
+    länsstyrelse: 2656 total (32.00 per doc)
+    MCF: 324 total (29.45 per doc)
+
+Qualification distribution by actor:
+
+  SANNOLIKHET:
+    very_low    : kommun: 523 (7.9%) | länsstyrelse: 84 (4.9%) | MCF: 6 (1.8%)
+    low         : kommun: 600 (9.0%) | länsstyrelse: 159 (9.3%) | MCF: 13 (3.8%)
+    medium      : kommun: 644 (9.7%) | länsstyrelse: 239 (14.0%) | MCF: 21 (6.2%)
+    high        : kommun: 850 (12.8%) | länsstyrelse: 209 (12.2%) | MCF: 28 (8.2%)
+    very_high   : kommun: 453 (6.8%) | länsstyrelse: 92 (5.4%) | MCF: 1 (0.3%)
+    change      : kommun: 373 (5.6%) | länsstyrelse: 105 (6.1%) | MCF: 29 (8.5%)
+    uncertainty : kommun: 220 (3.3%) | länsstyrelse: 56 (3.3%) | MCF: 31 (9.1%)
+
+  KONSEKVENS:
+    very_low    : kommun: 166 (1.4%) | länsstyrelse: 28 (0.8%) | MCF: 4 (0.5%)
+    low         : kommun: 362 (3.0%) | länsstyrelse: 61 (1.8%) | MCF: 27 (3.4%)
+    medium      : kommun: 204 (1.7%) | länsstyrelse: 46 (1.3%) | MCF: 30 (3.8%)
+    high        : kommun: 3741 (31.5%) | länsstyrelse: 1037 (30.1%) | MCF: 204 (26.0%)
+    very_high   : kommun: 723 (6.1%) | länsstyrelse: 212 (6.2%) | MCF: 85 (10.8%)
+    change      : kommun: 239 (2.0%) | länsstyrelse: 67 (1.9%) | MCF: 10 (1.3%)
+    uncertainty : kommun: 231 (1.9%) | länsstyrelse: 57 (1.7%) | MCF: 34 (4.3%)
+
+  RISK:
+    very_low    : kommun: 76 (0.4%) | länsstyrelse: 30 (0.4%) | MCF: 0 (0.0%)
+    low         : kommun: 238 (1.4%) | länsstyrelse: 100 (1.2%) | MCF: 7 (0.7%)
+    medium      : kommun: 205 (1.2%) | länsstyrelse: 185 (2.2%) | MCF: 5 (0.5%)
+    high        : kommun: 1357 (7.9%) | länsstyrelse: 643 (7.6%) | MCF: 55 (5.4%)
+    very_high   : kommun: 131 (0.8%) | länsstyrelse: 44 (0.5%) | MCF: 0 (0.0%)
+    change      : kommun: 2052 (11.9%) | länsstyrelse: 670 (7.9%) | MCF: 66 (6.5%)
+    uncertainty : kommun: 345 (2.0%) | länsstyrelse: 154 (1.8%) | MCF: 29 (2.8%)
+
+================================================================================
+LEVEL MAPPING REFERENCE
+================================================================================
+
+SANNOLIKHET:
+  very_low  : mycket låg, mycket liten, osannolik, sällsynt
+  low       : låg, liten, små
+  medium    : medelhög, mellan, möjlig
+  high      : hög, stor
+  very_high : mycket hög, mycket stora, stora
+  change    : minska, minskar, minskad, minskande, öka, ökar, ökad, ökande, förändras, förändrad, stiger, stigande, sjunker, sjunkande
+  uncertainty: svår, svårt, svåra, lätt, lätta, lättare, osäker, osäkert, osäkra, osäkerhet, säker, säkert, säkra, säkerhet
+  acceptability: acceptabel, oacceptabel
+
+KONSEKVENS:
+  very_low  : mycket begränsade, mycket liten, försumbara
+  low       : begränsade, lindriga, liten, små
+  medium    : kännbara, måttliga, direkta
+  high      : allvarlig, allvarliga, betydande, stor, stora, omfattande, svåra
+  very_high : mycket allvarlig, mycket allvarliga, mycket stora, mycket omfattande, katastrofal, katastrofala
+  change    : minska, minskar, minskad, minskande, öka, ökar, ökad, ökande, förändras, förändrad, stiger, stigande, sjunker, sjunkande
+  uncertainty: osäker, osäkert, osäkra, osäkerhet, säker, säkert, säkra, säkerhet
+  acceptability: acceptabel, oacceptabel
+
+RISK:
+  very_low  : mycket låg, mycket liten
+  low       : låg, liten, små
+  medium    : medelhög, mellan
+  high      : hög, stor, stora, omfattande
+  very_high : mycket hög, mycket stora, mycket omfattande
+  change    : minska, minskar, minskad, minskande, öka, ökar, ökad, ökande, förändras, förändrad, stiger, stigande, sjunker, sjunkande
+  uncertainty: osäker, osäkert, osäkra, osäkerhet, säker, säkert, säkra, säkerhet
+  acceptability: acceptabel, oacceptabel, tolerabel, intolerabel
