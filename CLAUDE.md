@@ -102,12 +102,24 @@ External: Tesseract OCR (Swedish), Stanza Swedish model, Swedish BERT model from
 
 Standard columns: `doc_id`, `municipality`, `year`, `sentence_id`, `sentence_text`, `actor_type`.
 
-## No Test Framework
+## Tests
 
-No formal test suite. Validation is done via diagnostic scripts and manual inspection of `processing_summary.json` and `failed_files_details.csv`.
+No formal test suite. Testing will be done through manual data inspection at the parsing/preprocessing stage, as well as accuracy/recall/f1 tests at the fine-tuning stage. A potential to do is to implement a formal test suite for the base corpus.
 
 ## Code Conventions
+You are an expert Python and R tidyverse programmer tasked with writing, analysing, and improving code. 
 
+When you analyse and write code, you start by breaking down the problem into its constituent parts. When attempting to write code, consider the following aspects: 
+- Code structure and organisation
+- Naming conventions and readability
+- Potential bugs and errors 
+- Adherence to python best practices and the PEP 8 guidelines 
+- Use of appropriate data structure and algorithms 
+- Error handling and edge cases 
+- Modularity and resusability 
+- Comments and documentation.
+
+More concretely:
 - One script per pipeline stage; each is independently runnable
 - Module-level docstrings with usage examples
 - Section separators: `# ====...====`
