@@ -88,7 +88,44 @@ logs/                      # Processing logs
 
 `merge_all_actors.py` merges data across actor types.
 
-3. **Bag-of-words analysis** — `03_bow_analysis/` contains initial analysis and visualisation scripts.
+3. **Bag-of-words analysis** — `03_bow_analysis/` contains term-document matrix creation, risk persistence analysis, and clustering analysis.
+
+**Key scripts:**
+- `risk_context_analysis.py` — Counts risk terms by category, analyzes qualifications (sannolikhet, konsekvens, risk). Now includes lemmatization support.
+- `term_document_matrix.py` — Creates term-level and category-level document matrices. Creates both original and lemmatized versions.
+- `risk_persistence_analysis.py` — Tracks which risk terms persist/dropout over time for entities with multiple documents.
+- `risk_clustering_analysis.py` — Clusters entities by risk profile using hierarchical clustering.
+- `visualize_rsa_results.py` — Generates visualizations for analysis results.
+
+**Recent improvements (2024):**
+
+1. **Wave mapping** — Years are mapped to waves for longitudinal analysis:
+   - Wave 1: 2015-2018
+   - Wave 2: 2019-2022
+   - Wave 3: ≥ 2023
+   - Pre-2015 documents excluded from analysis
+   - All matrices include `wave` column in metadata
+
+2. **Lemmatization** — Risk terms are lemmatized using Stanza Swedish pipeline to merge inflectional variants:
+   - Merges variants like "gräsbrand"/"gräsbränder", "cyberattack"/"cyberattacker"
+   - Both original and lemmatized matrices saved (`*_original.csv` and `*.csv`)
+   - Lemma mapping saved to JSON for transparency
+   - Token-by-token lemmatization handles multi-word terms correctly
+
+3. **Low-N flagging** — Persistence metrics flagged when based on small samples:
+   - Threshold: 3 entities (configurable via `--min-entities`)
+   - Output includes: `n_entities_t0`, `n_entities_persist`, `n_entities_dropout`, `flag_low_n`
+   - Prevents misleading persistence rates from single-entity observations
+
+**Output files:**
+- `term_document_matrix.csv` / `*_original.csv` — Term counts per document
+- `category_document_matrix.csv` / `*_original.csv` — Category counts per document
+- `term_metadata.csv` / `*_original.csv` — Term → category mapping
+- `lemma_mapping.json` — Lemma → original terms mapping
+- Persistence CSVs with entity counts and low-N flags
+- Clustering outputs with wave-based filtering
+
+See `docs/implementation-wave-lemma-lown.md` for detailed documentation.
 
 ### Remaining code to write:
 1. **Rewrite preprocessing** — possibly split into two scripts: one for bag-of-words preprocessing, one for transformer preprocessing.
@@ -118,6 +155,8 @@ External: Tesseract OCR (Swedish), Stanza Swedish model, Swedish BERT model from
 - **JSON** for processing summaries and configuration
 
 Standard columns: `doc_id`, `municipality`, `year`, `sentence_id`, `sentence_text`, `actor_type`.
+
+**Bag-of-words matrix columns:** `file`, `actor`, `entity`, `year`, `wave` (+ term/category counts).
 
 ## Tests
 
