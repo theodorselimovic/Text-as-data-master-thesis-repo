@@ -68,9 +68,26 @@ logs/                      # Processing logs
 
 ## Pipeline: Current State and Remaining Work
 
-### Existing (working):
 1. **PDF extraction** — `01_pdf_extraction/pdf_reader_enhanced.py` extracts text via fallback chain (pypdf → pdfplumber → pdfminer → OCR).
-2. **Preprocessing** — `02_preprocessing/preprocessing.py` handles lemmatisation and sentence segmentation. `merge_all_actors.py` merges data across actor types.
+
+2. **Preprocessing Pipeline (Stage 1)**: `preprocessing_bert.py`
+
+**Purpose:** Light preprocessing that produces a clean, sentence-segmented corpus for BERT fine-tuning. Preserves original surface form (no lemmatization, no stopword removal, no lowercasing).
+
+**What it does:**
+1. **OCR artifact cleanup** — mojibake repair (UTF-8→Latin-1 corruption maps), removal of page numbers, separator lines, box-drawing characters, and repeated page headers/footers ("Risk- och sårbarhetsanalys 2023-2025", "Sida X (Y)").
+2. **Introductory chapter removal** (kommun only) — detects the Chapter 3 heading ("Identifierad samhällsviktig verksamhet ... inom kommunens geografiska område") via regex and discards Chapters 1-2 (municipality description, methodology boilerplate). Safety guard: skips if match is past 50% of document. On failure: keeps full text and flags in quality report.
+3. **Sentence segmentation** — Stanza Swedish pipeline with `processors='tokenize'` only (no POS/lemma). Significantly faster than the full Stanza pipeline.
+4. **Quality assessment** — filters artifact sentences (< 3 words, > 300 words, < 50% alphabetic), computes per-document quality score (0.0–1.0), writes JSON quality report alongside the output parquet.
+
+**Output:** Sentence-level parquet with columns: `doc_id`, `municipality`, `year`, `maskad`, `actor_type`, `sentence_id`, `sentence_text`, `word_count`, `doc_quality`.
+
+**Tested on** 4 example RSAs (Bjurholm, Borgholm, Borlänge, Hagfors). Chapter detection works across heading variations. No hyphen-rejoining (too risky with Swedish compound constructions like "risk- och").
+
+**The existing `preprocessing.py`** (with lemmatization + stopwords) will become "Stage 2" for BOW analysis, consuming the output of this script.
+
+`merge_all_actors.py` merges data across actor types.
+
 3. **Bag-of-words analysis** — `03_bow_analysis/` contains initial analysis and visualisation scripts.
 
 ### Remaining code to write:

@@ -154,7 +154,7 @@ RISK_DICTIONARY = {
     ],
     'biologiska_hot': [
         'epidemi', 'epidemier', 'pandemi', 'pandemier',
-        'epozooti', 'epizootier',
+        'epozooti', 'epizootier', 'covid', 'coronaviruset',
         'smittsam sjukdom', 'smittsamma sjukdomar',
         'smitta', 'smittspridning', 'sjukdomsutbrott',
         'influensa', 'influensapandemi',
