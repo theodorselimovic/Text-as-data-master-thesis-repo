@@ -101,11 +101,10 @@ def map_year_to_wave(year: int) -> int:
     Map publication year to wave number.
 
     Wave mapping:
+        Wave 0: pre-2015
         Wave 1: 2015-2018
         Wave 2: 2019-2022
         Wave 3: >= 2023
-
-    Documents before 2015 return None and should be filtered out.
 
     Parameters
     ----------
@@ -114,11 +113,11 @@ def map_year_to_wave(year: int) -> int:
 
     Returns
     -------
-    int or None
-        Wave number (1, 2, 3) or None for pre-2015 documents
+    int
+        Wave number (0, 1, 2, 3)
     """
     if year < 2015:
-        return None  # Will be filtered out
+        return 0
     elif 2015 <= year <= 2018:
         return 1
     elif 2019 <= year <= 2022:
@@ -259,7 +258,6 @@ def build_matrices(
     category_rows = []
 
     n_docs = len(texts_df)
-    n_skipped = 0
     for idx, row in texts_df.iterrows():
         if verbose and idx % 50 == 0:
             print(f"  Processing document {idx}/{n_docs}...")
@@ -272,13 +270,6 @@ def build_matrices(
 
         # Map year to wave
         wave = map_year_to_wave(year) if year is not None else None
-
-        # Skip pre-2015 documents
-        if wave is None:
-            if verbose:
-                logger.warning(f"Skipping {filename}: pre-2015 document (year={year})")
-            n_skipped += 1
-            continue
 
         # Count terms
         term_counts = count_terms_per_document(text, risk_dictionary)
@@ -308,9 +299,6 @@ def build_matrices(
 
     term_matrix = pd.DataFrame(term_rows)
     category_matrix = pd.DataFrame(category_rows)
-
-    if n_skipped > 0:
-        logger.info(f"Skipped {n_skipped} pre-2015 documents")
 
     return term_matrix, category_matrix
 
@@ -470,6 +458,7 @@ def main():
 
     # Wave distribution
     wave_ranges = {
+        0: 'pre-2015',
         1: '2015-2018',
         2: '2019-2022',
         3: '≥ 2023',

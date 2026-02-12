@@ -4,8 +4,14 @@ Risk Persistence Analysis
 
 Measures whether risk terms persist in RSA documents over time.
 For entities (municipalities, prefectures, MCF) with ≥2 documents in
-different years, tracks which terms appear, disappear, or are newly
-adopted between consecutive documents.
+different waves, tracks which terms appear, disappear, or are newly
+adopted between consecutive waves.
+
+Waves:
+    Wave 0: pre-2015
+    Wave 1: 2015-2018
+    Wave 2: 2019-2022
+    Wave 3: >= 2023
 
 Includes actor-type comparisons throughout.
 
@@ -78,7 +84,7 @@ def load_and_prepare(input_path: Path) -> tuple:
 def build_panel(df: pd.DataFrame, term_cols: list) -> pd.DataFrame:
     """
     Build a longitudinal panel: keep only entities with ≥2 documents
-    in different years, sorted by entity and year.
+    in different waves, sorted by entity and wave.
 
     Parameters
     ----------
@@ -92,20 +98,20 @@ def build_panel(df: pd.DataFrame, term_cols: list) -> pd.DataFrame:
     pd.DataFrame
         Filtered and sorted panel.
     """
-    # Drop duplicates: if same entity has multiple docs in same year, keep last
-    df_sorted = df.sort_values(['entity', 'year'])
-    df_dedup = df_sorted.drop_duplicates(subset=['entity', 'year'], keep='last')
+    # Drop duplicates: if same entity has multiple docs in same wave, keep last
+    df_sorted = df.sort_values(['entity', 'wave', 'year'])
+    df_dedup = df_sorted.drop_duplicates(subset=['entity', 'wave'], keep='last')
 
-    # Keep entities with ≥2 distinct years
-    year_counts = df_dedup.groupby('entity')['year'].nunique()
-    multi_year = year_counts[year_counts >= 2].index
-    panel = df_dedup[df_dedup['entity'].isin(multi_year)].copy()
-    panel = panel.sort_values(['entity', 'year']).reset_index(drop=True)
+    # Keep entities with ≥2 distinct waves
+    wave_counts = df_dedup.groupby('entity')['wave'].nunique()
+    multi_wave = wave_counts[wave_counts >= 2].index
+    panel = df_dedup[df_dedup['entity'].isin(multi_wave)].copy()
+    panel = panel.sort_values(['entity', 'wave']).reset_index(drop=True)
 
     n_entities = panel['entity'].nunique()
     actor_breakdown = panel.groupby('actor')['entity'].nunique().to_dict()
     translated = {translate_actor(k): v for k, v in actor_breakdown.items()}
-    print(f"  Panel: {len(panel)} docs from {n_entities} entities with ≥2 time points")
+    print(f"  Panel: {len(panel)} docs from {n_entities} entities with ≥2 waves")
     print(f"  By actor: {translated}")
 
     return panel
@@ -120,17 +126,19 @@ def compute_transitions(panel: pd.DataFrame, term_cols: list) -> pd.DataFrame:
     For each consecutive document pair within an entity, compute
     per-term transitions: persist, dropout, adopt, stable_absent.
 
+    Transitions are computed between consecutive waves, not years.
+
     Returns
     -------
     pd.DataFrame
-        One row per (entity, year_from, year_to, term) with columns:
-        entity, actor, year_from, year_to, term, present_from, present_to,
+        One row per (entity, wave_from, wave_to, term) with columns:
+        entity, actor, wave_from, wave_to, term, present_from, present_to,
         transition (persist/dropout/adopt/stable_absent).
     """
     records = []
 
     for entity, group in panel.groupby('entity'):
-        group = group.sort_values('year')
+        group = group.sort_values('wave')
         actor = group['actor'].iloc[0]
         docs = list(group.iterrows())
 
@@ -138,8 +146,8 @@ def compute_transitions(panel: pd.DataFrame, term_cols: list) -> pd.DataFrame:
             _, doc_t = docs[i]
             _, doc_t1 = docs[i + 1]
 
-            year_from = doc_t['year']
-            year_to = doc_t1['year']
+            wave_from = doc_t['wave']
+            wave_to = doc_t1['wave']
 
             for term in term_cols:
                 present_t = int(doc_t[term] > 0)
@@ -157,9 +165,9 @@ def compute_transitions(panel: pd.DataFrame, term_cols: list) -> pd.DataFrame:
                 records.append({
                     'entity': entity,
                     'actor': actor,
-                    'year_from': year_from,
-                    'year_to': year_to,
-                    'year_pair': f"{int(year_from)}→{int(year_to)}",
+                    'wave_from': wave_from,
+                    'wave_to': wave_to,
+                    'wave_pair': f"W{int(wave_from)}→W{int(wave_to)}",
                     'term': term,
                     'present_from': present_t,
                     'present_to': present_t1,
@@ -172,17 +180,17 @@ def compute_transitions(panel: pd.DataFrame, term_cols: list) -> pd.DataFrame:
 def compute_jaccard(panel: pd.DataFrame, term_cols: list) -> pd.DataFrame:
     """
     Compute Jaccard similarity between consecutive documents
-    for each entity.
+    for each entity (by wave).
 
     Returns
     -------
     pd.DataFrame
-        One row per (entity, year_from, year_to) with Jaccard score.
+        One row per (entity, wave_from, wave_to) with Jaccard score.
     """
     records = []
 
     for entity, group in panel.groupby('entity'):
-        group = group.sort_values('year')
+        group = group.sort_values('wave')
         actor = group['actor'].iloc[0]
         docs = list(group.iterrows())
 
@@ -201,9 +209,9 @@ def compute_jaccard(panel: pd.DataFrame, term_cols: list) -> pd.DataFrame:
             records.append({
                 'entity': entity,
                 'actor': actor,
-                'year_from': doc_t['year'],
-                'year_to': doc_t1['year'],
-                'year_pair': f"{int(doc_t['year'])}→{int(doc_t1['year'])}",
+                'wave_from': doc_t['wave'],
+                'wave_to': doc_t1['wave'],
+                'wave_pair': f"W{int(doc_t['wave'])}→W{int(doc_t1['wave'])}",
                 'n_terms_t': len(set_t),
                 'n_terms_t1': len(set_t1),
                 'n_intersection': len(intersection),
@@ -222,10 +230,10 @@ def aggregate_persistence_by_term(
     transitions: pd.DataFrame, min_entities: int = 5
 ) -> pd.DataFrame:
     """
-    Compute persistence rate per term, optionally grouped by actor and year-pair.
+    Compute persistence rate per term (aggregated across all wave transitions).
 
     Persistence rate = persist / (persist + dropout), i.e., fraction of
-    terms present in T that remain in T+1.
+    terms present in wave T that remain in wave T+1.
 
     Parameters
     ----------
@@ -264,22 +272,22 @@ def aggregate_persistence_by_term(
     return result.sort_values('persistence_rate', ascending=False)
 
 
-def aggregate_by_actor_and_year_pair(
+def aggregate_by_actor_and_wave_pair(
     transitions: pd.DataFrame, min_entities: int = 3
 ) -> pd.DataFrame:
     """
-    Compute persistence rate per term, grouped by actor and year-pair.
+    Compute persistence rate per term, grouped by actor and wave transition.
 
     Returns
     -------
     pd.DataFrame
-        Rows with: actor, year_pair, term, persistence_rate, n_entities.
+        Rows with: actor, wave_pair, term, persistence_rate, n_entities.
     """
     present_in_t = transitions[transitions['present_from'] == 1].copy()
 
     records = []
-    for (actor, year_pair, term), group in present_in_t.groupby(
-        ['actor', 'year_pair', 'term']
+    for (actor, wave_pair, term), group in present_in_t.groupby(
+        ['actor', 'wave_pair', 'term']
     ):
         n_persist = (group['transition'] == 'persist').sum()
         n_dropout = (group['transition'] == 'dropout').sum()
@@ -290,7 +298,7 @@ def aggregate_by_actor_and_year_pair(
 
         records.append({
             'actor': actor,
-            'year_pair': year_pair,
+            'wave_pair': wave_pair,
             'term': term,
             'persistence_rate': n_persist / total if total > 0 else 0,
             'n_entities_t0': total,
@@ -319,7 +327,7 @@ def plot_persistence_heatmap(
     suffix: str = '',
 ) -> None:
     """
-    Heatmap: rows = terms, columns = year-pair transitions,
+    Heatmap: rows = terms, columns = wave transitions,
     cell colour = persistence rate.
     """
     df = transitions.copy()
@@ -328,15 +336,15 @@ def plot_persistence_heatmap(
 
     present_in_t = df[df['present_from'] == 1]
 
-    # Compute persistence rate per term per year-pair
+    # Compute persistence rate per term per wave transition
     pivot_data = []
-    for (term, year_pair), group in present_in_t.groupby(['term', 'year_pair']):
+    for (term, wave_pair), group in present_in_t.groupby(['term', 'wave_pair']):
         n_persist = (group['transition'] == 'persist').sum()
         total = len(group)
         if total >= 3:
             pivot_data.append({
                 'term': term,
-                'year_pair': year_pair,
+                'wave_pair': wave_pair,
                 'persistence_rate': n_persist / total,
                 'n': total,
             })
@@ -358,7 +366,7 @@ def plot_persistence_heatmap(
 
     # Pivot for heatmap
     heatmap_data = pivot_df.pivot_table(
-        index='term', columns='year_pair', values='persistence_rate'
+        index='term', columns='wave_pair', values='persistence_rate'
     )
 
     # Sort by mean persistence rate
@@ -376,11 +384,11 @@ def plot_persistence_heatmap(
         cbar_kws={'label': 'Persistence rate'}
     )
 
-    title = 'Term persistence rate by year-pair'
+    title = 'Term persistence rate by wave'
     if actor_filter:
         title += f' ({translate_actor(actor_filter)})'
     ax.set_title(title, fontsize=14, fontweight='bold')
-    ax.set_xlabel('Year-pair transition', fontsize=12)
+    ax.set_xlabel('Wave transition', fontsize=12)
     ax.set_ylabel('Risk term', fontsize=12)
 
     plt.tight_layout()
@@ -481,19 +489,19 @@ def plot_actor_persistence_comparison(
     transitions: pd.DataFrame, output_dir: Path
 ) -> None:
     """
-    Grouped bar chart: mean persistence rate per actor type per year-pair.
+    Grouped bar chart: mean persistence rate per actor type per wave transition.
     """
     present_in_t = transitions[transitions['present_from'] == 1].copy()
 
-    # Compute persistence rate per entity-pair, then average by actor
+    # Compute persistence rate per entity-wave transition, then average by actor
     entity_rates = []
-    for (entity, year_pair), group in present_in_t.groupby(['entity', 'year_pair']):
+    for (entity, wave_pair), group in present_in_t.groupby(['entity', 'wave_pair']):
         n_persist = (group['transition'] == 'persist').sum()
         total = len(group)
         entity_rates.append({
             'entity': entity,
             'actor': group['actor'].iloc[0],
-            'year_pair': year_pair,
+            'wave_pair': wave_pair,
             'persistence_rate': n_persist / total if total > 0 else 0,
         })
 
@@ -506,14 +514,14 @@ def plot_actor_persistence_comparison(
     fig, ax = plt.subplots(figsize=(10, 6))
 
     sns.barplot(
-        data=rates_df, x='year_pair', y='persistence_rate',
+        data=rates_df, x='wave_pair', y='persistence_rate',
         hue='actor_en', ax=ax, palette='Set1', alpha=0.8,
     )
 
-    ax.set_xlabel('Year-pair transition', fontsize=12)
+    ax.set_xlabel('Wave transition', fontsize=12)
     ax.set_ylabel('Mean persistence rate', fontsize=12)
     ax.set_title(
-        'Mean persistence rate by actor type and period',
+        'Mean persistence rate by actor type and wave',
         fontsize=14, fontweight='bold'
     )
     ax.set_ylim(0, 1)

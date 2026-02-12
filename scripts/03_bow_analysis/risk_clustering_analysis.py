@@ -3,9 +3,16 @@
 Risk Clustering Analysis (Per Time Period)
 
 Clusters entities (municipalities, prefectures, MCF) by their risk
-profiles, run separately for each collection wave (~2015, ~2019, ~2023).
+profiles, run separately for each wave.
+
+Waves:
+    Wave 0: pre-2015
+    Wave 1: 2015-2018
+    Wave 2: 2019-2022
+    Wave 3: >= 2023
+
 Uses k-means and hierarchical clustering on proportion-normalised
-8-category risk profiles.
+risk category profiles.
 
 Includes actor-type markers in visualisations and cross-period
 transition tracking.
@@ -17,12 +24,12 @@ Output: elbow plots, dendrograms, PCA scatter, centroid heatmaps,
 Usage:
     python risk_clustering_analysis.py \\
         --input results/term_document_matrix/category_document_matrix.csv \\
-        --output results/municipality_clustering/
+        --output results/clustering/
 
     python risk_clustering_analysis.py \\
         --input results/term_document_matrix/category_document_matrix.csv \\
-        --output results/municipality_clustering/ \\
-        --waves 2015 2019 2023 --window 2 --verbose
+        --output results/clustering/ \\
+        --waves 0 1 2 3 --verbose
 
 Requirements:
     pip install pandas numpy matplotlib seaborn scikit-learn scipy
@@ -696,8 +703,8 @@ def main():
         '--waves',
         type=int,
         nargs='+',
-        default=[1, 2, 3],
-        help='Wave numbers to analyze (default: 1 2 3 for waves 2015-2018, 2019-2022, 2023+)'
+        default=[0, 1, 2, 3],
+        help='Wave numbers to analyze (default: 0 1 2 3 for pre-2015, 2015-2018, 2019-2022, 2023+)'
     )
 
     parser.add_argument(
@@ -723,6 +730,7 @@ def main():
 
     # Wave range definitions
     WAVE_RANGES = {
+        0: 'pre-2015',
         1: '2015-2018',
         2: '2019-2022',
         3: '≥ 2023',
