@@ -32,10 +32,10 @@ from pathlib import Path
 
 import pandas as pd
 
-# Import the risk dictionary from the analysis script
+# Import the risk dictionaries from the analysis script
 import sys
 sys.path.insert(0, str(Path(__file__).parent))
-from risk_context_analysis import RISK_DICTIONARY
+from risk_context_analysis import get_risk_dictionary, RISK_DICTIONARY_ORIGINAL
 
 # =============================================================================
 # CONFIGURATION
@@ -94,6 +94,37 @@ def extract_entity(filename: str) -> str:
 
     logger.warning(f"Could not parse entity from filename: {filename}")
     return 'unknown'
+
+
+def map_year_to_wave(year: int) -> int:
+    """
+    Map publication year to wave number.
+
+    Wave mapping:
+        Wave 1: 2015-2018
+        Wave 2: 2019-2022
+        Wave 3: >= 2023
+
+    Documents before 2015 return None and should be filtered out.
+
+    Parameters
+    ----------
+    year : int
+        Publication year
+
+    Returns
+    -------
+    int or None
+        Wave number (1, 2, 3) or None for pre-2015 documents
+    """
+    if year < 2015:
+        return None  # Will be filtered out
+    elif 2015 <= year <= 2018:
+        return 1
+    elif 2019 <= year <= 2022:
+        return 2
+    else:  # year >= 2023
+        return 3
 
 
 # =============================================================================
@@ -228,6 +259,7 @@ def build_matrices(
     category_rows = []
 
     n_docs = len(texts_df)
+    n_skipped = 0
     for idx, row in texts_df.iterrows():
         if verbose and idx % 50 == 0:
             print(f"  Processing document {idx}/{n_docs}...")
@@ -237,6 +269,16 @@ def build_matrices(
         actor = str(row.get('actor', 'unknown'))
         year = row.get('year', None)
         entity = extract_entity(filename)
+
+        # Map year to wave
+        wave = map_year_to_wave(year) if year is not None else None
+
+        # Skip pre-2015 documents
+        if wave is None:
+            if verbose:
+                logger.warning(f"Skipping {filename}: pre-2015 document (year={year})")
+            n_skipped += 1
+            continue
 
         # Count terms
         term_counts = count_terms_per_document(text, risk_dictionary)
@@ -248,6 +290,7 @@ def build_matrices(
             'actor': actor,
             'entity': entity,
             'year': year,
+            'wave': wave,
         }
 
         # Term-level row
@@ -265,6 +308,9 @@ def build_matrices(
 
     term_matrix = pd.DataFrame(term_rows)
     category_matrix = pd.DataFrame(category_rows)
+
+    if n_skipped > 0:
+        logger.info(f"Skipped {n_skipped} pre-2015 documents")
 
     return term_matrix, category_matrix
 
@@ -361,13 +407,46 @@ def main():
     if 'year' in texts_df.columns:
         print(f"  Years: {sorted(texts_df['year'].dropna().unique())}")
 
-    # Build term metadata
-    print(f"\nRisk dictionary: {len(RISK_DICTIONARY)} categories")
-    term_metadata = build_term_metadata(RISK_DICTIONARY)
+    # Build original (non-lemmatized) matrices
+    print(f"\n{'='*60}")
+    print("STAGE 1: Building ORIGINAL (non-lemmatized) matrices")
+    print(f"{'='*60}")
+
+    print(f"\nOriginal risk dictionary: {len(RISK_DICTIONARY_ORIGINAL)} categories")
+    term_metadata_original = build_term_metadata(RISK_DICTIONARY_ORIGINAL)
+    n_unique_terms_orig = term_metadata_original['term'].nunique()
+    n_total_mappings_orig = len(term_metadata_original)
+    n_duplicates_orig = n_total_mappings_orig - n_unique_terms_orig
+    print(f"  {n_unique_terms_orig} unique terms, {n_duplicates_orig} duplicates across categories")
+
+    if n_duplicates_orig > 0:
+        dup_terms = term_metadata_original[term_metadata_original.duplicated(subset='term', keep=False)]
+        for term in dup_terms['term'].unique():
+            cats = dup_terms[dup_terms['term'] == term]['category'].tolist()
+            print(f"    Duplicate: '{term}' in {cats}")
+
+    print(f"\nBuilding original matrices...")
+    term_matrix_original, category_matrix_original = build_matrices(
+        texts_df, RISK_DICTIONARY_ORIGINAL,
+        text_column=args.text_column,
+        verbose=args.verbose,
+    )
+
+    # Build lemmatized matrices
+    print(f"\n{'='*60}")
+    print("STAGE 2: Building LEMMATIZED matrices")
+    print(f"{'='*60}")
+
+    # Get lemmatized dictionary (will create it if needed)
+    risk_dict_lemmatized = get_risk_dictionary(lemmatize=True, output_dir=args.output)
+
+    print(f"\nLemmatized risk dictionary: {len(risk_dict_lemmatized)} categories")
+    term_metadata = build_term_metadata(risk_dict_lemmatized)
     n_unique_terms = term_metadata['term'].nunique()
     n_total_mappings = len(term_metadata)
     n_duplicates = n_total_mappings - n_unique_terms
     print(f"  {n_unique_terms} unique terms, {n_duplicates} duplicates across categories")
+    print(f"  Reduction from original: {n_unique_terms_orig - n_unique_terms} terms ({(1 - n_unique_terms / n_unique_terms_orig) * 100:.1f}%)")
 
     if n_duplicates > 0:
         dup_terms = term_metadata[term_metadata.duplicated(subset='term', keep=False)]
@@ -375,20 +454,34 @@ def main():
             cats = dup_terms[dup_terms['term'] == term]['category'].tolist()
             print(f"    Duplicate: '{term}' in {cats}")
 
-    # Build matrices
-    print(f"\nBuilding document matrices...")
+    print(f"\nBuilding lemmatized matrices...")
     term_matrix, category_matrix = build_matrices(
-        texts_df, RISK_DICTIONARY,
+        texts_df, risk_dict_lemmatized,
         text_column=args.text_column,
         verbose=args.verbose,
     )
 
     # Summary statistics
-    metadata_cols = ['file', 'actor', 'entity', 'year']
+    metadata_cols = ['file', 'actor', 'entity', 'year', 'wave']
     term_cols = [c for c in term_matrix.columns if c not in metadata_cols]
     print(f"\nTerm matrix: {term_matrix.shape[0]} documents × {len(term_cols)} terms")
     print(f"  Non-zero entries: {(term_matrix[term_cols] > 0).sum().sum()}")
     print(f"  Sparsity: {1 - (term_matrix[term_cols] > 0).sum().sum() / (len(term_cols) * len(term_matrix)):.1%}")
+
+    # Wave distribution
+    wave_ranges = {
+        1: '2015-2018',
+        2: '2019-2022',
+        3: '≥ 2023',
+    }
+    print(f"\nWave distribution:")
+    wave_stats = term_matrix.groupby('wave').agg({'year': ['min', 'max', 'count']})
+    for wave in sorted(term_matrix['wave'].unique()):
+        wave_range = wave_ranges.get(wave, 'unknown')
+        count = len(term_matrix[term_matrix['wave'] == wave])
+        year_min = term_matrix[term_matrix['wave'] == wave]['year'].min()
+        year_max = term_matrix[term_matrix['wave'] == wave]['year'].max()
+        print(f"  Wave {wave} ({wave_range}): {count} documents (years {year_min}-{year_max})")
 
     # Entity extraction summary
     entity_counts = term_matrix.groupby('actor')['entity'].nunique()
@@ -404,11 +497,35 @@ def main():
 
     # Save
     print(f"\nSaving outputs to: {args.output}")
+
+    # Save original (non-lemmatized) matrices
+    print(f"\n  Saving ORIGINAL matrices...")
+    output_dir = Path(args.output)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    term_path_original = output_dir / 'term_document_matrix_original.csv'
+    term_matrix_original.to_csv(term_path_original, index=False, encoding='utf-8')
+    print(f"    Saved: {term_path_original} ({term_matrix_original.shape[0]} docs × {term_matrix_original.shape[1]} cols)")
+
+    cat_path_original = output_dir / 'category_document_matrix_original.csv'
+    category_matrix_original.to_csv(cat_path_original, index=False, encoding='utf-8')
+    print(f"    Saved: {cat_path_original} ({category_matrix_original.shape[0]} docs × {category_matrix_original.shape[1]} cols)")
+
+    meta_path_original = output_dir / 'term_metadata_original.csv'
+    term_metadata_original.to_csv(meta_path_original, index=False, encoding='utf-8')
+    print(f"    Saved: {meta_path_original} ({len(term_metadata_original)} term-category mappings)")
+
+    # Save lemmatized matrices (default files)
+    print(f"\n  Saving LEMMATIZED matrices (default)...")
     save_outputs(term_matrix, category_matrix, term_metadata, args.output)
 
     print(f"\n{'=' * 60}")
     print("DONE")
-    print(f"{'=' * 60}\n")
+    print(f"{'=' * 60}")
+    print(f"\nOutput files created:")
+    print(f"  Original matrices: *_original.csv")
+    print(f"  Lemmatized matrices: *.csv (default)")
+    print(f"  Lemma mapping: lemma_mapping.json\n")
 
     return 0
 

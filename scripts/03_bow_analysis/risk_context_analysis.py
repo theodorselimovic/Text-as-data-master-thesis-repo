@@ -29,6 +29,12 @@ import json
 from pathlib import Path
 from collections import Counter, defaultdict
 import argparse
+import stanza
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+logger = logging.getLogger(__name__)
 
 # =============================================================================
 # CONFIGURATION
@@ -137,8 +143,97 @@ def _build_term_to_level():
 
 TERM_TO_LEVEL = _build_term_to_level()
 
-# Risk dictionary (unchanged)
-RISK_DICTIONARY = {
+# =============================================================================
+# LEMMATIZATION
+# =============================================================================
+
+def lemmatize_term(term: str, nlp) -> str:
+    """
+    Lemmatize a risk term using Stanza Swedish pipeline.
+    Handles multi-word terms by lemmatizing each token.
+
+    Examples:
+        gräsbränder → gräsbrand
+        översvämning vid vattendrag → översvämning vid vattendrag
+        cyberattacker → cyberattack
+
+    Args:
+        term: The term to lemmatize
+        nlp: Stanza pipeline with tokenize,pos,lemma processors
+
+    Returns:
+        Lemmatized term (space-separated if multi-word)
+    """
+    doc = nlp(term)
+    lemmas = [word.lemma for sent in doc.sentences for word in sent.words]
+    return ' '.join(lemmas)
+
+
+def lemmatize_risk_dictionary(risk_dict: dict, output_dir: Path = None) -> tuple:
+    """
+    Lemmatize all terms in risk dictionary.
+
+    Args:
+        risk_dict: Dictionary mapping categories to lists of terms
+        output_dir: Optional directory to save lemma mapping JSON
+
+    Returns:
+        (lemmatized_dict, lemma_to_original) where:
+            - lemmatized_dict: Dictionary with lemmatized terms
+            - lemma_to_original: Mapping from lemma → list of original terms
+    """
+    logger.info("Initializing Stanza Swedish pipeline for lemmatization...")
+    nlp = stanza.Pipeline('sv', processors='tokenize,pos,lemma', verbose=False, use_gpu=False)
+
+    lemmatized_dict = defaultdict(list)
+    lemma_to_original = defaultdict(list)
+
+    logger.info("Lemmatizing risk dictionary terms...")
+
+    total_original = 0
+    for category, terms in risk_dict.items():
+        logger.info(f"  Processing category '{category}': {len(terms)} terms")
+        seen_lemmas = set()
+
+        for term in terms:
+            total_original += 1
+            lemma = lemmatize_term(term, nlp)
+
+            # Only add each unique lemma once per category
+            if lemma not in seen_lemmas:
+                lemmatized_dict[category].append(lemma)
+                seen_lemmas.add(lemma)
+
+            # Track all original terms that map to this lemma
+            lemma_to_original[lemma].append(term)
+
+    total_lemmatized = sum(len(terms) for terms in lemmatized_dict.values())
+    reduction_pct = (1 - total_lemmatized / total_original) * 100 if total_original > 0 else 0
+
+    logger.info(f"Lemmatization complete:")
+    logger.info(f"  Original terms: {total_original}")
+    logger.info(f"  Lemmatized terms: {total_lemmatized}")
+    logger.info(f"  Reduction: {reduction_pct:.1f}%")
+
+    # Save mapping if output directory provided
+    if output_dir:
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        mapping_path = output_dir / 'lemma_mapping.json'
+        with open(mapping_path, 'w', encoding='utf-8') as f:
+            json.dump(dict(lemma_to_original), f, ensure_ascii=False, indent=2)
+        logger.info(f"  Saved lemma mapping to: {mapping_path}")
+
+    return dict(lemmatized_dict), dict(lemma_to_original)
+
+
+# =============================================================================
+# RISK DICTIONARY
+# =============================================================================
+
+# Original risk dictionary (preserved for reference)
+RISK_DICTIONARY_ORIGINAL = {
     'naturhot': [
         'naturhändelser', 'naturhot', 'väderrelaterade händelser',
         'klimatförändring', 'klimatförändringarna', 'klimatförändringar',
@@ -230,6 +325,39 @@ RISK_DICTIONARY = {
         'arbetslöshet', 'inflation', 'ekonomisk nedgång',
     ],
 }
+
+# Create lemmatized version of dictionary
+# This will be initialized lazily when needed to avoid Stanza startup overhead
+RISK_DICTIONARY = None  # Will be set to lemmatized version
+LEMMA_TO_ORIGINAL = None  # Will be set to mapping
+
+
+def get_risk_dictionary(lemmatize: bool = True, output_dir: Path = None):
+    """
+    Get risk dictionary, optionally lemmatized.
+
+    Args:
+        lemmatize: If True, return lemmatized dictionary. If False, return original.
+        output_dir: Directory to save lemma mapping (only used if lemmatize=True)
+
+    Returns:
+        Risk dictionary (lemmatized or original)
+    """
+    global RISK_DICTIONARY, LEMMA_TO_ORIGINAL
+
+    if not lemmatize:
+        return RISK_DICTIONARY_ORIGINAL
+
+    # Initialize lemmatized version if not done yet
+    if RISK_DICTIONARY is None:
+        logger.info("Creating lemmatized risk dictionary...")
+        RISK_DICTIONARY, LEMMA_TO_ORIGINAL = lemmatize_risk_dictionary(
+            RISK_DICTIONARY_ORIGINAL,
+            output_dir=output_dir
+        )
+
+    return RISK_DICTIONARY
+
 
 # =============================================================================
 # TEXT PREPROCESSING
@@ -468,9 +596,25 @@ def analyze_document(
 def analyze_corpus(
     texts_df: pd.DataFrame,
     text_column: str = 'text',
-    metadata_columns: list = None
+    metadata_columns: list = None,
+    lemmatize: bool = True,
+    output_dir: Path = None
 ) -> tuple:
-    """Analyze entire corpus."""
+    """
+    Analyze entire corpus.
+
+    Args:
+        texts_df: DataFrame with texts
+        text_column: Column containing text
+        metadata_columns: Metadata columns to include
+        lemmatize: If True, use lemmatized risk dictionary
+        output_dir: Output directory (for saving lemma mapping)
+
+    Returns:
+        (results_df, aggregated_stats)
+    """
+    # Get appropriate risk dictionary
+    risk_dict = get_risk_dictionary(lemmatize=lemmatize, output_dir=output_dir)
 
     doc_results = []
 
@@ -495,7 +639,7 @@ def analyze_corpus(
 
         # Analyze
         analysis = analyze_document(
-            text, RISK_DICTIONARY, TARGET_WORDS,
+            text, risk_dict, TARGET_WORDS,
             KNOWN_QUALIFICATIONS, TERM_TO_LEVEL
         )
 
@@ -794,6 +938,20 @@ def main():
         help='Output directory'
     )
 
+    parser.add_argument(
+        '--lemmatize',
+        action='store_true',
+        default=True,
+        help='Use lemmatized risk dictionary (default: True)'
+    )
+
+    parser.add_argument(
+        '--no-lemmatize',
+        dest='lemmatize',
+        action='store_false',
+        help='Use original (non-lemmatized) risk dictionary'
+    )
+
     args = parser.parse_args()
 
     print("="*80)
@@ -806,6 +964,10 @@ def main():
 
     print("\nAnalyzing documents...")
     print("  - Removing 'risk- och sårbarhetsanalys' boilerplate")
+    if args.lemmatize:
+        print("  - Using lemmatized risk dictionary")
+    else:
+        print("  - Using original risk dictionary")
     print("  - Counting risk terms from dictionary")
     print("  - Extracting qualified mentions (sannolikhet, konsekvens, risk)")
     print("  - Mapping to 5-level scale: very_low -> very_high")
@@ -813,7 +975,9 @@ def main():
     results_df, aggregated = analyze_corpus(
         texts_df,
         text_column=args.text_column,
-        metadata_columns=args.metadata
+        metadata_columns=args.metadata,
+        lemmatize=args.lemmatize,
+        output_dir=args.output
     )
 
     print("\nSaving results...")

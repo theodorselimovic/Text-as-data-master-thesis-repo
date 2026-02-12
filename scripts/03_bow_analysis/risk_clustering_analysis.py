@@ -49,7 +49,7 @@ from scipy.cluster.hierarchy import linkage, dendrogram, fcluster
 plt.style.use('seaborn-v0_8-whitegrid')
 sns.set_palette("Set1")
 
-METADATA_COLS = ['file', 'actor', 'entity', 'year', 'total_risk_mentions']
+METADATA_COLS = ['file', 'actor', 'entity', 'year', 'wave', 'total_risk_mentions']
 
 ACTOR_TRANSLATIONS = {
     'kommun': 'Municipality',
@@ -91,41 +91,39 @@ def load_category_matrix(input_path: Path) -> tuple:
 
 def filter_to_wave(
     df: pd.DataFrame,
-    wave_year: int,
-    window: int = 2,
+    wave: int,
 ) -> pd.DataFrame:
     """
-    Filter to documents within a time window around the wave year.
-    If an entity has multiple docs in the window, keep the one
-    closest to the wave year.
+    Filter to documents in the specified wave.
+
+    Wave mapping:
+        1: 2015-2018
+        2: 2019-2022
+        3: ≥ 2023
+
+    If an entity has multiple documents in the same wave, keep the most recent.
 
     Parameters
     ----------
     df : pd.DataFrame
-        Full category-document matrix.
-    wave_year : int
-        Central year of the collection wave.
-    window : int
-        Years on each side of wave_year to include.
+        Full category-document matrix with 'wave' column.
+    wave : int
+        Wave number (1, 2, or 3).
 
     Returns
     -------
     pd.DataFrame
         Filtered data, one row per entity.
     """
-    year_min = wave_year - window
-    year_max = wave_year + window
+    # Filter to specified wave
+    df_wave = df[df['wave'] == wave].copy()
 
-    in_window = df[(df['year'] >= year_min) & (df['year'] <= year_max)].copy()
+    if len(df_wave) == 0:
+        return df_wave
 
-    if len(in_window) == 0:
-        return in_window
-
-    # For each entity, keep the doc closest to wave_year
-    in_window['year_dist'] = (in_window['year'] - wave_year).abs()
-    in_window = in_window.sort_values(['entity', 'year_dist'])
-    result = in_window.drop_duplicates(subset='entity', keep='first')
-    result = result.drop(columns='year_dist')
+    # For each entity, keep the most recent document in this wave
+    df_wave = df_wave.sort_values(['entity', 'year'], ascending=[True, False])
+    result = df_wave.drop_duplicates(subset='entity', keep='first')
 
     return result.reset_index(drop=True)
 
@@ -291,7 +289,7 @@ def characterise_clusters(
 # VISUALISATIONS
 # =============================================================================
 
-def plot_elbow(metrics: dict, wave_year: int, output_dir: Path) -> None:
+def plot_elbow(metrics: dict, wave: int, output_dir: Path) -> None:
     """Elbow plot with inertia and silhouette score."""
     fig, ax1 = plt.subplots(figsize=(8, 5))
 
@@ -317,19 +315,19 @@ def plot_elbow(metrics: dict, wave_year: int, output_dir: Path) -> None:
         xytext=(10, 10), textcoords='offset points',
     )
 
-    ax1.set_title(f'Cluster evaluation — wave {wave_year}', fontsize=14, fontweight='bold')
+    ax1.set_title(f'Cluster evaluation — wave {wave}', fontsize=14, fontweight='bold')
     fig.tight_layout()
-    plt.savefig(output_dir / f'elbow_{wave_year}.png', dpi=150, bbox_inches='tight')
-    plt.savefig(output_dir / f'elbow_{wave_year}.pdf', bbox_inches='tight')
+    plt.savefig(output_dir / f'elbow_{wave}.png', dpi=150, bbox_inches='tight')
+    plt.savefig(output_dir / f'elbow_{wave}.pdf', bbox_inches='tight')
     plt.close()
-    print(f"  Saved: elbow_{wave_year}.png/pdf")
+    print(f"  Saved: elbow_{wave}.png/pdf")
 
 
 def plot_dendrogram_fig(
     Z: np.ndarray,
     wave_df: pd.DataFrame,
     k: int,
-    wave_year: int,
+    wave: int,
     output_dir: Path,
 ) -> None:
     """Dendrogram with actor type in labels."""
@@ -349,23 +347,23 @@ def plot_dendrogram_fig(
     )
 
     ax.set_title(
-        f'Hierarchical clustering — wave {wave_year} (k={k})',
+        f'Hierarchical clustering — wave {wave} (k={k})',
         fontsize=14, fontweight='bold'
     )
     ax.set_xlabel('Distance (Ward)', fontsize=12)
 
     plt.tight_layout()
-    plt.savefig(output_dir / f'dendrogram_{wave_year}.png', dpi=150, bbox_inches='tight')
-    plt.savefig(output_dir / f'dendrogram_{wave_year}.pdf', bbox_inches='tight')
+    plt.savefig(output_dir / f'dendrogram_{wave}.png', dpi=150, bbox_inches='tight')
+    plt.savefig(output_dir / f'dendrogram_{wave}.pdf', bbox_inches='tight')
     plt.close()
-    print(f"  Saved: dendrogram_{wave_year}.png/pdf")
+    print(f"  Saved: dendrogram_{wave}.png/pdf")
 
 
 def plot_pca_scatter(
     X: np.ndarray,
     wave_df: pd.DataFrame,
     labels: np.ndarray,
-    wave_year: int,
+    wave: int,
     output_dir: Path,
 ) -> None:
     """PCA 2D scatter: colour by cluster, marker by actor type."""
@@ -406,7 +404,7 @@ def plot_pca_scatter(
     ax.set_xlabel(f'PC1 ({pca.explained_variance_ratio_[0]:.1%} variance)', fontsize=12)
     ax.set_ylabel(f'PC2 ({pca.explained_variance_ratio_[1]:.1%} variance)', fontsize=12)
     ax.set_title(
-        f'PCA scatter — wave {wave_year} (k={n_clusters})',
+        f'PCA scatter — wave {wave} (k={n_clusters})',
         fontsize=14, fontweight='bold'
     )
 
@@ -425,15 +423,15 @@ def plot_pca_scatter(
               loc='upper left', fontsize=8)
 
     plt.tight_layout()
-    plt.savefig(output_dir / f'pca_scatter_{wave_year}.png', dpi=150, bbox_inches='tight')
-    plt.savefig(output_dir / f'pca_scatter_{wave_year}.pdf', bbox_inches='tight')
+    plt.savefig(output_dir / f'pca_scatter_{wave}.png', dpi=150, bbox_inches='tight')
+    plt.savefig(output_dir / f'pca_scatter_{wave}.pdf', bbox_inches='tight')
     plt.close()
-    print(f"  Saved: pca_scatter_{wave_year}.png/pdf")
+    print(f"  Saved: pca_scatter_{wave}.png/pdf")
 
 
 def plot_centroid_heatmap(
     cluster_info: pd.DataFrame,
-    wave_year: int,
+    wave: int,
     output_dir: Path,
 ) -> None:
     """Heatmap of cluster centroids (risk profile per cluster)."""
@@ -456,21 +454,21 @@ def plot_centroid_heatmap(
     )
 
     ax.set_title(
-        f'Cluster risk profiles — wave {wave_year}',
+        f'Cluster risk profiles — wave {wave}',
         fontsize=14, fontweight='bold'
     )
     ax.set_ylabel('')
 
     plt.tight_layout()
-    plt.savefig(output_dir / f'centroid_heatmap_{wave_year}.png', dpi=150, bbox_inches='tight')
-    plt.savefig(output_dir / f'centroid_heatmap_{wave_year}.pdf', bbox_inches='tight')
+    plt.savefig(output_dir / f'centroid_heatmap_{wave}.png', dpi=150, bbox_inches='tight')
+    plt.savefig(output_dir / f'centroid_heatmap_{wave}.pdf', bbox_inches='tight')
     plt.close()
-    print(f"  Saved: centroid_heatmap_{wave_year}.png/pdf")
+    print(f"  Saved: centroid_heatmap_{wave}.png/pdf")
 
 
 def plot_actor_distribution(
     cluster_info: pd.DataFrame,
-    wave_year: int,
+    wave: int,
     output_dir: Path,
 ) -> None:
     """Stacked bar: actor composition per cluster."""
@@ -487,17 +485,17 @@ def plot_actor_distribution(
     ax.set_xlabel('Cluster', fontsize=12)
     ax.set_ylabel('Number of entities', fontsize=12)
     ax.set_title(
-        f'Actor composition per cluster — wave {wave_year}',
+        f'Actor composition per cluster — wave {wave}',
         fontsize=14, fontweight='bold'
     )
     ax.legend(title='Actor type')
     plt.setp(ax.xaxis.get_majorticklabels(), rotation=0)
 
     plt.tight_layout()
-    plt.savefig(output_dir / f'actor_distribution_{wave_year}.png', dpi=150, bbox_inches='tight')
-    plt.savefig(output_dir / f'actor_distribution_{wave_year}.pdf', bbox_inches='tight')
+    plt.savefig(output_dir / f'actor_distribution_{wave}.png', dpi=150, bbox_inches='tight')
+    plt.savefig(output_dir / f'actor_distribution_{wave}.pdf', bbox_inches='tight')
     plt.close()
-    print(f"  Saved: actor_distribution_{wave_year}.png/pdf")
+    print(f"  Saved: actor_distribution_{wave}.png/pdf")
 
 
 # =============================================================================
@@ -698,15 +696,8 @@ def main():
         '--waves',
         type=int,
         nargs='+',
-        default=[2015, 2019, 2023],
-        help='Collection wave years (default: 2015 2019 2023)'
-    )
-
-    parser.add_argument(
-        '--window',
-        type=int,
-        default=2,
-        help='Years on each side of wave year to include (default: 2)'
+        default=[1, 2, 3],
+        help='Wave numbers to analyze (default: 1 2 3 for waves 2015-2018, 2019-2022, 2023+)'
     )
 
     parser.add_argument(
@@ -730,6 +721,13 @@ def main():
     print("RISK CLUSTERING ANALYSIS")
     print("=" * 60)
 
+    # Wave range definitions
+    WAVE_RANGES = {
+        1: '2015-2018',
+        2: '2019-2022',
+        3: '≥ 2023',
+    }
+
     # Load data
     print(f"\nLoading: {args.input}")
     df, risk_cols = load_category_matrix(args.input)
@@ -740,18 +738,21 @@ def main():
     all_cluster_info = {}
     all_metrics = {}
 
-    for wave_year in args.waves:
+    for wave in args.waves:
+        wave_range = WAVE_RANGES.get(wave, f'Wave {wave}')
         print(f"\n{'=' * 40}")
-        print(f"WAVE {wave_year} (±{args.window} years)")
+        print(f"WAVE {wave} ({wave_range})")
         print(f"{'=' * 40}")
 
         # Filter to wave
-        wave_df = filter_to_wave(df, wave_year, window=args.window)
+        wave_df = filter_to_wave(df, wave)
         if len(wave_df) < 5:
-            print(f"  Too few entities ({len(wave_df)}), skipping wave {wave_year}")
+            print(f"  Too few entities ({len(wave_df)}), skipping wave {wave}")
             continue
 
         print(f"  {len(wave_df)} entities in wave")
+        year_range = f"{wave_df['year'].min()}-{wave_df['year'].max()}"
+        print(f"  Year range: {year_range}")
         actor_counts = wave_df['actor'].value_counts().to_dict()
         translated = {translate_actor(k): v for k, v in actor_counts.items()}
         print(f"  By actor: {translated}")
@@ -772,7 +773,7 @@ def main():
         best_k = metrics['best_k']
         best_sil = metrics['silhouettes'][metrics['k_range'].index(best_k)]
         print(f"  Best k = {best_k} (silhouette = {best_sil:.3f})")
-        all_metrics[wave_year] = metrics
+        all_metrics[wave] = metrics
 
         # Run clustering
         print(f"  Running clustering with k={best_k}...")
@@ -782,27 +783,27 @@ def main():
         cluster_info = characterise_clusters(
             wave_norm, clustering['kmeans_labels'], risk_cols
         )
-        all_cluster_info[wave_year] = cluster_info
+        all_cluster_info[wave] = cluster_info
 
         # Save assignments
         assignments = wave_norm[['entity', 'actor', 'year']].copy()
         assignments['cluster'] = clustering['kmeans_labels']
-        assignments['wave'] = wave_year
+        assignments['wave'] = wave
         all_assignments.append(assignments)
 
         # Visualisations
         print(f"  Generating visualisations...")
-        plot_elbow(metrics, wave_year, args.output)
+        plot_elbow(metrics, wave, args.output)
         plot_dendrogram_fig(
             clustering['linkage_matrix'], wave_norm,
-            best_k, wave_year, args.output
+            best_k, wave, args.output
         )
         plot_pca_scatter(
             X, wave_norm, clustering['kmeans_labels'],
-            wave_year, args.output
+            wave, args.output
         )
-        plot_centroid_heatmap(cluster_info, wave_year, args.output)
-        plot_actor_distribution(cluster_info, wave_year, args.output)
+        plot_centroid_heatmap(cluster_info, wave, args.output)
+        plot_actor_distribution(cluster_info, wave, args.output)
 
     # Combine assignments
     if all_assignments:
