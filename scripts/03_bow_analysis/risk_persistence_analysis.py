@@ -42,7 +42,7 @@ import seaborn as sns
 plt.style.use('seaborn-v0_8-whitegrid')
 sns.set_palette("Set1")
 
-METADATA_COLS = ['file', 'actor', 'entity', 'year']
+METADATA_COLS = ['file', 'actor', 'entity', 'year', 'wave']
 
 ACTOR_TRANSLATIONS = {
     'kommun': 'Municipality',
@@ -248,11 +248,20 @@ def aggregate_persistence_by_term(
         if col not in grouped.columns:
             grouped[col] = 0
 
-    grouped['total_present'] = grouped['persist'] + grouped['dropout']
-    grouped['persistence_rate'] = grouped['persist'] / grouped['total_present']
-    grouped = grouped[grouped['total_present'] >= min_entities]
+    grouped['n_entities_t0'] = grouped['persist'] + grouped['dropout']
+    grouped['n_entities_persist'] = grouped['persist']
+    grouped['n_entities_dropout'] = grouped['dropout']
+    grouped['persistence_rate'] = grouped['persist'] / grouped['n_entities_t0']
+    grouped['flag_low_n'] = grouped['n_entities_t0'] < 3
 
-    return grouped.sort_values('persistence_rate', ascending=False)
+    # Filter by min_entities
+    result = grouped[grouped['n_entities_t0'] >= min_entities].copy()
+
+    # Reorder columns for clarity
+    result = result[['n_entities_t0', 'n_entities_persist', 'n_entities_dropout',
+                     'persistence_rate', 'flag_low_n']]
+
+    return result.sort_values('persistence_rate', ascending=False)
 
 
 def aggregate_by_actor_and_year_pair(
@@ -276,16 +285,26 @@ def aggregate_by_actor_and_year_pair(
         n_dropout = (group['transition'] == 'dropout').sum()
         total = n_persist + n_dropout
 
-        if total >= min_entities:
-            records.append({
-                'actor': actor,
-                'year_pair': year_pair,
-                'term': term,
-                'persistence_rate': n_persist / total,
-                'n_entities': total,
-            })
+        # Always include the record, but flag if low N
+        flag_low_n = (total < 3)  # Flag if fewer than 3 entities
 
-    return pd.DataFrame(records)
+        records.append({
+            'actor': actor,
+            'year_pair': year_pair,
+            'term': term,
+            'persistence_rate': n_persist / total if total > 0 else 0,
+            'n_entities_t0': total,
+            'n_entities_persist': n_persist,
+            'n_entities_dropout': n_dropout,
+            'flag_low_n': flag_low_n,
+        })
+
+    # Filter by min_entities if specified
+    result = pd.DataFrame(records)
+    if min_entities > 1:
+        result = result[result['n_entities_t0'] >= min_entities]
+
+    return result
 
 
 # =============================================================================
