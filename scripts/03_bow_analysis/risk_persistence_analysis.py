@@ -585,7 +585,7 @@ def generate_report(
     for term, row in top_persist.iterrows():
         report.append(
             f"  {term:30s}: {row['persistence_rate']:.1%} "
-            f"(persisted {int(row['persist'])}/{int(row['total_present'])} times)"
+            f"(persisted {int(row['n_entities_persist'])}/{int(row['n_entities_t0'])} entities)"
         )
 
     # Top dropout terms
@@ -594,7 +594,7 @@ def generate_report(
     for term, row in dropout_ranked.iterrows():
         report.append(
             f"  {term:30s}: {1 - row['persistence_rate']:.1%} dropout rate "
-            f"({int(row['dropout'])}/{int(row['total_present'])})"
+            f"({int(row['n_entities_dropout'])}/{int(row['n_entities_t0'])} entities)"
         )
 
     # Save
