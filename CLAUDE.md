@@ -57,10 +57,17 @@ scripts/
     preprocessing.py
     merge_all_actors.py
   03_bow_analysis/         # Bag-of-words analysis
-    risk_context_analysis.py
-    visualize_rsa_results.py
+    risk_context_analysis.py       # Term counting by category
+    term_document_matrix.py        # Creates term/category document matrices
+    risk_persistence_analysis.py   # Tracks term persistence/dropout over time
+    risk_clustering_analysis.py    # Clusters entities by risk profile
+    visualize_rsa_results.py       # Generates visualizations
+    generate_analysis_pdf.py       # Combines all outputs into single PDF report
 data/                      # Gitignored: raw PDFs, parquet files, vectors
 results/                   # Gitignored: analysis outputs, visualisations
+  persistence/             # Persistence analysis outputs
+  clustering/              # Clustering analysis outputs
+  term_document_matrix/    # Term-document matrices
 docs/                      # Guides and documentation
 archive/                   # Legacy notebooks and R scripts
 logs/                      # Processing logs
@@ -93,17 +100,18 @@ logs/                      # Processing logs
 **Key scripts:**
 - `risk_context_analysis.py` — Counts risk terms by category, analyzes qualifications (sannolikhet, konsekvens, risk). Now includes lemmatization support.
 - `term_document_matrix.py` — Creates term-level and category-level document matrices. Creates both original and lemmatized versions.
-- `risk_persistence_analysis.py` — Tracks which risk terms persist/dropout over time for entities with multiple documents.
-- `risk_clustering_analysis.py` — Clusters entities by risk profile using hierarchical clustering.
+- `risk_persistence_analysis.py` — Tracks which risk terms persist/dropout over time for entities with multiple documents. Supports wave-based (municipalities) and year-based (prefectures, MCF) transitions.
+- `risk_clustering_analysis.py` — Clusters entities by risk profile using hierarchical clustering per wave.
 - `visualize_rsa_results.py` — Generates visualizations for analysis results.
+- `generate_analysis_pdf.py` — Combines all persistence and clustering outputs into a single PDF report (`results/risk_mapping_analysis_outputs.pdf`).
 
-**Recent improvements (2024):**
+**Recent improvements (2024-2025):**
 
 1. **Wave mapping** — Years are mapped to waves for longitudinal analysis:
+   - Wave 0: pre-2015 (baseline, mostly prefectures)
    - Wave 1: 2015-2018
    - Wave 2: 2019-2022
    - Wave 3: ≥ 2023
-   - Pre-2015 documents excluded from analysis
    - All matrices include `wave` column in metadata
 
 2. **Lemmatization** — Risk terms are lemmatized using Stanza Swedish pipeline to merge inflectional variants:
@@ -117,15 +125,72 @@ logs/                      # Processing logs
    - Output includes: `n_entities_t0`, `n_entities_persist`, `n_entities_dropout`, `flag_low_n`
    - Prevents misleading persistence rates from single-entity observations
 
+4. **Actor-specific persistence analysis** — Different transition types per actor:
+   - **Municipalities**: Wave-based transitions (W0→W1, W1→W2, W2→W3) plus direct W1→W3 comparison
+   - **Prefectures (länsstyrelsen)**: Year-by-year transitions (fewer entities, wave grouping less meaningful)
+   - **MCF**: Year-by-year transitions (single entity tracked across 4 reports)
+
+5. **Clustering analysis** — Hierarchical clustering of entities by risk profile per wave:
+   - Uses category-level term frequencies (10 risk categories)
+   - Optimal k determined via silhouette score
+   - Tracks cluster transitions between waves
+
 **Output files:**
 - `term_document_matrix.csv` / `*_original.csv` — Term counts per document
 - `category_document_matrix.csv` / `*_original.csv` — Category counts per document
 - `term_metadata.csv` / `*_original.csv` — Term → category mapping
 - `lemma_mapping.json` — Lemma → original terms mapping
-- Persistence CSVs with entity counts and low-N flags
-- Clustering outputs with wave-based filtering
+- `results/persistence/` — Persistence analysis outputs (see below)
+- `results/clustering/` — Clustering analysis outputs (see below)
+- `results/risk_mapping_analysis_outputs.pdf` — Combined PDF report
 
 See `docs/implementation-wave-lemma-lown.md` for detailed documentation.
+
+### Persistence Analysis Results
+
+**Panel:** 162 entities (153 municipalities, 9 prefectures, 1 MCF), 449 documents with ≥2 waves.
+
+**Key findings:**
+- Overall persistence rate: **73.8%** (once a risk term enters an RSA, 74% chance it remains)
+- Prefectures most stable (75.8%), municipalities similar (73.9%), MCF most volatile (29.6%)
+- Mean Jaccard similarity: Prefectures 0.54, Municipalities 0.50, MCF 0.11
+
+**Most persistent terms:** hälsa (97%), dricksvatten (91%), brand (89%), storm (88%), fjärrvärme (87%), pandemi (87%)
+
+**Most frequently dropped terms:** terrorhot (73% dropout), vattenläcka (73%), folkhälsa (70%), influensapandemi (67%)
+
+**Output files in `results/persistence/`:**
+- `persistence_heatmap.png` — All actors, consecutive waves
+- `persistence_heatmap_kommun.png` — Municipalities W0→W1, W1→W2, W2→W3
+- `persistence_heatmap_kommun_w1_w3.png` — Municipalities W1→W3 direct (112 entities)
+- `persistence_heatmap_year_länsstyrelse.png` — Prefectures year-by-year (11 entities, 20 year-pairs)
+- `persistence_heatmap_year_MCF.png` — MCF year-by-year (10 year-pairs)
+- `persistence_transitions.csv` — Raw transition data
+- `persistence_by_term.csv` — Aggregated persistence rates per term
+
+### Clustering Analysis Results
+
+**Method:** Hierarchical clustering on category-level risk profiles (10 categories: naturhot, biologiska_hot, olyckor, antagonistiska_hot, cyber_hot, sociala_risker, teknisk_infrastruktur, brand, miljö_klimat, ekonomi).
+
+**Key findings by wave:**
+
+| Wave | Entities | Optimal k | Silhouette | Cluster 0 distinctive | Cluster 1 distinctive |
+|------|----------|-----------|------------|----------------------|----------------------|
+| W0 (pre-2015) | 21 | 2 | 0.57 | naturhot | antagonistiska_hot (1 outlier) |
+| W1 (2015-18) | 126 | 2 | 0.29 | naturhot | teknisk_infrastruktur |
+| W2 (2019-22) | 154 | 2 | 0.37 | biologiska_hot | naturhot |
+| W3 (2023+) | 201 | 2 | 0.24 | naturhot | teknisk_infrastruktur |
+
+**Cluster transitions:**
+- W0→W1: 13% changed cluster
+- W1→W2: 69% changed cluster (major shift, possibly COVID-related)
+- W2→W3: 59% changed cluster
+
+**Output files in `results/clustering/`:**
+- `cluster_assignments.csv` — Entity-wave-cluster mapping
+- `clustering_report.txt` — Detailed cluster profiles
+- Per-wave visualizations: `elbow_*.png`, `dendrogram_*.png`, `pca_scatter_*.png`, `centroid_heatmap_*.png`, `actor_distribution_*.png`
+- `transition_matrix_*.png` — Cluster transition matrices between waves
 
 ### Remaining code to write:
 1. **Rewrite preprocessing** — possibly split into two scripts: one for bag-of-words preprocessing, one for transformer preprocessing.

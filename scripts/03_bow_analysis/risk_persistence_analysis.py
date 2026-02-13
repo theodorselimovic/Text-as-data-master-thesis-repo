@@ -177,6 +177,139 @@ def compute_transitions(panel: pd.DataFrame, term_cols: list) -> pd.DataFrame:
     return pd.DataFrame(records)
 
 
+def compute_direct_wave_transitions(
+    panel: pd.DataFrame, term_cols: list, wave_from: int, wave_to: int
+) -> pd.DataFrame:
+    """
+    Compute direct transitions between two specific waves for all entities
+    that have documents in BOTH waves, regardless of intermediate waves.
+
+    This allows comparing W1→W3 for all municipalities, not just those
+    that skipped W2.
+
+    Parameters
+    ----------
+    panel : pd.DataFrame
+        Longitudinal panel data.
+    term_cols : list
+        List of term column names.
+    wave_from : int
+        Starting wave (e.g., 1).
+    wave_to : int
+        Ending wave (e.g., 3).
+
+    Returns
+    -------
+    pd.DataFrame
+        Transition records for entities with docs in both waves.
+    """
+    records = []
+
+    for entity, group in panel.groupby('entity'):
+        waves_present = set(group['wave'].unique())
+
+        # Only include entities that have BOTH waves
+        if wave_from not in waves_present or wave_to not in waves_present:
+            continue
+
+        actor = group['actor'].iloc[0]
+
+        # Get the document for each wave (latest if multiple)
+        doc_from = group[group['wave'] == wave_from].sort_values('year').iloc[-1]
+        doc_to = group[group['wave'] == wave_to].sort_values('year').iloc[-1]
+
+        for term in term_cols:
+            present_t = int(doc_from[term] > 0)
+            present_t1 = int(doc_to[term] > 0)
+
+            if present_t and present_t1:
+                transition = 'persist'
+            elif present_t and not present_t1:
+                transition = 'dropout'
+            elif not present_t and present_t1:
+                transition = 'adopt'
+            else:
+                transition = 'stable_absent'
+
+            records.append({
+                'entity': entity,
+                'actor': actor,
+                'wave_from': wave_from,
+                'wave_to': wave_to,
+                'wave_pair': f"W{wave_from}→W{wave_to}",
+                'term': term,
+                'present_from': present_t,
+                'present_to': present_t1,
+                'transition': transition,
+            })
+
+    return pd.DataFrame(records)
+
+
+def compute_year_transitions(df: pd.DataFrame, term_cols: list) -> pd.DataFrame:
+    """
+    Compute year-by-year transitions for entities with multiple documents.
+
+    Unlike wave-based transitions, this compares consecutive YEARS.
+    Useful for länsstyrelsen and MCF where wave categorisation is less meaningful.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Full term-document matrix (not panel-filtered).
+    term_cols : list
+        List of term column names.
+
+    Returns
+    -------
+    pd.DataFrame
+        Transition records with year_pair instead of wave_pair.
+    """
+    records = []
+
+    for entity, group in df.groupby('entity'):
+        if len(group) < 2:
+            continue
+
+        group = group.sort_values('year')
+        actor = group['actor'].iloc[0]
+        docs = list(group.iterrows())
+
+        for i in range(len(docs) - 1):
+            _, doc_t = docs[i]
+            _, doc_t1 = docs[i + 1]
+
+            year_from = int(doc_t['year'])
+            year_to = int(doc_t1['year'])
+
+            for term in term_cols:
+                present_t = int(doc_t[term] > 0)
+                present_t1 = int(doc_t1[term] > 0)
+
+                if present_t and present_t1:
+                    transition = 'persist'
+                elif present_t and not present_t1:
+                    transition = 'dropout'
+                elif not present_t and present_t1:
+                    transition = 'adopt'
+                else:
+                    transition = 'stable_absent'
+
+                records.append({
+                    'entity': entity,
+                    'actor': actor,
+                    'year_from': year_from,
+                    'year_to': year_to,
+                    'year_pair': f"{year_from}→{year_to}",
+                    'term': term,
+                    'present_from': present_t,
+                    'present_to': present_t1,
+                    'transition': transition,
+                })
+
+    return pd.DataFrame(records)
+
+
 def compute_jaccard(panel: pd.DataFrame, term_cols: list) -> pd.DataFrame:
     """
     Compute Jaccard similarity between consecutive documents
@@ -329,8 +462,16 @@ def plot_persistence_heatmap(
     """
     Heatmap: rows = terms, columns = wave transitions,
     cell colour = persistence rate.
+
+    Only includes consecutive wave transitions (W0→W1, W1→W2, W2→W3).
+    Skip-wave transitions (e.g., W1→W3 for entities missing W2) are excluded.
     """
+    # Only include consecutive wave transitions
+    CONSECUTIVE_PAIRS = ['W0→W1', 'W1→W2', 'W2→W3']
+
     df = transitions.copy()
+    df = df[df['wave_pair'].isin(CONSECUTIVE_PAIRS)]
+
     if actor_filter:
         df = df[df['actor'] == actor_filter]
 
@@ -389,6 +530,175 @@ def plot_persistence_heatmap(
         title += f' ({translate_actor(actor_filter)})'
     ax.set_title(title, fontsize=14, fontweight='bold')
     ax.set_xlabel('Wave transition', fontsize=12)
+    ax.set_ylabel('Risk term', fontsize=12)
+
+    plt.tight_layout()
+    fname = f'persistence_heatmap{suffix}'
+    plt.savefig(output_dir / f'{fname}.png', dpi=150, bbox_inches='tight')
+    plt.savefig(output_dir / f'{fname}.pdf', bbox_inches='tight')
+    plt.close()
+    print(f"  Saved: {fname}.png/pdf")
+
+
+def plot_year_persistence_heatmap(
+    year_transitions: pd.DataFrame,
+    output_dir: Path,
+    min_entities: int = 1,
+    actor_filter: str = None,
+    suffix: str = '',
+) -> None:
+    """
+    Heatmap for year-by-year transitions (for länsstyrelsen/MCF).
+
+    Since there are fewer entities, uses lower thresholds.
+    """
+    df = year_transitions.copy()
+
+    if actor_filter:
+        df = df[df['actor'] == actor_filter]
+
+    if len(df) == 0:
+        print(f"  No data for year persistence heatmap{suffix}")
+        return
+
+    present_in_t = df[df['present_from'] == 1]
+
+    if len(present_in_t) == 0:
+        print(f"  No presence data for year persistence heatmap{suffix}")
+        return
+
+    # Compute persistence rate per term per year transition
+    pivot_data = []
+    for (term, year_pair), group in present_in_t.groupby(['term', 'year_pair']):
+        n_persist = (group['transition'] == 'persist').sum()
+        total = len(group)
+        if total >= min_entities:
+            pivot_data.append({
+                'term': term,
+                'year_pair': year_pair,
+                'persistence_rate': n_persist / total,
+                'n': total,
+            })
+
+    if not pivot_data:
+        print(f"  No data for year persistence heatmap{suffix}")
+        return
+
+    pivot_df = pd.DataFrame(pivot_data)
+
+    # Filter to terms with enough observations (at least 2 year-pairs)
+    term_counts = pivot_df.groupby('term').size()
+    frequent_terms = term_counts[term_counts >= 2].index
+    pivot_df = pivot_df[pivot_df['term'].isin(frequent_terms)]
+
+    if len(pivot_df) == 0:
+        print(f"  No terms meet threshold for year heatmap{suffix}")
+        return
+
+    # Pivot for heatmap
+    heatmap_data = pivot_df.pivot_table(
+        index='term', columns='year_pair', values='persistence_rate'
+    )
+
+    # Sort columns chronologically
+    def year_pair_sort_key(yp):
+        try:
+            return int(yp.split('→')[0])
+        except:
+            return 0
+    sorted_cols = sorted(heatmap_data.columns, key=year_pair_sort_key)
+    heatmap_data = heatmap_data[sorted_cols]
+
+    # Sort rows by mean persistence rate
+    heatmap_data = heatmap_data.loc[
+        heatmap_data.mean(axis=1).sort_values(ascending=False).index
+    ]
+
+    # Plot
+    fig_width = max(10, len(heatmap_data.columns) * 0.8)
+    fig_height = max(6, len(heatmap_data) * 0.3)
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+
+    sns.heatmap(
+        heatmap_data, annot=True, fmt='.2f', cmap='RdYlGn',
+        vmin=0, vmax=1, linewidths=0.5, ax=ax,
+        cbar_kws={'label': 'Persistence rate'}
+    )
+
+    title = 'Term persistence rate by year'
+    if actor_filter:
+        title += f' ({translate_actor(actor_filter)})'
+    ax.set_title(title, fontsize=14, fontweight='bold')
+    ax.set_xlabel('Year transition', fontsize=12)
+    ax.set_ylabel('Risk term', fontsize=12)
+    plt.xticks(rotation=45, ha='right')
+
+    plt.tight_layout()
+    fname = f'persistence_heatmap_year{suffix}'
+    plt.savefig(output_dir / f'{fname}.png', dpi=150, bbox_inches='tight')
+    plt.savefig(output_dir / f'{fname}.pdf', bbox_inches='tight')
+    plt.close()
+    print(f"  Saved: {fname}.png/pdf")
+
+
+def plot_direct_wave_heatmap(
+    transitions: pd.DataFrame,
+    output_dir: Path,
+    wave_pair_label: str,
+    min_entities: int = 3,
+    actor_filter: str = None,
+    suffix: str = '',
+) -> None:
+    """
+    Heatmap for a specific direct wave comparison (e.g., W1→W3 for all municipalities).
+    """
+    df = transitions.copy()
+
+    if actor_filter:
+        df = df[df['actor'] == actor_filter]
+
+    present_in_t = df[df['present_from'] == 1]
+
+    # Compute persistence rate per term
+    pivot_data = []
+    for term, group in present_in_t.groupby('term'):
+        n_persist = (group['transition'] == 'persist').sum()
+        total = len(group)
+        if total >= min_entities:
+            pivot_data.append({
+                'term': term,
+                'persistence_rate': n_persist / total,
+                'n': total,
+            })
+
+    if not pivot_data:
+        print(f"  No data for direct wave heatmap{suffix}")
+        return
+
+    pivot_df = pd.DataFrame(pivot_data)
+
+    # Sort by persistence rate
+    pivot_df = pivot_df.sort_values('persistence_rate', ascending=False)
+
+    # Create single-column heatmap data
+    heatmap_data = pivot_df.set_index('term')[['persistence_rate']]
+    heatmap_data.columns = [wave_pair_label]
+
+    # Plot
+    fig_height = max(6, len(heatmap_data) * 0.3)
+    fig, ax = plt.subplots(figsize=(6, fig_height))
+
+    sns.heatmap(
+        heatmap_data, annot=True, fmt='.2f', cmap='RdYlGn',
+        vmin=0, vmax=1, linewidths=0.5, ax=ax,
+        cbar_kws={'label': 'Persistence rate'}
+    )
+
+    title = f'Term persistence rate ({wave_pair_label})'
+    if actor_filter:
+        title += f' — {translate_actor(actor_filter)}'
+    ax.set_title(title, fontsize=14, fontweight='bold')
+    ax.set_xlabel('', fontsize=12)
     ax.set_ylabel('Risk term', fontsize=12)
 
     plt.tight_layout()
@@ -490,8 +800,13 @@ def plot_actor_persistence_comparison(
 ) -> None:
     """
     Grouped bar chart: mean persistence rate per actor type per wave transition.
+
+    Only includes consecutive wave transitions (W0→W1, W1→W2, W2→W3).
     """
-    present_in_t = transitions[transitions['present_from'] == 1].copy()
+    CONSECUTIVE_PAIRS = ['W0→W1', 'W1→W2', 'W2→W3']
+
+    df = transitions[transitions['wave_pair'].isin(CONSECUTIVE_PAIRS)].copy()
+    present_in_t = df[df['present_from'] == 1].copy()
 
     # Compute persistence rate per entity-wave transition, then average by actor
     entity_rates = []
@@ -707,18 +1022,70 @@ def main():
     # Visualisations
     print("\nGenerating visualisations...")
 
-    # Combined heatmap
+    # Combined heatmap (all actors, wave-based)
     plot_persistence_heatmap(
         transitions, args.output, min_entities=args.min_entities
     )
 
-    # Per-actor heatmaps
-    for actor in sorted(panel['actor'].unique()):
-        plot_persistence_heatmap(
-            transitions, args.output,
-            min_entities=max(3, args.min_entities // 3),
-            actor_filter=actor,
+    # Municipality wave-based heatmap (W0→W1, W1→W2, W2→W3)
+    kommun_transitions = transitions[transitions['actor'] == 'kommun']
+    plot_persistence_heatmap(
+        kommun_transitions, args.output,
+        min_entities=max(3, args.min_entities // 3),
+        suffix='_kommun',
+    )
+
+    # Municipality W1→W3 direct comparison (all municipalities with both waves)
+    print("\nComputing W1→W3 direct transitions for municipalities...")
+    kommun_panel = panel[panel['actor'] == 'kommun']
+    w1_w3_transitions = compute_direct_wave_transitions(
+        kommun_panel, term_cols, wave_from=1, wave_to=3
+    )
+    if len(w1_w3_transitions) > 0:
+        n_entities = w1_w3_transitions['entity'].nunique()
+        print(f"  {n_entities} municipalities with both W1 and W3 documents")
+        plot_direct_wave_heatmap(
+            w1_w3_transitions, args.output,
+            wave_pair_label='W1→W3',
+            min_entities=3,
+            suffix='_kommun_w1_w3',
+        )
+        # Save W1→W3 transitions
+        w1_w3_transitions.to_csv(
+            args.output / 'persistence_transitions_kommun_w1_w3.csv',
+            index=False, encoding='utf-8'
+        )
+        print(f"  Saved: persistence_transitions_kommun_w1_w3.csv")
+    else:
+        print("  No municipalities with both W1 and W3 documents")
+
+    # Year-by-year transitions for länsstyrelsen and MCF
+    print("\nComputing year-by-year transitions for länsstyrelsen and MCF...")
+    for actor in ['länsstyrelse', 'MCF']:
+        actor_df = df[df['actor'] == actor]
+        if len(actor_df) < 2:
+            print(f"  Skipping {actor}: not enough documents")
+            continue
+
+        year_trans = compute_year_transitions(actor_df, term_cols)
+        if len(year_trans) == 0:
+            print(f"  Skipping {actor}: no year transitions computed")
+            continue
+
+        n_entities = year_trans['entity'].nunique()
+        n_pairs = year_trans['year_pair'].nunique()
+        print(f"  {translate_actor(actor)}: {n_entities} entities, {n_pairs} year-pairs")
+
+        plot_year_persistence_heatmap(
+            year_trans, args.output,
+            min_entities=1,
             suffix=f'_{actor}',
+        )
+
+        # Save year transitions
+        year_trans.to_csv(
+            args.output / f'persistence_transitions_year_{actor}.csv',
+            index=False, encoding='utf-8'
         )
 
     # Dropout and adoption rankings
