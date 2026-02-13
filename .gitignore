@@ -85,6 +85,11 @@ results/cooccurrence/*.parquet
 results/figures/*.png
 results/figures/*.pdf
 results/negation_analysis/*.txt
+results/clustering/
+results/persistence/
+results/term_document_matrix/
+results/test_output/
+results/*.pdf
 !results/**/.gitkeep
 
 # Logs
