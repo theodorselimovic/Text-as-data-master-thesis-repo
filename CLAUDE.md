@@ -54,7 +54,7 @@ scripts/
     pdf_reader_enhanced.py
     document_preview_generator.py
   02_preprocessing/        # Text preprocessing (lemmatisation, sentence segmentation)
-    preprocessing.py
+    preprocessing_bert.py        # Light preprocessing for BERT (sentence + paragraph segmentation)
     merge_all_actors.py
   03_bow_analysis/         # Bag-of-words analysis
     risk_context_analysis.py       # Term counting by category
@@ -63,11 +63,15 @@ scripts/
     risk_clustering_analysis.py    # Clusters entities by risk profile
     visualize_rsa_results.py       # Generates visualizations
     generate_analysis_pdf.py       # Combines all outputs into single PDF report
+  04_sampling/             # Sampling for hand-coding
+    risk_term_filter.py          # Filters corpus to paragraphs containing risk terms
+    stratified_sample.py         # Stratified sampling by actor/wave with train/test split
 data/                      # Gitignored: raw PDFs, parquet files, vectors
 results/                   # Gitignored: analysis outputs, visualisations
   persistence/             # Persistence analysis outputs
   clustering/              # Clustering analysis outputs
   term_document_matrix/    # Term-document matrices
+  sampling/                # Sampling outputs (train/test CSVs for hand-coding)
 docs/                      # Guides and documentation
 archive/                   # Legacy notebooks and R scripts
 logs/                      # Processing logs
@@ -83,19 +87,57 @@ logs/                      # Processing logs
 
 **What it does:**
 1. **OCR artifact cleanup** — mojibake repair (UTF-8→Latin-1 corruption maps), removal of page numbers, separator lines, box-drawing characters, and repeated page headers/footers ("Risk- och sårbarhetsanalys 2023-2025", "Sida X (Y)").
-2. **Introductory chapter removal** (kommun only) — detects the Chapter 3 heading ("Identifierad samhällsviktig verksamhet ... inom kommunens geografiska område") via regex and discards Chapters 1-2 (municipality description, methodology boilerplate). Safety guard: skips if match is past 50% of document. On failure: keeps full text and flags in quality report.
-3. **Sentence segmentation** — Stanza Swedish pipeline with `processors='tokenize'` only (no POS/lemma). Significantly faster than the full Stanza pipeline.
-4. **Quality assessment** — filters artifact sentences (< 3 words, > 300 words, < 50% alphabetic), computes per-document quality score (0.0–1.0), writes JSON quality report alongside the output parquet.
+2. **Sentence segmentation with paragraph tracking** — splits text into paragraphs on `\n\n`, then uses Stanza Swedish pipeline with `processors='tokenize'` only (no POS/lemma). Each sentence tracks its `paragraph_id` for downstream filtering.
+3. **Quality assessment** — filters artifact sentences (< 3 words, > 300 words, < 50% alphabetic), computes per-document quality score (0.0–1.0), writes JSON quality report alongside the output parquet.
 
-**Output:** Sentence-level parquet with columns: `doc_id`, `municipality`, `year`, `maskad`, `actor_type`, `sentence_id`, `sentence_text`, `word_count`, `doc_quality`.
+**Output:** Sentence-level parquet with columns: `doc_id`, `municipality`, `year`, `maskad`, `actor_type`, `sentence_id`, `paragraph_id`, `sentence_text`, `word_count`, `doc_quality`.
 
-**Tested on** 4 example RSAs (Bjurholm, Borgholm, Borlänge, Hagfors). Chapter detection works across heading variations. No hyphen-rejoining (too risky with Swedish compound constructions like "risk- och").
-
-**The existing `preprocessing.py`** (with lemmatization + stopwords) will become "Stage 2" for BOW analysis, consuming the output of this script.
+**Note:** Chapter removal is disabled — use `risk_term_filter.py` for paragraph-level filtering instead, which handles irrelevant content more precisely.
 
 `merge_all_actors.py` merges data across actor types.
 
-3. **Bag-of-words analysis** — `03_bow_analysis/` contains term-document matrix creation, risk persistence analysis, and clustering analysis.
+3. **Risk Term Filtering**: `04_sampling/risk_term_filter.py`
+
+**Purpose:** Filters the sentence corpus to only include paragraphs containing at least one risk term. This removes methodology, boilerplate, and irrelevant sections while preserving full paragraph context around risk mentions.
+
+**What it does:**
+1. Loads sentence corpus with `paragraph_id` column
+2. Builds regex pattern from 213 risk terms across 10 categories
+3. Identifies paragraphs containing ≥N risk terms (default: 1)
+4. Keeps all sentences from qualifying paragraphs
+
+**Filtering results (full corpus):**
+- Before: 99,053 paragraphs / 380,097 sentences
+- After: 26,090 paragraphs / 190,690 sentences (26.3% of paragraphs, 50.2% of sentences retained)
+
+**CLI options:**
+- `--categories` — filter by specific risk categories
+- `--min-terms` — require multiple risk terms per paragraph (default: 1)
+
+4. **Stratified Sampling**: `04_sampling/stratified_sample.py`
+
+**Purpose:** Creates reproducible stratified sample for hand-coding theoretical mechanisms.
+
+**What it does:**
+1. Two-stage stratified sampling: documents by (actor_type, wave), then sentences within documents
+2. Train/test split at document level (prevents data leakage)
+3. Outputs CSV files with coding columns for hand-coding
+
+**Sample generated (2025-02-17):**
+- 500 sentences from 58 documents
+- Train: 338 sentences (67.6%), Test: 162 sentences (32.4%)
+- Stratified by actor (MCF/kommun/länsstyrelse) and wave (0-3)
+
+**Output files in `results/sampling/`:**
+- `sample_train.csv` — training set for BERT fine-tuning
+- `sample_test.csv` — held-out test set for evaluation
+- `sample_full.csv` — complete sample
+- `sampling_report.json` — metadata and diagnostics
+
+**Coding columns:**
+- `mechanism_legitimacy`, `mechanism_functional`, `mechanism_equivalence`, `mechanism_complexity`, `coder_notes`
+
+5. **Bag-of-words analysis** — `03_bow_analysis/` contains term-document matrix creation, risk persistence analysis, and clustering analysis.
 
 **Key scripts:**
 - `risk_context_analysis.py` — Counts risk terms by category, analyzes qualifications (sannolikhet, konsekvens, risk). Now includes lemmatization support.
@@ -193,13 +235,11 @@ See `docs/implementation-wave-lemma-lown.md` for detailed documentation.
 - `transition_matrix_*.png` — Cluster transition matrices between waves
 
 ### Remaining code to write:
-1. **Rewrite preprocessing** — possibly split into two scripts: one for bag-of-words preprocessing, one for transformer preprocessing.
-2. **Refine bag-of-words analysis** in `03_bow_analysis/`.
-3. **Write the codebook** — defining coding categories for hand-coding the sample.
-4. **Sampling script** — sample the corpus, split into training set and testing set (70/30). Must produce the same sample each time for reproducibility.
-5. **BERT fine-tuning script** — fine-tune a Swedish BERT model (Royal Library of Sweden, via Hugging Face) on the hand-coded training set.
-6. **BERT evaluation script** — test the fine-tuned model on the held-out testing set.
-7. **Results visualisation script** — visualise the final results.
+1. **Write the codebook** — defining coding categories for hand-coding the sample.
+2. **Hand-code the sample** — code 338 training sentences using the codebook.
+3. **BERT fine-tuning script** — fine-tune a Swedish BERT model (Royal Library of Sweden, via Hugging Face) on the hand-coded training set.
+4. **BERT evaluation script** — test the fine-tuned model on the held-out testing set.
+5. **Results visualisation script** — visualise the final results.
 
 ## Language & Key Dependencies
 

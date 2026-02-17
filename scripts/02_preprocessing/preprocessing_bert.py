@@ -5,9 +5,11 @@ Light Preprocessing for BERT Corpus
 Produces a clean, sentence-segmented corpus suitable for BERT fine-tuning.
 Does NOT lemmatize, remove stopwords, or lowercase. Focuses on:
 1. OCR artifact cleanup (mojibake repair, line artifact removal)
-2. Introductory chapter removal for municipal RSAs (Chapters 1-2)
-3. Sentence segmentation (Stanza tokenize-only, no POS/lemma)
-4. Data quality assessment with per-document scoring
+2. Sentence segmentation with paragraph tracking (Stanza tokenize-only)
+3. Data quality assessment with per-document scoring
+
+Note: Chapter removal is disabled - use risk_term_filter.py for paragraph-level
+filtering instead, which handles irrelevant content more precisely.
 
 This is "Stage 1" of a two-stage preprocessing pipeline. The output
 can be consumed directly by the BERT fine-tuning pipeline, or passed
@@ -28,6 +30,7 @@ Output Format:
     - maskad: Whether document is redacted (boolean)
     - actor_type: Actor type (kommun/lansstyrelse/MCF/unknown)
     - sentence_id: Sentence number within document (1-indexed)
+    - paragraph_id: Paragraph number within document (1-indexed, split on \\n\\n)
     - sentence_text: Cleaned sentence (original surface form)
     - word_count: Number of words in sentence
     - doc_quality: Per-document quality score (0.0-1.0)
@@ -596,9 +599,12 @@ class SentenceSegmenter:
         logging.info("Stanza tokenizer loaded.")
 
     def segment_document(self, text: str) -> List[Dict]:
-        """Segment text into sentences.
+        """Segment text into sentences, tracking paragraph structure.
 
-        Returns list of dicts with sentence_id, sentence_text, word_count.
+        Splits text into paragraphs on double newlines before processing,
+        allowing downstream filtering by paragraph context.
+
+        Returns list of dicts with sentence_id, paragraph_id, sentence_text, word_count.
         """
         if self.pipeline is None:
             self.load_pipeline()
@@ -606,17 +612,29 @@ class SentenceSegmenter:
         if not text or not text.strip():
             return []
 
-        doc = self.pipeline(text)
-        sentences = []
-        for idx, sent in enumerate(doc.sentences, 1):
-            sent_text = sent.text
-            word_count = len(sent.words)
-            sentences.append({
-                'sentence_id': idx,
-                'sentence_text': sent_text,
-                'word_count': word_count,
-            })
-        return sentences
+        # Split into paragraphs on double newlines
+        paragraphs = [p.strip() for p in text.split('\n\n') if p.strip()]
+
+        all_sentences = []
+        sentence_counter = 1
+
+        for para_id, para_text in enumerate(paragraphs, 1):
+            if not para_text:
+                continue
+
+            doc = self.pipeline(para_text)
+            for sent in doc.sentences:
+                sent_text = sent.text
+                word_count = len(sent.words)
+                all_sentences.append({
+                    'sentence_id': sentence_counter,
+                    'paragraph_id': para_id,
+                    'sentence_text': sent_text,
+                    'word_count': word_count,
+                })
+                sentence_counter += 1
+
+        return all_sentences
 
 
 # =============================================================================
@@ -720,19 +738,9 @@ class BertCorpusProcessor:
         # 2. Clean text (mojibake, artifacts, whitespace)
         cleaned_text = self.cleaner.clean_document(raw_text)
 
-        # 3. Remove intro chapters (kommun only)
+        # 3. Chapter removal disabled - paragraph-level risk filtering handles this
         chapter_trimmed = False
         chapter_trim_failed = False
-        if self.remove_intro_chapters and actor_type == 'kommun':
-            text_before = cleaned_text
-            cleaned_text = self.chapter_remover.remove_intro_chapters(
-                cleaned_text, doc_id
-            )
-            chapter_trimmed = cleaned_text is not text_before
-            chapter_trim_failed = (
-                not chapter_trimmed
-                and cleaned_text is text_before
-            )
 
         # 4. Sentence segmentation
         sentences = self.segmenter.segment_document(cleaned_text)
@@ -959,7 +967,7 @@ class BertCorpusProcessor:
         # Ensure column order
         columns = [
             'doc_id', 'municipality', 'year', 'maskad', 'actor_type',
-            'sentence_id', 'sentence_text', 'word_count', 'doc_quality',
+            'sentence_id', 'paragraph_id', 'sentence_text', 'word_count', 'doc_quality',
         ]
         df_save = self.df_output[columns]
 
@@ -1092,7 +1100,7 @@ Input Format:
 Output Format:
     Parquet file with columns:
     - doc_id, municipality, year, maskad, actor_type
-    - sentence_id, sentence_text, word_count
+    - sentence_id, paragraph_id, sentence_text, word_count
     - doc_quality (per-document quality score 0.0-1.0)
 
     JSON quality report with per-document metrics.
