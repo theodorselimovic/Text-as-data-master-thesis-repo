@@ -55,6 +55,7 @@ scripts/
     document_preview_generator.py
   02_preprocessing/        # Text preprocessing (lemmatisation, sentence segmentation)
     preprocessing_bert.py        # Light preprocessing for BERT (sentence + paragraph segmentation)
+    quality_audit.py             # Semantic quality checker for OCR garbage detection
     merge_all_actors.py
   03_bow_analysis/         # Bag-of-words analysis
     risk_context_analysis.py       # Term counting by category
@@ -66,12 +67,16 @@ scripts/
   04_sampling/             # Sampling for hand-coding
     risk_term_filter.py          # Filters corpus to paragraphs containing risk terms
     stratified_sample.py         # Stratified sampling by actor/wave with train/test split
+  05_ner/                  # Named Entity Recognition
+    ner_extraction.py            # Swedish BERT NER extraction (KBLab model)
 data/                      # Gitignored: raw PDFs, parquet files, vectors
 results/                   # Gitignored: analysis outputs, visualisations
   persistence/             # Persistence analysis outputs
   clustering/              # Clustering analysis outputs
   term_document_matrix/    # Term-document matrices
   sampling/                # Sampling outputs (train/test CSVs for hand-coding)
+  ner/                     # NER extraction outputs
+  quality_audit/           # Quality audit outputs
 docs/                      # Guides and documentation
 archive/                   # Legacy notebooks and R scripts
 logs/                      # Processing logs
@@ -96,13 +101,41 @@ logs/                      # Processing logs
 
 `merge_all_actors.py` merges data across actor types.
 
+### Quality Audit: `02_preprocessing/quality_audit.py`
+
+**Purpose:** Identifies semantically garbage sentences that passed basic parsing filters. Detects OCR failures, table fragments, and nonsense text using heuristics and dictionary-based checks. This is an inspection tool — it flags suspicious sentences for manual review without automatically filtering them.
+
+**Heuristics:**
+1. **low_dict_coverage** — < 50% of tokens are real Swedish words (builds dictionary from corpus + stopwords)
+2. **repetition** — unusual short tokens (1-4 chars) appearing 3+ times (excludes common Swedish words)
+3. **letter_spam** — multiple ALL CAPS tokens that aren't known acronyms (whitelist of ~100 Swedish acronyms: MSB, SCB, RSA, etc.)
+4. **char_repetition** — same character repeated 3+ times, multiple occurrences (excludes ellipsis, digits, URLs)
+5. **mixed_case** — weird capitalization mid-word (e.g., "BEgreppSförklariNG")
+6. **short_tokens** — > 50% of tokens are 1-3 character non-words
+7. **high_digits** — > 30% of characters are digits
+
+**Usage:**
+```bash
+python quality_audit.py \
+    --input data/processed/bert_corpus.parquet \
+    --output results/quality_audit/
+```
+
+**Output files in `results/quality_audit/`:**
+- `flagged_sentences.csv` — sentences flagged by any heuristic
+- `quality_audit_report.json` — summary statistics
+
+**Results (full corpus, 380K sentences):**
+- Flagged: 8,948 (2.4%)
+- Clean: 371,149 (97.6%)
+
 3. **Risk Term Filtering**: `04_sampling/risk_term_filter.py`
 
 **Purpose:** Filters the sentence corpus to only include paragraphs containing at least one risk term. This removes methodology, boilerplate, and irrelevant sections while preserving full paragraph context around risk mentions.
 
 **What it does:**
 1. Loads sentence corpus with `paragraph_id` column
-2. Builds regex pattern from 213 risk terms across 10 categories
+2. Builds regex pattern from risk terms across 11 categories (including 'riskfamilj' following Boholm 2016)
 3. Identifies paragraphs containing ≥N risk terms (default: 1)
 4. Keeps all sentences from qualifying paragraphs
 
@@ -187,6 +220,45 @@ logs/                      # Processing logs
 - `results/risk_mapping_analysis_outputs.pdf` — Combined PDF report
 
 See `docs/implementation-wave-lemma-lown.md` for detailed documentation.
+
+6. **Named Entity Recognition**: `05_ner/ner_extraction.py`
+
+**Purpose:** Extracts named entities from the RSA corpus using the Swedish BERT NER model from KBLab (Royal Library of Sweden). Identifies geographic and institutional entities referenced in risk analyses.
+
+**Model:** `KBLab/bert-base-swedish-cased-ner` (Hugging Face)
+
+**Entity types:**
+- TME: Time expressions (dates, periods)
+- PRS: Personal names
+- LOC: Locations (geographic entities)
+- EVN: Events
+- ORG: Organizations
+
+**Features:**
+- Auto-detects device: CUDA > MPS (Apple Silicon) > CPU
+- Batch processing with automatic OOM recovery
+- Checkpointing for resume capability on long runs
+- Merges BERT subword tokens via `aggregation_strategy="simple"`
+
+**Usage:**
+```bash
+# Full corpus (M1 Mac ~4.5 hours, Colab T4 ~1 hour)
+python ner_extraction.py \
+    --input data/processed/bert_corpus_filtered.parquet \
+    --output results/ner/
+
+# Test on small sample
+python ner_extraction.py \
+    --input data/processed/bert_corpus_filtered.parquet \
+    --output results/ner/ \
+    --max-sentences 1000
+```
+
+**Output files in `results/ner/`:**
+- `entities.csv` — all extracted entities with positions and confidence
+- `entities_by_sentence.csv` — entity counts per sentence
+- `entities_by_document.csv` — entity counts per document with actor/wave metadata
+- `ner_report.json` — summary statistics, top entities by type
 
 ### Persistence Analysis Results
 
