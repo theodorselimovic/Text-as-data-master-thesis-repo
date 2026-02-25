@@ -69,6 +69,8 @@ logger = logging.getLogger(__name__)
 
 # Risk dictionary copied from risk_context_analysis.py to avoid import dependencies.
 # This is the original (non-lemmatized) version for pattern matching.
+# Does not include "risk" as a word to avoid catching "risk- och sårbarhetsanalys".
+# Does include some related words to risk however, such as säkerhet, following Boholm (2016)
 RISK_DICTIONARY = {
     'naturhot': [
         'naturhändelser', 'naturhot', 'väderrelaterade händelser',
@@ -105,10 +107,11 @@ RISK_DICTIONARY = {
         'fartygsolycka', 'fartygsolyckor', 'båtolycka', 'båtolyckor',
         'flygolycka', 'flygolyckor', 'flyghaveri',
         'olyckor med nukleära ämnen', 'olyckor med radioaktiva ämnen',
+        'kärnkraftsolycka', 'strålning', 'radioaktivitet', 'kärnavfall',
         'brokollaps', 'tunnelolycka',
         'byggnadsras', 'byggnadskollaps',
         'försvunnen person', 'försvunna personer', 'försvunnen brukare',
-        'försvinnande', 'saknad person',
+        'försvinnande', 'saknad person', 
     ],
     'antagonistiska_hot': [
         'statliga antagonister', 'statlig antagonist',
@@ -121,7 +124,7 @@ RISK_DICTIONARY = {
         'vandalism', 'skadegörelse', 'inbrott',
         'desinformation', 'påverkanskampanj', 'påverkanskampanjer',
         'hybrid hot', 'hybridhot',
-        'säkerhetshot',
+        'säkerhetshot', 'säkerhet',
     ],
     'cyber_hot': [
         'dataintrång', 'cyberattack', 'cyberattacker', 'cybersäkerhet',
@@ -137,7 +140,7 @@ RISK_DICTIONARY = {
         'strömavbrott', 'elavbrott', 'kraftförsörjning', 'elförsörjning', 'effektbrist',
         'fjärrvärmebrott', 'fjärrvärme', 'värmeförsörjning',
         'vattenläcka', 'vattenläckor', 'vattenförsörjning', 'dricksvatten',
-        'avloppsbrott', 'avloppssystem',
+        'avloppsbrott', 'avloppssystem', 'dricksvattensförsörjning',
         'IT-bortfall', 'it-bortfall', 'IT-avbrott', 'it-avbrott',
         'dataförlust', 'systemfel', 'nätverksavbrott',
         'kommunikationsavbrott', 'teleavbrott', 'telebrott',
@@ -160,6 +163,12 @@ RISK_DICTIONARY = {
         'ekonomisk kris', 'finanskris', 'recession',
         'arbetslöshet', 'inflation', 'ekonomisk nedgång',
     ],
+    'riskfamilj': [
+        'säkerhet', 'riskabel', 'riskerar', 'fara', 'farlig',
+        'säker', 'exponering', 'känslig', 'utsatthet', 'beredskap', 'försvar',
+        'säkerställa', 'granskning', 'bevakning', 'tillsyn', 'drabba', 'sårbarhet',
+        'haveri', 'katastrof', ''
+    ]
 }
 
 
