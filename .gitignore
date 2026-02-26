@@ -78,6 +78,7 @@ data/expanded_terms/*.csv
 *.vec
 models/*.bin
 models/*.vec
+models/mechanism_classifier/
 
 # Results (regenerable)
 results/cooccurrence/*.csv
@@ -89,6 +90,10 @@ results/clustering/
 results/persistence/
 results/term_document_matrix/
 results/test_output/
+results/sampling/
+results/ner/
+results/quality_audit/
+results/bert_classification/
 results/*.pdf
 !results/**/.gitkeep
 

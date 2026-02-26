@@ -69,7 +69,10 @@ scripts/
     stratified_sample.py         # Stratified sampling by actor/wave with train/test split
   05_ner/                  # Named Entity Recognition
     ner_extraction.py            # Swedish BERT NER extraction (KBLab model)
+  06_bert_classification/  # BERT mechanism classification
+    mechanism_classifier.py      # Fine-tune Swedish BERT for mechanism detection
 data/                      # Gitignored: raw PDFs, parquet files, vectors
+models/                    # Gitignored: trained model checkpoints
 results/                   # Gitignored: analysis outputs, visualisations
   persistence/             # Persistence analysis outputs
   clustering/              # Clustering analysis outputs
@@ -77,6 +80,7 @@ results/                   # Gitignored: analysis outputs, visualisations
   sampling/                # Sampling outputs (train/test CSVs for hand-coding)
   ner/                     # NER extraction outputs
   quality_audit/           # Quality audit outputs
+  bert_classification/     # BERT classification outputs (predictions, metrics)
 docs/                      # Guides and documentation
 archive/                   # Legacy notebooks and R scripts
 logs/                      # Processing logs
@@ -260,6 +264,70 @@ python ner_extraction.py \
 - `entities_by_document.csv` — entity counts per document with actor/wave metadata
 - `ner_report.json` — summary statistics, top entities by type
 
+7. **BERT Mechanism Classification**: `06_bert_classification/mechanism_classifier.py`
+
+**Purpose:** Fine-tunes Swedish BERT to classify theoretical mechanisms in RSA sentences. Multi-label classification for two mechanisms:
+- **mechanism_legitimacy** — defining parameters of blame / institutional risk management legitimization (Borraz, 2008)
+- **mechanism_complexity** — complexity empowerment of local actors
+
+**Model:** `KBLab/bert-base-swedish-cased` (Hugging Face)
+
+**Features:**
+- Three modes: `train`, `evaluate`, `predict`
+- Multi-label classification with weighted BCE loss for class imbalance
+- Auto-detects device: CUDA > MPS (Apple Silicon) > CPU
+- Automatic threshold calibration per mechanism
+- Saves model checkpoints, training history, and evaluation metrics
+
+**Usage:**
+```bash
+# Train model
+python mechanism_classifier.py --mode train \
+    --train-data results/sampling/sample_train.csv \
+    --test-data results/sampling/sample_test.csv \
+    --output results/bert_classification/ \
+    --model-dir models/mechanism_classifier/ \
+    --epochs 5 --learning-rate 2e-5
+
+# Evaluate model
+python mechanism_classifier.py --mode evaluate \
+    --test-data results/sampling/sample_test.csv \
+    --model-dir models/mechanism_classifier/ \
+    --output results/bert_classification/ \
+    --calibrate-thresholds
+
+# Predict on full corpus
+python mechanism_classifier.py --mode predict \
+    --input data/processed/bert_corpus_filtered.parquet \
+    --model-dir models/mechanism_classifier/ \
+    --output results/bert_classification/
+```
+
+**Input data format:**
+- Training/test CSV with columns: `sentence_text`, `mechanism_legitimacy`, `mechanism_complexity`
+- Labels: `1` = present, empty = absent (recoded to 0 automatically)
+- Metadata columns preserved: `doc_id`, `actor_type`, `year`, `wave`, `sentence_id`
+
+**Output files:**
+- `models/mechanism_classifier/` — Model checkpoint, tokenizer, thresholds.json
+- `results/bert_classification/training_report.json` — Training metadata and config
+- `results/bert_classification/training_history.csv` — Per-epoch loss and F1
+- `results/bert_classification/evaluation_report.json` — Per-mechanism metrics, confusion matrices
+- `results/bert_classification/predictions.csv` — Full corpus with `prob_*` and `pred_*` columns
+- `results/bert_classification/predictions_report.json` — Summary statistics
+
+**Hyperparameters:**
+| Parameter | Default | Notes |
+|-----------|---------|-------|
+| base_model | KBLab/bert-base-swedish-cased | Swedish BERT |
+| max_length | 512 | Full BERT context |
+| epochs | 5 | Small dataset |
+| learning_rate | 2e-5 | Standard for BERT |
+| batch_size | 8 (MPS), 16 (CUDA) | Auto-detect |
+| gradient_accumulation | 2 | Effective batch = 16-32 |
+| warmup_ratio | 0.1 | ~10% of steps |
+| threshold | 0.5 | Calibrated per mechanism |
+
 ### Persistence Analysis Results
 
 **Panel:** 162 entities (153 municipalities, 9 prefectures, 1 MCF), 449 documents with ≥2 waves.
@@ -306,12 +374,12 @@ python ner_extraction.py \
 - Per-wave visualizations: `elbow_*.png`, `dendrogram_*.png`, `pca_scatter_*.png`, `centroid_heatmap_*.png`, `actor_distribution_*.png`
 - `transition_matrix_*.png` — Cluster transition matrices between waves
 
-### Remaining code to write:
+### Remaining work:
 1. **Write the codebook** — defining coding categories for hand-coding the sample.
 2. **Hand-code the sample** — code 338 training sentences using the codebook.
-3. **BERT fine-tuning script** — fine-tune a Swedish BERT model (Royal Library of Sweden, via Hugging Face) on the hand-coded training set.
-4. **BERT evaluation script** — test the fine-tuned model on the held-out testing set.
-5. **Results visualisation script** — visualise the final results.
+3. ~~**BERT fine-tuning script**~~ — **DONE**: `mechanism_classifier.py` with `--mode train`
+4. ~~**BERT evaluation script**~~ — **DONE**: `mechanism_classifier.py` with `--mode evaluate`
+5. **Results visualisation script** — visualise the final classification results (mechanism prevalence by actor/wave, etc.).
 
 ## Language & Key Dependencies
 
@@ -366,17 +434,3 @@ More concretely:
 - Large files (parquet, PDFs, `.bin` models, results) are gitignored
 - Directory structure preserved via `.gitkeep`
 - Dual license: MIT (code), CC BY 4.0 (docs)
-
-## Key References
-
-- Balzaq (2008) — policy tools of securitisation
-- Beck (1998) — politics of risk society
-- Borraz (2008) — institutional risk and legitimacy
-- Borraz et al. (2022) — regulatory style and risk-based inspections
-- Desrosières (2011) — politics of large numbers / spaces of equivalence
-- Foucault (2009) — security, territory, population
-- Kassim & Le Galès (2010) — governance and policy instruments
-- Le Galès (2011) — policy instruments and governance
-- Paul (2021) — varieties of risk analysis in public administrations
-- Rothstein et al. (2006) — risk colonisation theory
-- Salamon (2002) — tools of government
