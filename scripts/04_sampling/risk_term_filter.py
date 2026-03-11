@@ -84,6 +84,11 @@ RISK_DICTIONARY = {
         'stora snömängder', 'snöoväder',
         'extrem värme', 'extremvärme', 'extrem kyla',
         'låga flöden', 'lågvatten',
+        # Added: seismic, avalanche, tsunami, water scarcity
+        'jordbävning', 'jordskalv', 'seismisk',
+        'lavin', 'laviner', 'snölavin',
+        'tsunami', 'tsunamier',
+        'vattenbrist', 'grundvattennivå', 'grundvattenbrist',
     ],
     'biologiska_hot': [
         'epidemi', 'epidemier', 'pandemi', 'pandemier',
@@ -124,7 +129,13 @@ RISK_DICTIONARY = {
         'vandalism', 'skadegörelse', 'inbrott',
         'desinformation', 'påverkanskampanj', 'påverkanskampanjer',
         'hybrid hot', 'hybridhot',
-        'säkerhetshot', 'säkerhet',
+        'säkerhetshot', 'säkerhet', 'hot om attentat',
+        'kidnapping', 'väpnad konflikt', 'påverkansoperationer',
+        'upplopp', 'beväpnad konflikt',
+        # Added: military/war
+        'krig', 'väpnat angrepp', 'invasion', 'mobilisering',
+        'totalförsvar', 'totalförsvaret', 'krigstillstånd',
+        'militärt hot', 'militärt angrepp',
     ],
     'cyber_hot': [
         'dataintrång', 'cyberattack', 'cyberattacker', 'cybersäkerhet',
@@ -135,6 +146,20 @@ RISK_DICTIONARY = {
     'sociala_risker': [
         'samhällsvärden', 'värdesystem',
         'social oro', 'sociala oroligheter', 'civila oroligheter', 'upplopp',
+        # Added: mass gatherings
+        'folksamling', 'folksamlingar', 'stora evenemang', 'publikevenemang',
+        'massevenemang', 'stor tillställning',
+        # Added: migration/demographic
+        'flyktingkris', 'migration', 'flyktingström', 'flyktingströmmar',
+        'massflykt',
+    ],
+    'samhällsfunktioner': [
+        # Healthcare capacity
+        'vårdkapacitet', 'vårdkris', 'sjukvårdsbrist', 'sjukvårdskris',
+        'vårdplatsbrist', 'intensivvårdsbrist',
+        # Personnel/competence
+        'kompetensbrist', 'personalbrist', 'bemanningsproblem',
+        'kompetensförsörjning', 'personalförsörjning',
     ],
     'teknisk_infrastruktur': [
         'strömavbrott', 'elavbrott', 'kraftförsörjning', 'elförsörjning', 'effektbrist',
@@ -147,6 +172,9 @@ RISK_DICTIONARY = {
         'distributionsstörning', 'logistikavbrott', 'transportavbrott',
         'drivsmedelsbrist', 'bränslebrist', 'försörjningsbrist',
         'livsmedelsförsörjning', 'livsmedelsbrist', 'matförsörjning',
+        # Added: supply chain
+        'leveranskedja', 'leveranskedjor', 'leveransstörning',
+        'försörjningskedja', 'försörjningskedjor',
     ],
     'brand': [
         'brand', 'bränder', 'skogsbrand', 'skogsbränder',
@@ -167,7 +195,12 @@ RISK_DICTIONARY = {
         'säkerhet', 'riskabel', 'riskerar', 'fara', 'farlig',
         'säker', 'exponering', 'känslig', 'utsatthet', 'beredskap', 'försvar',
         'säkerställa', 'granskning', 'bevakning', 'tillsyn', 'drabba', 'sårbarhet',
-        'haveri', 'katastrof', ''
+        'haveri', 'katastrof', 
+    ],
+    'legitimitetsrisker': [
+       'samhällsvärden', 'värdesystem',
+        'social oro', 'sociala oroligheter',
+        'tillit', 'misstro', 'förtroende',
     ]
 }
 
@@ -327,7 +360,8 @@ Examples:
 
 Available categories:
     naturhot, biologiska_hot, olyckor, antagonistiska_hot, cyber_hot,
-    sociala_risker, teknisk_infrastruktur, brand, miljö_klimat, ekonomi
+    sociala_risker, teknisk_infrastruktur, brand, miljö_klimat, ekonomi,
+    samhällsfunktioner, riskfamilj, legitimitetsrisker
         """,
     )
 

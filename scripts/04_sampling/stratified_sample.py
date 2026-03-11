@@ -17,8 +17,8 @@ Input:
     - Merged corpus parquet (fallback): Full document text, segments on-the-fly
 
 Output:
-    - sample_train.csv: Training set (70%)
-    - sample_test.csv: Test set (30%)
+    - sample_full.xlsx: Full sample for hand-coding (formatted Excel with frozen
+      header row and wrapped text). Contains 'split' column indicating train/test.
     - sampling_report.json: Metadata and diagnostics
 
 Usage:
@@ -26,7 +26,7 @@ Usage:
     python stratified_sample.py \\
         --input data/processed/bert_corpus_filtered.parquet \\
         --output results/sampling/ \\
-        --n-units 500 \\
+        --n-units 1000 \\
         --seed 42
 
     # Sample paragraphs instead
@@ -34,12 +34,12 @@ Usage:
         --input data/processed/bert_corpus_filtered.parquet \\
         --output results/sampling/ \\
         --unit paragraph \\
-        --n-units 500 \\
+        --n-units 1000 \\
         --seed 42 \\
         --verbose
 
 Requirements:
-    pip install pandas pyarrow stanza
+    pip install pandas pyarrow stanza openpyxl
 """
 
 import argparse
@@ -82,9 +82,9 @@ ACTOR_TRANSLATIONS = {
 
 # Coding columns to add to output
 CODING_COLUMNS = [
-    'mechanism_legitimacy',
+    'mechanism_legitimacy_offload',   # Offloading responsibility / limited capabilities
+    'mechanism_legitimacy_lowrisk',   # Risk too low for public action
     'mechanism_functional',
-    'mechanism_equivalence',
     'mechanism_complexity',
     'coder_notes',
 ]
@@ -97,6 +97,90 @@ UNIT_PARAGRAPH = 'paragraph'
 # =============================================================================
 # HELPER FUNCTIONS
 # =============================================================================
+
+def sanitize_for_excel(text: str) -> str:
+    """
+    Remove illegal characters that Excel/openpyxl cannot handle.
+
+    Excel prohibits control characters (0x00-0x1F except tab/newline/CR).
+    Also removes other problematic Unicode that causes IllegalCharacterError.
+    """
+    if not isinstance(text, str):
+        return text
+    # Remove control characters except tab (0x09), newline (0x0A), CR (0x0D)
+    import re
+    # Pattern matches control chars 0x00-0x08, 0x0B-0x0C, 0x0E-0x1F
+    illegal_pattern = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f]')
+    return illegal_pattern.sub('', text)
+
+
+def save_excel_formatted(df: pd.DataFrame, path: Path, text_column: str = 'sentence_text') -> None:
+    """
+    Save DataFrame to Excel with formatting for hand-coding.
+
+    Applies formatting:
+        - Freeze header row
+        - Wrap text on the text column
+        - Auto-adjust column widths (with max width for text column)
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame to save.
+    path : Path
+        Output path (.xlsx).
+    text_column : str
+        Name of the text column to wrap (default: 'sentence_text').
+    """
+    from openpyxl.utils.dataframe import dataframe_to_rows
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font
+
+    # Sanitize string columns to remove illegal characters
+    df = df.copy()
+    for col in df.select_dtypes(include=['object']).columns:
+        df[col] = df[col].apply(sanitize_for_excel)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Sample"
+
+    # Write data
+    for r_idx, row in enumerate(dataframe_to_rows(df, index=False, header=True), 1):
+        for c_idx, value in enumerate(row, 1):
+            cell = ws.cell(row=r_idx, column=c_idx, value=value)
+            # Header row styling
+            if r_idx == 1:
+                cell.font = Font(bold=True)
+            # Wrap text for text column
+            col_name = df.columns[c_idx - 1] if c_idx <= len(df.columns) else None
+            if col_name == text_column:
+                cell.alignment = Alignment(wrap_text=True, vertical='top')
+
+    # Freeze header row
+    ws.freeze_panes = 'A2'
+
+    # Adjust column widths
+    for col_idx, column in enumerate(df.columns, 1):
+        col_letter = ws.cell(row=1, column=col_idx).column_letter
+        if column == text_column:
+            # Fixed width for text column (wide enough to read)
+            ws.column_dimensions[col_letter].width = 80
+        else:
+            # Auto-width based on content (with max)
+            max_length = max(
+                len(str(column)),  # header
+                df[column].astype(str).str.len().max() if len(df) > 0 else 0
+            )
+            ws.column_dimensions[col_letter].width = min(max_length + 2, 30)
+
+    # Set row height for text column rows (after header)
+    for row_idx in range(2, len(df) + 2):
+        ws.row_dimensions[row_idx].height = 60  # Approximate height for wrapped text
+
+    wb.save(path)
+    logger.info(f"Saved formatted Excel: {path}")
+
 
 def map_year_to_wave(year) -> Optional[int]:
     """
@@ -818,14 +902,14 @@ Examples:
     python stratified_sample.py \\
         --input data/processed/bert_corpus_filtered.parquet \\
         --output results/sampling/ \\
-        --n-units 500 --seed 42
+        --n-units 1000 --seed 42
 
     # Sample paragraphs instead
     python stratified_sample.py \\
         --input data/processed/bert_corpus_filtered.parquet \\
         --output results/sampling/ \\
         --unit paragraph \\
-        --n-units 500 --seed 42 --verbose
+        --n-units 1000 --seed 42 --verbose
 """
     )
 
@@ -853,8 +937,8 @@ Examples:
     parser.add_argument(
         '--n-units',
         type=int,
-        default=500,
-        help='Total units to sample (default: 500)'
+        default=1000,
+        help='Total units to sample (default: 1000)'
     )
 
     parser.add_argument(
@@ -931,6 +1015,12 @@ Examples:
         df = df[df['word_count'] >= args.min_words].copy()
         print(f"  Kept {len(df)}/{original_count} sentences")
 
+    # Exclude wave 0 (pre-2015) from sampling
+    print("\nExcluding wave 0 (pre-2015)...")
+    original_count = len(df)
+    df = df[df['wave'] != 0].copy()
+    print(f"  Kept {len(df)}/{original_count} sentences")
+
     # If sampling paragraphs, aggregate sentences
     if unit_type == UNIT_PARAGRAPH:
         df = aggregate_to_paragraphs(df, args.verbose)
@@ -1005,21 +1095,10 @@ Examples:
     # Create output directory
     args.output.mkdir(parents=True, exist_ok=True)
 
-    # Save train/test splits
-    train_df = output_df[output_df['split'] == 'train'].copy()
-    test_df = output_df[output_df['split'] == 'test'].copy()
-
-    train_path = args.output / 'sample_train.csv'
-    test_path = args.output / 'sample_test.csv'
-    full_path = args.output / 'sample_full.csv'
-
-    train_df.to_csv(train_path, index=False, encoding='utf-8')
-    test_df.to_csv(test_path, index=False, encoding='utf-8')
-    output_df.to_csv(full_path, index=False, encoding='utf-8')
-
-    print(f"\nSaved: {train_path} ({len(train_df)} rows)")
-    print(f"Saved: {test_path} ({len(test_df)} rows)")
-    print(f"Saved: {full_path} ({len(output_df)} rows)")
+    # Save formatted Excel for hand-coding
+    excel_path = args.output / 'sample_full.xlsx'
+    save_excel_formatted(output_df, excel_path, text_column='sentence_text')
+    print(f"\nSaved: {excel_path} ({len(output_df)} rows)")
 
     # Generate and save report
     report = generate_report(output_df, allocation, args.input, args.output, args, unit_type)
@@ -1042,9 +1121,9 @@ Examples:
     print(f"\nSample size: {len(output_df)} {unit_type}s from {n_docs} documents")
     print(f"Train/test split: {n_train}/{n_test} ({args.train_ratio:.0%}/{1-args.train_ratio:.0%})")
     print(f"\nOutput directory: {args.output}")
-    print(f"\nFiles for hand-coding:")
-    print(f"  - sample_train.csv: {n_train} {unit_type}s (for training BERT)")
-    print(f"  - sample_test.csv: {n_test} {unit_type}s (for evaluation)")
+    print(f"\nFile for hand-coding:")
+    print(f"  - sample_full.xlsx: {len(output_df)} {unit_type}s (formatted Excel)")
+    print(f"    Train/test indicated by 'split' column")
     print(f"\nCoding columns to fill:")
     for col in CODING_COLUMNS:
         print(f"  - {col}")
