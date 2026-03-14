@@ -3,9 +3,12 @@
 BERT-based Mechanism Classifier for RSA Corpus
 
 Fine-tunes a Swedish BERT model to classify theoretical mechanisms in RSA
-sentences. Implements multi-label classification for two mechanisms:
-    - mechanism_legitimacy: Defining parameters of blame / institutional risk
-      management legitimization (Borraz, 2008)
+sentences. Implements multi-label classification for four mechanisms:
+    - mechanism_legitimacy_offload: Offloading responsibility to another actor
+      or claiming limited capabilities (Borraz, 2008)
+    - mechanism_legitimacy_lowrisk: Qualifying risk as too low to demand public
+      action (Borraz, 2008)
+    - mechanism_functional: Functional aptness for handling social risks (Paul, 2021)
     - mechanism_complexity: Complexity empowerment of local actors
 
 The classifier supports three modes:
@@ -14,9 +17,12 @@ The classifier supports three modes:
     3. predict: Apply trained model to full corpus
 
 Input Format (train/evaluate):
-    CSV file with columns:
+    Excel (.xlsx) or CSV file with columns:
     - sentence_text: Text to classify
-    - mechanism_legitimacy: 1 = present, empty = absent (recoded to 0)
+    - split: 'train' or 'test' (for combined input file)
+    - mechanism_legitimacy_offload: 1 = present, empty = absent (recoded to 0)
+    - mechanism_legitimacy_lowrisk: 1 = present, empty = absent (recoded to 0)
+    - mechanism_functional: 1 = present, empty = absent (recoded to 0)
     - mechanism_complexity: 1 = present, empty = absent (recoded to 0)
     - Metadata: doc_id, actor_type, year, wave, sentence_id (preserved)
 
@@ -26,17 +32,16 @@ Output Format:
     - Prediction: CSV with probability scores and predicted labels
 
 Usage:
-    # Train
+    # Train (with combined Excel file containing train/test split)
     python mechanism_classifier.py --mode train \\
-        --train-data results/sampling/sample_train.csv \\
-        --test-data results/sampling/sample_test.csv \\
+        --data results/sampling/sample_full.xlsx \\
         --output results/bert_classification/ \\
         --model-dir models/mechanism_classifier/ \\
         --epochs 5 --learning-rate 2e-5
 
     # Evaluate
     python mechanism_classifier.py --mode evaluate \\
-        --test-data results/sampling/sample_test.csv \\
+        --data results/sampling/sample_full.xlsx \\
         --model-dir models/mechanism_classifier/ \\
         --output results/bert_classification/ \\
         --calibrate-thresholds
@@ -48,7 +53,7 @@ Usage:
         --output results/bert_classification/
 
 Requirements:
-    pip install transformers torch pandas pyarrow scikit-learn
+    pip install transformers torch pandas pyarrow scikit-learn openpyxl
 
 Model:
     KBLab/bert-base-swedish-cased (Royal Library of Sweden)
@@ -82,14 +87,26 @@ from torch.utils.data import Dataset
 # Model configuration
 MODEL_NAME = "KBLab/bert-base-swedish-cased"
 
-# Mechanism labels
-MECHANISM_LABELS = ["mechanism_legitimacy", "mechanism_complexity"]
+# Mechanism labels (default set - can be overridden via CLI)
+MECHANISM_LABELS = [
+    "mechanism_legitimacy_offload",
+    "mechanism_legitimacy_lowrisk",
+    "mechanism_functional",
+    "mechanism_complexity",
+]
 
 # Label descriptions for documentation
 MECHANISM_DESCRIPTIONS = {
-    "mechanism_legitimacy": (
-        "Defining parameters of blame / institutional risk management "
-        "legitimization (Borraz, 2008)"
+    "mechanism_legitimacy_offload": (
+        "Offloading responsibility to another actor or claiming limited "
+        "capabilities (Borraz, 2008)"
+    ),
+    "mechanism_legitimacy_lowrisk": (
+        "Qualifying risk as too low to demand public action (Borraz, 2008)"
+    ),
+    "mechanism_functional": (
+        "Functional aptness - the instrument is genuinely apt for handling "
+        "social risks (Paul, 2021)"
     ),
     "mechanism_complexity": "Complexity empowerment of local actors",
 }
@@ -341,16 +358,19 @@ class DataLoader:
         self.labels = labels or MECHANISM_LABELS
 
     def load_labeled_data(
-        self, file_path: Path
+        self, file_path: Path, split: str = None
     ) -> Tuple[pd.DataFrame, np.ndarray]:
-        """Load labeled data from CSV.
+        """Load labeled data from Excel or CSV.
 
         Recodes empty cells as 0 for all label columns.
 
         Parameters
         ----------
         file_path : Path
-            Path to CSV file.
+            Path to Excel (.xlsx) or CSV file.
+        split : str, optional
+            If provided, filter to rows where 'split' column matches this value.
+            Use 'train' or 'test' for combined files with split column.
 
         Returns
         -------
@@ -359,7 +379,23 @@ class DataLoader:
         """
         logger.info(f"Loading labeled data from: {file_path}")
 
-        df = pd.read_csv(file_path)
+        # Load based on file extension
+        suffix = file_path.suffix.lower()
+        if suffix == '.xlsx':
+            df = pd.read_excel(file_path, engine='openpyxl')
+        elif suffix == '.csv':
+            df = pd.read_csv(file_path)
+        else:
+            raise ValueError(f"Unsupported file format: {suffix}. Use .xlsx or .csv")
+
+        # Filter by split if requested
+        if split is not None:
+            if 'split' not in df.columns:
+                raise ValueError(
+                    f"No 'split' column found. Cannot filter by split='{split}'"
+                )
+            df = df[df['split'] == split].copy()
+            logger.info(f"  Filtered to split='{split}': {len(df)} rows")
 
         # Validate required columns
         if "sentence_text" not in df.columns:
@@ -1089,18 +1125,22 @@ class MechanismPipeline:
 
     def train(
         self,
-        train_data_path: Path,
+        train_data_path: Path = None,
         test_data_path: Optional[Path] = None,
+        data_path: Optional[Path] = None,
         config: Optional[TrainingConfig] = None,
     ) -> Dict:
         """Train model on labeled data.
 
         Parameters
         ----------
-        train_data_path : Path
-            Path to training CSV.
+        train_data_path : Path, optional
+            Path to training CSV/Excel.
         test_data_path : Path, optional
-            Path to test CSV for validation.
+            Path to test CSV/Excel for validation.
+        data_path : Path, optional
+            Path to combined Excel/CSV with 'split' column. If provided,
+            train_data_path and test_data_path are ignored.
         config : TrainingConfig, optional
             Training configuration.
 
@@ -1117,17 +1157,24 @@ class MechanismPipeline:
         logger.info("TRAINING MODE")
         logger.info("=" * 70)
 
-        # Load data
-        train_df, train_labels = self.data_loader.load_labeled_data(
-            train_data_path
-        )
-
-        test_df = None
-        test_labels = None
-        if test_data_path is not None:
-            test_df, test_labels = self.data_loader.load_labeled_data(
-                test_data_path
+        # Load data - either from combined file or separate files
+        if data_path is not None:
+            train_df, train_labels = self.data_loader.load_labeled_data(
+                data_path, split='train'
             )
+            test_df, test_labels = self.data_loader.load_labeled_data(
+                data_path, split='test'
+            )
+        else:
+            train_df, train_labels = self.data_loader.load_labeled_data(
+                train_data_path
+            )
+            test_df = None
+            test_labels = None
+            if test_data_path is not None:
+                test_df, test_labels = self.data_loader.load_labeled_data(
+                    test_data_path
+                )
 
         # Compute class weights
         pos_weights = None
@@ -1223,15 +1270,19 @@ class MechanismPipeline:
 
     def evaluate(
         self,
-        test_data_path: Path,
+        test_data_path: Path = None,
+        data_path: Path = None,
         calibrate_thresholds: bool = False,
     ) -> Dict:
         """Evaluate model on test data.
 
         Parameters
         ----------
-        test_data_path : Path
-            Path to test CSV.
+        test_data_path : Path, optional
+            Path to test CSV/Excel.
+        data_path : Path, optional
+            Path to combined Excel/CSV with 'split' column. If provided,
+            test_data_path is ignored and test split is extracted.
         calibrate_thresholds : bool
             Whether to recalibrate thresholds on test data.
 
@@ -1258,10 +1309,15 @@ class MechanismPipeline:
             device_manager=self.device_manager,
         )
 
-        # Load data
-        test_df, test_labels = self.data_loader.load_labeled_data(
-            test_data_path
-        )
+        # Load data - either from combined file or separate file
+        if data_path is not None:
+            test_df, test_labels = self.data_loader.load_labeled_data(
+                data_path, split='test'
+            )
+        else:
+            test_df, test_labels = self.data_loader.load_labeled_data(
+                test_data_path
+            )
 
         test_dataset = MechanismDataset(
             texts=test_df["sentence_text"].tolist(),
@@ -1285,7 +1341,8 @@ class MechanismPipeline:
         )
 
         # Save evaluation report
-        self._save_evaluation_report(metrics, test_data_path)
+        report_data_path = data_path if data_path is not None else test_data_path
+        self._save_evaluation_report(metrics, report_data_path)
 
         # Print summary
         self._print_evaluation_summary(metrics)
@@ -1511,21 +1568,23 @@ Mechanisms:
         Defining parameters of blame / institutional risk management
         legitimization (Borraz, 2008)
 
+    mechanism_functional:
+        Functional aptness for handling social risks (Paul, 2021)
+
     mechanism_complexity:
         Complexity empowerment of local actors
 
 Examples:
-    # Train model
+    # Train model (using Excel file with train/test split column)
     python mechanism_classifier.py --mode train \\
-        --train-data results/sampling/sample_train.csv \\
-        --test-data results/sampling/sample_test.csv \\
+        --data results/sampling/sample_full.xlsx \\
         --output results/bert_classification/ \\
         --model-dir models/mechanism_classifier/ \\
         --epochs 5 --learning-rate 2e-5
 
     # Evaluate model
     python mechanism_classifier.py --mode evaluate \\
-        --test-data results/sampling/sample_test.csv \\
+        --data results/sampling/sample_full.xlsx \\
         --model-dir models/mechanism_classifier/ \\
         --output results/bert_classification/ \\
         --calibrate-thresholds
@@ -1553,14 +1612,19 @@ Model:
 
     # Input/output paths
     parser.add_argument(
+        "--data",
+        type=Path,
+        help="Path to Excel/CSV file with 'split' column (train/test modes)",
+    )
+    parser.add_argument(
         "--train-data",
         type=Path,
-        help="Path to training CSV (required for train mode)",
+        help="Path to training CSV (alternative to --data)",
     )
     parser.add_argument(
         "--test-data",
         type=Path,
-        help="Path to test CSV (required for evaluate mode)",
+        help="Path to test CSV (alternative to --data)",
     )
     parser.add_argument(
         "--input",
@@ -1611,6 +1675,13 @@ Model:
         help="Disable inverse frequency class weighting",
     )
     parser.add_argument(
+        "--exclude-mechanisms",
+        type=str,
+        nargs="+",
+        default=[],
+        help="Mechanism labels to exclude from training (e.g., mechanism_legitimacy_lowrisk)",
+    )
+    parser.add_argument(
         "--seed",
         type=int,
         default=42,
@@ -1654,15 +1725,21 @@ Model:
 def validate_args(args: argparse.Namespace) -> None:
     """Validate command-line arguments."""
     if args.mode == "train":
-        if args.train_data is None:
-            raise ValueError("--train-data is required for train mode")
-        if not args.train_data.exists():
+        # Either --data or --train-data is required
+        if args.data is None and args.train_data is None:
+            raise ValueError("--data or --train-data is required for train mode")
+        if args.data is not None and not args.data.exists():
+            raise FileNotFoundError(f"Data file not found: {args.data}")
+        if args.train_data is not None and not args.train_data.exists():
             raise FileNotFoundError(f"Train data not found: {args.train_data}")
 
     elif args.mode == "evaluate":
-        if args.test_data is None:
-            raise ValueError("--test-data is required for evaluate mode")
-        if not args.test_data.exists():
+        # Either --data or --test-data is required
+        if args.data is None and args.test_data is None:
+            raise ValueError("--data or --test-data is required for evaluate mode")
+        if args.data is not None and not args.data.exists():
+            raise FileNotFoundError(f"Data file not found: {args.data}")
+        if args.test_data is not None and not args.test_data.exists():
             raise FileNotFoundError(f"Test data not found: {args.test_data}")
 
     elif args.mode == "predict":
@@ -1681,6 +1758,17 @@ def main() -> int:
 
     try:
         validate_args(args)
+
+        # Filter mechanism labels if exclusions specified
+        global MECHANISM_LABELS
+        if args.exclude_mechanisms:
+            excluded = set(args.exclude_mechanisms)
+            invalid = excluded - set(MECHANISM_LABELS)
+            if invalid:
+                raise ValueError(f"Unknown mechanisms to exclude: {invalid}")
+            MECHANISM_LABELS = [m for m in MECHANISM_LABELS if m not in excluded]
+            logger.info(f"Excluded mechanisms: {args.exclude_mechanisms}")
+            logger.info(f"Training with {len(MECHANISM_LABELS)} mechanisms: {MECHANISM_LABELS}")
 
         # Set random seed
         torch.manual_seed(args.seed)
@@ -1709,17 +1797,31 @@ def main() -> int:
             else:
                 config.batch_size = pipeline.device_manager.get_recommended_batch_size()
 
-            pipeline.train(
-                train_data_path=args.train_data,
-                test_data_path=args.test_data,
-                config=config,
-            )
+            # Use combined data file or separate train/test files
+            if args.data is not None:
+                pipeline.train(
+                    data_path=args.data,
+                    config=config,
+                )
+            else:
+                pipeline.train(
+                    train_data_path=args.train_data,
+                    test_data_path=args.test_data,
+                    config=config,
+                )
 
         elif args.mode == "evaluate":
-            pipeline.evaluate(
-                test_data_path=args.test_data,
-                calibrate_thresholds=args.calibrate_thresholds,
-            )
+            # Use combined data file or separate test file
+            if args.data is not None:
+                pipeline.evaluate(
+                    data_path=args.data,
+                    calibrate_thresholds=args.calibrate_thresholds,
+                )
+            else:
+                pipeline.evaluate(
+                    test_data_path=args.test_data,
+                    calibrate_thresholds=args.calibrate_thresholds,
+                )
 
         elif args.mode == "predict":
             batch_size = args.batch_size

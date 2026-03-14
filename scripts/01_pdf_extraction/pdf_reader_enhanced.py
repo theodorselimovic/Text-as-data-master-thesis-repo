@@ -11,6 +11,7 @@ The script provides:
 - Automatic format detection
 - Multiple extraction methods with fallback
 - OCR support for scanned documents
+- OCR preprocessing with ocrmypdf (deskewing, noise removal) when available
 - Output format compatible with readtext R package
 - Detailed logging and error handling
 
@@ -53,6 +54,14 @@ try:
 except ImportError:
     OCR_AVAILABLE = False
 
+# ocrmypdf for preprocessing (deskew, clean) - optional
+OCRMYPDF_AVAILABLE = False
+try:
+    import ocrmypdf
+    OCRMYPDF_AVAILABLE = True
+except ImportError:
+    pass
+
 # Data handling
 import pandas as pd
 
@@ -89,6 +98,7 @@ class ProcessingConfig:
     use_ocr: bool = False  # Whether to use OCR for image-based content
     ocr_language: str = "swe"  # Tesseract language
     ocr_dpi: int = 300  # DPI for image conversion
+    preprocess_ocr: bool = True  # Whether to preprocess PDFs with ocrmypdf before OCR
     verbose: bool = False
 
 
@@ -191,119 +201,203 @@ def extract_with_pdfminer(file_path: Path) -> Tuple[bool, str, str]:
 
 
 # =============================================================================
+# PDF Preprocessing with ocrmypdf
+# =============================================================================
+
+def _preprocess_pdf_for_ocr(pdf_path: Path, config: ProcessingConfig) -> Path:
+    """
+    Preprocess a PDF with ocrmypdf for better OCR quality.
+
+    Uses ocrmypdf to deskew and clean scanned pages before OCR.
+    If ocrmypdf is not available or preprocessing is disabled, returns the original path.
+
+    Args:
+        pdf_path: Path to the original PDF
+        config: Processing configuration
+
+    Returns:
+        Path to preprocessed PDF (may be a temp file) or original path if no preprocessing
+    """
+    # Skip if preprocessing is disabled or ocrmypdf not available
+    if not config.preprocess_ocr:
+        logging.debug("OCR preprocessing disabled, using original PDF")
+        return pdf_path
+
+    if not OCRMYPDF_AVAILABLE:
+        logging.debug("ocrmypdf not available, using original PDF without preprocessing")
+        return pdf_path
+
+    try:
+        # Create temp file for preprocessed output
+        temp_dir = tempfile.gettempdir()
+        temp_output = Path(temp_dir) / f"preprocessed_{pdf_path.stem}.pdf"
+
+        logging.info(f"  Preprocessing PDF with ocrmypdf (deskew + clean)...")
+
+        # Run ocrmypdf for preprocessing only (--skip-text skips OCR)
+        # Options:
+        #   deskew=True - correct skewed scans
+        #   clean=True - run unpaper for noise removal
+        #   rotate_pages=True - auto-rotate pages to correct orientation
+        #   skip_text=True - don't do OCR (we'll use pytesseract for that)
+        #   force_ocr=False - respect existing text layers
+        #   output_type='pdf' - output a PDF (not pdfa)
+        ocrmypdf.ocr(
+            pdf_path,
+            temp_output,
+            deskew=True,
+            clean=True,
+            rotate_pages=True,
+            skip_text=True,
+            output_type='pdf',
+            progress_bar=False,
+        )
+
+        logging.info(f"  Preprocessing complete: {temp_output}")
+        return temp_output
+
+    except ocrmypdf.exceptions.PriorOcrFoundError:
+        # PDF already has OCR layer - skip preprocessing
+        logging.debug("PDF already has OCR text, skipping preprocessing")
+        return pdf_path
+
+    except ocrmypdf.exceptions.InputFileError as e:
+        logging.warning(f"  ocrmypdf could not read input: {e}")
+        return pdf_path
+
+    except Exception as e:
+        logging.warning(f"  ocrmypdf preprocessing failed: {e}, using original PDF")
+        return pdf_path
+
+
+# =============================================================================
 # PDF to Image OCR (for scanned PDFs)
 # =============================================================================
 
 def extract_from_scanned_pdf(file_path: Path, config: ProcessingConfig) -> Tuple[bool, str, str, int]:
     """
     Extract text from scanned PDF using OCR.
-    
+
     For PDFs that have no text layer - converts pages to images and performs OCR.
-    
+    If ocrmypdf is available and preprocessing is enabled, the PDF is first
+    deskewed and cleaned for better OCR quality.
+
     Args:
         file_path: Path to PDF file
         config: Processing configuration
-        
+
     Returns:
         (success, text, error_message, page_count)
     """
     if not OCR_AVAILABLE:
         return False, "", "OCR libraries not available (PIL/pytesseract required)", 0
-    
+
     if not config.use_ocr:
         return False, "", "Scanned PDF detected but OCR is disabled", 0
-    
+
+    # Preprocess PDF with ocrmypdf (deskew, clean) if available
+    preprocessed_path = _preprocess_pdf_for_ocr(file_path, config)
+    use_preprocessed = preprocessed_path != file_path
+
     try:
         # Try PyMuPDF first (best option - easy to install, good quality)
         try:
             import fitz  # PyMuPDF
-            
-            doc = fitz.open(file_path)
+
+            doc = fitz.open(preprocessed_path)
             page_count = len(doc)
-            
+
             if page_count == 0:
                 return False, "", "PDF has no pages", 0
-            
+
             page_texts = []
-            
+
             for page_num in range(page_count):
                 try:
                     page = doc[page_num]
-                    
+
                     # Render page to image
                     pix = page.get_pixmap(dpi=config.ocr_dpi)
-                    
+
                     # Convert to PIL Image
                     img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-                    
+
                     # Perform OCR
                     text = pytesseract.image_to_string(
                         img,
                         lang=config.ocr_language,
                         config=f'--psm 1 --dpi {config.ocr_dpi}'
                     )
-                    
+
                     if text.strip():
                         page_texts.append(text)
-                        
+
                 except Exception as e:
                     logging.warning(f"Failed to OCR page {page_num + 1}: {e}")
                     continue
-            
+
             doc.close()
-            
+
             if not page_texts:
                 return False, "", "OCR produced no text", page_count
-            
+
             full_text = "\n\n".join(page_texts)
             return True, full_text, "", page_count
-            
+
         except ImportError:
             logging.debug("PyMuPDF not available, trying pdf2image")
-            
+
             # Try pdf2image as alternative
             try:
                 from pdf2image import convert_from_path
-                
+
                 images = convert_from_path(
-                    file_path,
+                    preprocessed_path,
                     dpi=config.ocr_dpi,
                     fmt='jpeg'
                 )
-                
+
                 page_texts = []
                 for i, img in enumerate(images, 1):
                     try:
                         # Convert to RGB if needed
                         if img.mode != 'RGB':
                             img = img.convert('RGB')
-                        
+
                         # Perform OCR
                         text = pytesseract.image_to_string(
                             img,
                             lang=config.ocr_language,
                             config=f'--psm 1 --dpi {config.ocr_dpi}'
                         )
-                        
+
                         if text.strip():
                             page_texts.append(text)
                     except Exception as e:
                         logging.warning(f"Failed to OCR page {i}: {e}")
                         continue
-                
+
                 if not page_texts:
                     return False, "", "OCR produced no text", len(images)
-                
+
                 full_text = "\n\n".join(page_texts)
                 return True, full_text, "", len(images)
-                
+
             except ImportError:
                 return False, "", "Neither PyMuPDF nor pdf2image available. Install with: pip install pymupdf", 0
             except Exception as e:
                 return False, "", f"pdf2image failed: {str(e)}", 0
-                
+
     except Exception as e:
         return False, "", str(e), 0
+
+    finally:
+        # Clean up preprocessed temp file if created
+        if use_preprocessed and preprocessed_path.exists():
+            try:
+                preprocessed_path.unlink()
+            except Exception:
+                pass
 
 
 # =============================================================================
@@ -582,6 +676,11 @@ def process_directory(
     logger.info(f"Input directory: {input_dir}")
     logger.info(f"Output directory: {output_dir}")
     logger.info(f"OCR enabled: {config.use_ocr}")
+    if config.use_ocr:
+        preprocess_status = "enabled" if config.preprocess_ocr and OCRMYPDF_AVAILABLE else "disabled"
+        if config.preprocess_ocr and not OCRMYPDF_AVAILABLE:
+            preprocess_status += " (ocrmypdf not installed)"
+        logger.info(f"OCR preprocessing: {preprocess_status}")
     logger.info(f"Min text length: {config.min_text_length}")
     
     # Find all PDF files
@@ -789,6 +888,8 @@ File Type Detection:
 
 Extraction Methods:
     For standard PDFs, tries in order: pypdf → pdfplumber → pdfminer
+    For scanned PDFs (with --ocr): If ocrmypdf is installed, preprocesses with
+        deskew + clean before OCR. Use --no-preprocess to skip.
     For ZIP-based PDFs: Extracts JPEGs and performs OCR (if --ocr enabled)
         """
     )
@@ -833,7 +934,13 @@ Extraction Methods:
         default=300,
         help='DPI for OCR processing (default: 300)'
     )
-    
+
+    parser.add_argument(
+        '--no-preprocess',
+        action='store_true',
+        help='Skip OCR preprocessing (deskew, clean) with ocrmypdf. Useful for debugging or speed.'
+    )
+
     parser.add_argument(
         '--verbose',
         '-v',
@@ -883,6 +990,7 @@ def main():
         use_ocr=args.ocr,
         ocr_language=args.ocr_lang,
         ocr_dpi=args.ocr_dpi,
+        preprocess_ocr=not args.no_preprocess,
         verbose=args.verbose
     )
     

@@ -6,7 +6,34 @@ Detailed documentation of the pipeline scripts and their outputs.
 
 ### 1. PDF Extraction (`01_pdf_extraction/`)
 
-`pdf_reader_enhanced.py` extracts text via fallback chain (pypdf → pdfplumber → pdfminer → OCR).
+**Main script:** `pdf_reader_enhanced.py`
+
+**Purpose:** Extracts text from PDF files using multiple methods with automatic fallback.
+
+**Extraction chain:** pypdf → pdfplumber → pdfminer → OCR (if `--ocr` enabled)
+
+**OCR preprocessing:** When OCR is triggered and `ocrmypdf` is installed, scanned PDFs are automatically preprocessed before OCR:
+- **Deskewing** — corrects skewed scans
+- **Cleaning** — removes noise via unpaper
+- **Auto-rotation** — corrects page orientation
+
+This improves OCR quality significantly for poorly scanned documents. Preprocessing can be disabled with `--no-preprocess` for speed or debugging.
+
+**Usage:**
+```bash
+# Standard extraction (no OCR)
+python pdf_reader_enhanced.py --input-dir ./pdfs --output-dir ./output
+
+# With OCR for scanned documents (includes preprocessing if ocrmypdf installed)
+python pdf_reader_enhanced.py --input-dir ./pdfs --output-dir ./output --ocr
+
+# OCR without preprocessing (faster, lower quality)
+python pdf_reader_enhanced.py --input-dir ./pdfs --output-dir ./output --ocr --no-preprocess
+```
+
+**File type detection:** Automatically detects standard PDFs vs ZIP archives masquerading as PDFs (containing JPEG scans).
+
+**Output:** `pdf_texts.parquet` with columns `file`, `text`, and optionally `actor`.
 
 ### 2. Preprocessing (`02_preprocessing/`)
 
@@ -319,13 +346,13 @@ See `docs/implementation-wave-lemma-lown.md` for detailed documentation.
 
 **Python 3** — no `requirements.txt` exists. Key libraries:
 - NLP: `stanza` (Swedish lemmatisation)
-- PDF: `pypdf`, `pdfplumber`, `pdfminer.six`, `pytesseract`
+- PDF: `pypdf`, `pdfplumber`, `pdfminer.six`, `pytesseract`, `ocrmypdf` (optional, for OCR preprocessing)
 - Data: `pandas`, `numpy`, `pyarrow`
 - ML: `transformers`, `torch` (for BERT fine-tuning)
 - Stats: `scipy`, `scikit-learn`
 - Viz: `matplotlib`, `seaborn`
 
-External: Tesseract OCR (Swedish), Stanza Swedish model, Swedish BERT model from Hugging Face (Royal Library of Sweden).
+External: Tesseract OCR (Swedish), unpaper (for ocrmypdf cleaning), Stanza Swedish model, Swedish BERT model from Hugging Face (Royal Library of Sweden).
 
 ## Data Formats
 

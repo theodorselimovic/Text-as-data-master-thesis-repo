@@ -107,6 +107,7 @@ More concretely:
 - Logging with optional `--verbose` flag
 - Graceful fallback chains (PDF extraction tries pypdf → pdfplumber → pdfminer → OCR)
 - RSA filename pattern: `RSA [Municipality] [Year] [Maskad].pdf`
+- When measuring mentions, especially when creating graphs per actor, mentions should be averaged per document, as otherwise it simply reflects the number of documents.
 
 ## Git & Data Policy
 
