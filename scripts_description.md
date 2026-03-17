@@ -37,9 +37,44 @@ python pdf_reader_enhanced.py --input-dir ./pdfs --output-dir ./output --ocr --n
 
 ### 2. Preprocessing (`02_preprocessing/`)
 
-**Main script:** `preprocessing_bert.py`
+#### BERT Preprocessing: `preprocessing_bert.py`
 
 **Purpose:** Light preprocessing that produces a clean, sentence-segmented corpus for BERT fine-tuning. Preserves original surface form (no lemmatization, no stopword removal, no lowercasing).
+
+#### BoW Preprocessing: `preprocessing_bow.py`
+
+**Purpose:** Prepares text for bag-of-words analysis with stemming, stopword removal, and n-gram generation.
+
+**Stemming vs Lemmatization:**
+
+The BoW preprocessing uses **stemming** (Snowball Swedish) rather than lemmatization for:
+
+1. **Speed**: Rule-based stemming is ~100x faster than neural lemmatization (~15 min vs ~2.5 hours for 416K sentences)
+2. **Consistency**: Same input always produces same output (no model variance)
+3. **Dictionary matching**: When both corpus and dictionary are stemmed identically, matching is reliable even if stems are non-words
+
+**N-grams** (bigrams, trigrams) are generated to capture multi-word dictionary phrases. For example, "organiserad brottslighet" becomes tokens: `["organiser", "brottslig", "organiser_brottslig"]`. The dictionary is stemmed the same way, so "organiserad brottslighet" in the dictionary becomes `"organiser_brottslig"` and matches the corpus n-gram.
+
+**Trade-off:** Stemming may over-reduce (merge unrelated words), but for dictionary-based counting this is acceptable since we control both sides.
+
+**Usage:**
+```bash
+python preprocessing_bow.py \
+    --input data/processed/bert_corpus.parquet \
+    --output data/processed/bow_corpus_stemmed.parquet
+
+# Adjust n-gram size (default: 3 for trigrams)
+python preprocessing_bow.py \
+    --input data/processed/bert_corpus.parquet \
+    --output data/processed/bow_corpus_stemmed.parquet \
+    --max-ngram 2
+```
+
+**Output:** Parquet with columns: `tokens` (list of stemmed unigrams + n-grams), `tokens_text` (space-joined), `token_count`.
+
+---
+
+**Main script:** `preprocessing_bert.py`
 
 **What it does:**
 1. **OCR artifact cleanup** — mojibake repair (UTF-8→Latin-1 corruption maps), removal of page numbers, separator lines, box-drawing characters, and repeated page headers/footers ("Risk- och sårbarhetsanalys 2023-2025", "Sida X (Y)").
@@ -255,11 +290,15 @@ python mechanism_classifier.py --mode predict \
    - Wave 3: ≥ 2023
    - All matrices include `wave` column in metadata
 
-2. **Lemmatization** — Risk terms are lemmatized using Stanza Swedish pipeline to merge inflectional variants:
+2. **Stemming (recommended)** — Risk terms are stemmed using Snowball Swedish stemmer to merge inflectional variants:
+   - Faster than lemmatization (~15 min vs ~2.5 hours for full corpus)
+   - N-grams capture multi-word dictionary phrases (e.g., "organiserad brottslighet" → "organiser_brottslig")
+   - Use `--use-stems` flag with `risk_dictionary_counter.py`
+
+   **Legacy lemmatization** — Stanza Swedish pipeline (slower, use `--use-lemmas`):
    - Merges variants like "gräsbrand"/"gräsbränder", "cyberattack"/"cyberattacker"
    - Both original and lemmatized matrices saved (`*_original.csv` and `*.csv`)
    - Lemma mapping saved to JSON for transparency
-   - Token-by-token lemmatization handles multi-word terms correctly
 
 3. **Low-N flagging** — Persistence metrics flagged when based on small samples:
    - Threshold: 3 entities (configurable via `--min-entities`)
