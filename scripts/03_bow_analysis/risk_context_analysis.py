@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Risk Context Analysis Script
+Risk Context Analysis Script (Token-Based)
 
 Analyzes RSA documents for:
 1. Risk terms from dictionary (by category)
@@ -8,29 +8,28 @@ Analyzes RSA documents for:
 3. Context for unknown qualifications
 
 Key features:
-- Filters out "risk- och sårbarhetsanalys" boilerplate
-- Only counts "risk" when paired with a qualifier (adjective)
+- Uses pre-stemmed corpus for fast token matching (no regex)
+- Sentence-level qualifier matching
 - Groups qualifications into 5 levels: very_low, low, medium, high, very_high
 
 Output: CSV with per-document counts + comprehensive report
 
 Usage:
     python risk_context_analysis.py \
-        --texts your_texts.parquet \
-        --text-column text \
-        --metadata doc_id municipality year \
-        --output ./results/
+        --corpus data/processed/bow_corpus_stemmed.parquet \
+        --output results/01_bow_analysis/context/
 """
 
-import re
 import random
 import pandas as pd
 import json
 from pathlib import Path
 from collections import Counter, defaultdict
 import argparse
-import stanza
 import logging
+import sys
+
+from nltk.stem.snowball import SnowballStemmer
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
@@ -40,31 +39,22 @@ logger = logging.getLogger(__name__)
 # CONFIGURATION
 # =============================================================================
 
-# Phrases to exclude when counting "risk" (boilerplate)
-RSA_EXCLUSION_PATTERNS = [
-    r'risk-\s*och\s*sårbarhetsanalys\w*',
-    r'rsa\b',
-    r'risk-\s*och\s*sårbarhets\w*',
-    r'risk\s*och\s*sårbarhetsanalys\w*',
-    r'risk-\s*och\s*sårbarhetsbedömning\w*',
-]
-
-# Target words for qualification analysis
-TARGET_WORDS = {
-    'sannolikhet': ['sannolikhet', 'sannolikheten', 'sannolikhets', 'trolig'],
+# Target words for qualification analysis (will be stemmed)
+TARGET_WORDS_RAW = {
+    'sannolikhet': ['sannolikhet', 'sannolikheten', 'sannolikhets', 'trolig', 'troligt', 'troliga'],
     'konsekvens': ['konsekvens', 'konsekvensen', 'konsekvenser'],
     'risk': ['risk', 'risken', 'risker', 'riskens']
 }
 
+# Boilerplate tokens to exclude (stemmed forms)
+# These will be checked as n-grams in tokens
+RSA_BOILERPLATE_STEMS = None  # Will be initialized after stemmer
+
 # =============================================================================
-# 5-LEVEL QUALIFICATION MAPPING
+# 5-LEVEL QUALIFICATION MAPPING (raw forms, will be stemmed)
 # =============================================================================
 
-# Map raw qualifications to 5-level scale
-# Each category maps terms to: very_low, low, medium, high, very_high
-# Additional categories: change (increase/decrease), uncertainty, other (acceptability)
-
-QUALIFICATION_MAPPING = {
+QUALIFICATION_MAPPING_RAW = {
     'sannolikhet': {
         'very_low': ['mycket låg', 'mycket liten', 'osannolik', 'sällsynt'],
         'low': ['låg', 'liten', 'små'],
@@ -76,7 +66,7 @@ QUALIFICATION_MAPPING = {
         'uncertainty': ['svår', 'svårt', 'svåra', 'lätt', 'lätta', 'lättare',
                         'osäker', 'osäkert', 'osäkra', 'osäkerhet',
                         'säker', 'säkert', 'säkra', 'säkerhet'],
-        'acceptability': ['acceptabel', 'oacceptabel']  # acceptability, not level
+        'acceptability': ['acceptabel', 'oacceptabel']
     },
     'konsekvens': {
         'very_low': ['mycket begränsade', 'mycket liten', 'försumbara'],
@@ -88,7 +78,6 @@ QUALIFICATION_MAPPING = {
                    'förändras', 'förändrad', 'stiger', 'stigande', 'sjunker', 'sjunkande'],
         'uncertainty': ['osäker', 'osäkert', 'osäkra', 'osäkerhet',
                         'säker', 'säkert', 'säkra', 'säkerhet'],
-        # Note: 'svårt att bedöma' handled specially - see SPECIAL_UNCERTAINTY_PATTERNS
         'acceptability': ['acceptabel', 'oacceptabel']
     },
     'risk': {
@@ -101,630 +90,328 @@ QUALIFICATION_MAPPING = {
                    'förändras', 'förändrad', 'stiger', 'stigande', 'sjunker', 'sjunkande'],
         'uncertainty': ['osäker', 'osäkert', 'osäkra', 'osäkerhet',
                         'säker', 'säkert', 'säkra', 'säkerhet'],
-        # Note: 'svårt att bedöma' handled specially - see SPECIAL_UNCERTAINTY_PATTERNS
-        'acceptability': ['acceptabel', 'oacceptabel', 'tolerabel', 'intolerabel']  # acceptability
+        'acceptability': ['acceptabel', 'oacceptabel', 'tolerabel', 'intolerabel']
     }
 }
 
-# Special patterns for uncertainty that require multiple words
-# For konsekvens and risk: "svårt/svår" + "bedöma" together implies uncertainty
-SPECIAL_UNCERTAINTY_PATTERNS = {
-    'konsekvens': [
-        (r'svår\w*', r'bedöm\w*'),  # svårt att bedöma, svåra att bedöma, etc.
-    ],
-    'risk': [
-        (r'svår\w*', r'bedöm\w*'),  # svårt att bedöma, svåra att bedöma, etc.
-    ]
+# Special uncertainty patterns: if BOTH stems appear in sentence, it's uncertainty
+# e.g., "svår" + "bedöm" = "svårt att bedöma"
+SPECIAL_UNCERTAINTY_STEMS = {
+    'konsekvens': [('svår', 'bedöm')],
+    'risk': [('svår', 'bedöm')],
 }
 
-# Build flat list of all known qualifications per concept (for detection)
-def _build_known_qualifications():
-    """Build flat list of known qualifications from mapping."""
-    known = {}
-    for concept, level_map in QUALIFICATION_MAPPING.items():
-        all_quals = []
-        for level, terms in level_map.items():
-            all_quals.extend(terms)
-        known[concept] = all_quals
-    return known
+# =============================================================================
+# STEMMING INITIALIZATION
+# =============================================================================
 
-KNOWN_QUALIFICATIONS = _build_known_qualifications()
+def initialize_stemmed_dictionaries():
+    """
+    Stem all dictionaries once at startup.
 
-# Build reverse lookup: term -> level
-def _build_term_to_level():
-    """Build reverse lookup from term to level."""
-    reverse = {}
-    for concept, level_map in QUALIFICATION_MAPPING.items():
-        reverse[concept] = {}
+    Returns:
+        tuple: (stemmed_targets, stemmed_qualifications, stem_to_level, stem_to_raw)
+    """
+    stemmer = SnowballStemmer('swedish')
+
+    # Stem target words
+    stemmed_targets = {}
+    for concept, words in TARGET_WORDS_RAW.items():
+        stemmed_targets[concept] = set(stemmer.stem(w) for w in words)
+
+    # Stem qualification mapping and build reverse lookups
+    stemmed_qualifications = {}  # concept -> level -> set of stems
+    stem_to_level = {}  # concept -> stem -> level
+    stem_to_raw = {}  # concept -> stem -> original term (for reporting)
+
+    for concept, level_map in QUALIFICATION_MAPPING_RAW.items():
+        stemmed_qualifications[concept] = {}
+        stem_to_level[concept] = {}
+        stem_to_raw[concept] = {}
+
         for level, terms in level_map.items():
+            stemmed_terms = set()
             for term in terms:
-                reverse[concept][term.lower()] = level
-    return reverse
+                # For multi-word terms, stem each word and join
+                words = term.lower().split()
+                stemmed = '_'.join(stemmer.stem(w) for w in words)
+                stemmed_terms.add(stemmed)
+                stem_to_level[concept][stemmed] = level
+                stem_to_raw[concept][stemmed] = term
 
-TERM_TO_LEVEL = _build_term_to_level()
+                # Also add individual stems for single-word matching
+                if len(words) == 1:
+                    stem = stemmer.stem(words[0])
+                    if stem not in stem_to_level[concept]:
+                        stem_to_level[concept][stem] = level
+                        stem_to_raw[concept][stem] = term
 
-# =============================================================================
-# LEMMATIZATION
-# =============================================================================
+            stemmed_qualifications[concept][level] = stemmed_terms
 
-def lemmatize_term(term: str, nlp) -> str:
-    """
-    Lemmatize a risk term using Stanza Swedish pipeline.
-    Handles multi-word terms by lemmatizing each token.
+    # Build flat set of all qualification stems per concept
+    all_qual_stems = {}
+    for concept in stemmed_qualifications:
+        all_stems = set()
+        for level, stems in stemmed_qualifications[concept].items():
+            all_stems.update(stems)
+        all_qual_stems[concept] = all_stems
 
-    Examples:
-        gräsbränder → gräsbrand
-        översvämning vid vattendrag → översvämning vid vattendrag
-        cyberattacker → cyberattack
+    # Stem special uncertainty patterns
+    stemmed_special = {}
+    for concept, patterns in SPECIAL_UNCERTAINTY_STEMS.items():
+        stemmed_special[concept] = [
+            (stemmer.stem(p1), stemmer.stem(p2)) for p1, p2 in patterns
+        ]
 
-    Args:
-        term: The term to lemmatize
-        nlp: Stanza pipeline with tokenize,pos,lemma processors
+    # Boilerplate stems to exclude
+    boilerplate_phrases = ['risk och sårbarhetsanalys', 'risk- och sårbarhetsanalys', 'rsa']
+    boilerplate_stems = set()
+    for phrase in boilerplate_phrases:
+        words = phrase.replace('-', ' ').split()
+        for w in words:
+            boilerplate_stems.add(stemmer.stem(w))
 
-    Returns:
-        Lemmatized term (space-separated if multi-word)
-    """
-    doc = nlp(term)
-    lemmas = [word.lemma for sent in doc.sentences for word in sent.words]
-    return ' '.join(lemmas)
-
-
-def lemmatize_risk_dictionary(risk_dict: dict, output_dir: Path = None) -> tuple:
-    """
-    Lemmatize all terms in risk dictionary.
-
-    Args:
-        risk_dict: Dictionary mapping categories to lists of terms
-        output_dir: Optional directory to save lemma mapping JSON
-
-    Returns:
-        (lemmatized_dict, lemma_to_original) where:
-            - lemmatized_dict: Dictionary with lemmatized terms
-            - lemma_to_original: Mapping from lemma → list of original terms
-    """
-    logger.info("Initializing Stanza Swedish pipeline for lemmatization...")
-    nlp = stanza.Pipeline('sv', processors='tokenize,pos,lemma', verbose=False, use_gpu=False)
-
-    lemmatized_dict = defaultdict(list)
-    lemma_to_original = defaultdict(list)
-
-    logger.info("Lemmatizing risk dictionary terms...")
-
-    total_original = 0
-    for category, terms in risk_dict.items():
-        logger.info(f"  Processing category '{category}': {len(terms)} terms")
-        seen_lemmas = set()
-
-        for term in terms:
-            total_original += 1
-            lemma = lemmatize_term(term, nlp)
-
-            # Only add each unique lemma once per category
-            if lemma not in seen_lemmas:
-                lemmatized_dict[category].append(lemma)
-                seen_lemmas.add(lemma)
-
-            # Track all original terms that map to this lemma
-            lemma_to_original[lemma].append(term)
-
-    total_lemmatized = sum(len(terms) for terms in lemmatized_dict.values())
-    reduction_pct = (1 - total_lemmatized / total_original) * 100 if total_original > 0 else 0
-
-    logger.info(f"Lemmatization complete:")
-    logger.info(f"  Original terms: {total_original}")
-    logger.info(f"  Lemmatized terms: {total_lemmatized}")
-    logger.info(f"  Reduction: {reduction_pct:.1f}%")
-
-    # Save mapping if output directory provided
-    if output_dir:
-        output_dir = Path(output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-        mapping_path = output_dir / 'lemma_mapping.json'
-        with open(mapping_path, 'w', encoding='utf-8') as f:
-            json.dump(dict(lemma_to_original), f, ensure_ascii=False, indent=2)
-        logger.info(f"  Saved lemma mapping to: {mapping_path}")
-
-    return dict(lemmatized_dict), dict(lemma_to_original)
+    return {
+        'targets': stemmed_targets,
+        'qualifications': stemmed_qualifications,
+        'all_qual_stems': all_qual_stems,
+        'stem_to_level': stem_to_level,
+        'stem_to_raw': stem_to_raw,
+        'special_uncertainty': stemmed_special,
+        'boilerplate': boilerplate_stems,
+        'stemmer': stemmer,
+    }
 
 
 # =============================================================================
-# RISK DICTIONARY
+# TOKEN-BASED ANALYSIS
 # =============================================================================
 
-# Original risk dictionary (preserved for reference)
-RISK_DICTIONARY_ORIGINAL = {
-    'naturhot': [
-        'naturhändelser', 'naturhot', 'väderrelaterade händelser',
-        'klimatförändring', 'klimatförändringarna', 'klimatförändringar',
-        'översvämning', 'översvämningar', 'skyfall', 'höga flöden', 'högvatten',
-        'värme', 'värmebölja', 'värmeböljor', 'torka', 'torkor',
-        'ras', 'skred', 'jordskred', 'slamskred', 'erosion',
-        'storm', 'stormar', 'stormfällning', 'isstorm',
-        'skogsbrand', 'skogsbränder', 'gräsbrand',
-        'blixt', 'blixtnedslag', 'hagel', 'halka', 'köldknäpp',
-        'stora snömängder', 'snöoväder',
-        'extrem värme', 'extremvärme', 'extrem kyla', 'extremt väder',
-        'låga flöden', 'lågvatten',
-    ],
-    'biologiska_hot': [
-        'epidemi', 'epidemier', 'pandemi', 'pandemier',
-        'epizooti', 'epizootier', 'covid', 'coronaviruset',
-        'smittsam sjukdom', 'smittsamma sjukdomar',
-        'smitta', 'smittspridning', 'sjukdomsutbrott',
-        'influensa', 'influensapandemi',
-        'djursjukdom', 'djursjukdomar', 'zoonos', 'zoonoser',
-        'antibiotikaresistens', 'resistenta bakterier',
-        'hälsa', 'folkhälsa',
-    ],
-    'olyckor': [
-        'olycka vid farlig verksamhet', 'farlig verksamhet',
-        'industriolycka', 'kemikalieolycka',
-        'olycka med transport av farligt gods', 'olycka med farligt gods',
-        'farligt gods', 'transport av farligt gods',
-        'vägolycka', 'vägolyckor', 'trafikolycka', 'trafikolyckor',
-        'tågolycka', 'tågolyckor', 'järnvägsolycka', 'järnvägsolyckor',
-        'bussolycka', 'bussolyckor', 'spårbundna olyckor',
-        'dammbrott',
-        'fartygsolycka', 'fartygsolyckor', 'fartygskollision', 'båtolycka', 'båtolyckor',
-        'flygolycka', 'flygolyckor', 'flyghaveri',
-        'olyckor med nukleära ämnen', 'olyckor med radioaktiva ämnen', 'kärnteknisk olycka',
-        'brokollaps', 'tunnelolycka',
-        'byggnadsras', 'byggnadskollaps',
-        'försvunnen person', 'försvunna personer', 'försvunnen brukare',
-        'försvinnande', 'saknad person',
-    ],
-    'antagonistiska_hot': [
-        'statliga antagonister', 'statlig antagonist',
-        'icke-statliga antagonister', 'icke-statlig antagonist',
-        'terror', 'terrorism', 'terrorhot', 'terrorattentat', 'terrorhandling',
-        'hot och våld', 'våld', 'våldsbrott',
-        'pågående dödligt våld', 'våldsbejakande extremism',
-        'sabotage', 'spionage',
-        'brott', 'kriminalitet', 'organiserad brottslighet',
-        'vandalism', 'skadegörelse', 'inbrott',
-        'desinformation', 'påverkanskampanj', 'påverkanskampanjer',
-        'hybrid hot', 'hybridhot',
-        'säkerhetshot',
-        'väpnat angrepp', 'höjd beredskap',
-    ],
-    'cyber_hot': [
-        'dataintrång', 'cyberattack', 'cyberattacker', 'cybersäkerhet',
-        'nätattack', 'nätattacker', 'hackerattack', 'hackerattacker',
-        'DDoS-attack', 'ddos-attack', 'ransomware', 'datavirus', 'virus',
-        'IT-sabotage',
-    ],
-    'sociala_risker': [
-        'samhällsvärden', 'värdesystem',
-        'social oro', 'sociala oroligheter', 'civila oroligheter', 'upplopp',
-    ],
-    'teknisk_infrastruktur': [
-        'strömavbrott', 'elavbrott', 'kraftförsörjning', 'elförsörjning', 'effektbrist',
-        'energiförsörjning', 'energibrist',
-        'fjärrvärmebrott', 'fjärrvärme', 'värmeförsörjning',
-        'vattenläcka', 'vattenläckor', 'vattenförsörjning', 'dricksvatten',
-        'dricksvattenförsörjning',
-        'avloppsbrott', 'avloppssystem',
-        'IT-bortfall', 'it-bortfall', 'IT-avbrott', 'it-avbrott',
-        'dataförlust', 'systemfel', 'nätverksavbrott',
-        'kommunikationsavbrott', 'teleavbrott', 'telebrott',
-        'elektroniska kommunikationer', 'elektronisk kommunikation',
-        'distributionsstörning', 'logistikavbrott', 'transportavbrott',
-        'transporter', 'transportstörning', 'transportstörningar',
-        'drivsmedelsbrist', 'bränslebrist', 'försörjningsbrist',
-        'drivmedel', 'drivmedelsförsörjning',
-        'livsmedelsförsörjning', 'livsmedelsbrist', 'matförsörjning',
-    ],
-    'brand': [
-        'brand', 'bränder', 'skogsbrand', 'skogsbränder', 'storbrand',
-        'gräsbrand', 'gräsbränder', 'byggnadsbrand', 'fordonsbrand',
-        'explosion', 'explosioner', 'gasexplosion', 'brandfarligt gods',
-    ],
-    'miljö_klimat': [
-        'miljöförorening', 'kemikalieutsläpp', 'oljeutsläpp',
-        'markförorening', 'luftföroreningar', 'vattenförorening',
-        'miljöhot', 'miljöskada', 'utsläpp', 'föroreningar', 'klimatförändring',
-        'klimatpåverkan', 'klimatrelaterade', 'klimatförändringen', 'försurning',
-    ],
-    'ekonomi': [
-        'ekonomisk kris', 'finanskris', 'recession',
-        'arbetslöshet', 'inflation', 'ekonomisk nedgång',
-    ],
-}
-
-# Create lemmatized version of dictionary
-# This will be initialized lazily when needed to avoid Stanza startup overhead
-RISK_DICTIONARY = None  # Will be set to lemmatized version
-LEMMA_TO_ORIGINAL = None  # Will be set to mapping
-
-
-def get_risk_dictionary(lemmatize: bool = True, output_dir: Path = None):
-    """
-    Get risk dictionary, optionally lemmatized.
-
-    Args:
-        lemmatize: If True, return lemmatized dictionary. If False, return original.
-        output_dir: Directory to save lemma mapping (only used if lemmatize=True)
-
-    Returns:
-        Risk dictionary (lemmatized or original)
-    """
-    global RISK_DICTIONARY, LEMMA_TO_ORIGINAL
-
-    if not lemmatize:
-        return RISK_DICTIONARY_ORIGINAL
-
-    # Initialize lemmatized version if not done yet
-    if RISK_DICTIONARY is None:
-        logger.info("Creating lemmatized risk dictionary...")
-        RISK_DICTIONARY, LEMMA_TO_ORIGINAL = lemmatize_risk_dictionary(
-            RISK_DICTIONARY_ORIGINAL,
-            output_dir=output_dir
-        )
-
-    return RISK_DICTIONARY
-
-
-# =============================================================================
-# TEXT PREPROCESSING
-# =============================================================================
-
-def remove_rsa_boilerplate(text: str) -> str:
-    """
-    Remove 'risk- och sårbarhetsanalys' and related boilerplate from text.
-    Returns cleaned text for risk qualification analysis.
-    """
-    cleaned = text
-    for pattern in RSA_EXCLUSION_PATTERNS:
-        cleaned = re.sub(pattern, ' ', cleaned, flags=re.IGNORECASE)
-    return cleaned
-
-# =============================================================================
-# RISK TERM COUNTING
-# =============================================================================
-
-def count_risk_terms(text: str, risk_dictionary: dict) -> dict:
-    """Count occurrences of risk terms."""
-    text_lower = text.lower()
-
-    results = {'by_category': {}, 'total': 0}
-
-    for category, terms in risk_dictionary.items():
-        category_count = 0
-
-        for term in terms:
-            pattern = r'\b' + re.escape(term.lower()) + r'\b'
-            count = len(re.findall(pattern, text_lower))
-            category_count += count
-
-        results['by_category'][category] = category_count
-        results['total'] += category_count
-
-    return results
-
-# =============================================================================
-# QUALIFICATION ANALYSIS (WITH REQUIRED QUALIFIER FOR RISK)
-# =============================================================================
-
-def extract_qualified_contexts(text, target_word, variations, known_quals,
-                               max_intervening=5, context_window=4,
-                               require_qualifier=False):
-    """
-    Extract contexts around target words.
-
-    If require_qualifier=True, only return contexts where a known qualifier
-    is found within the search window (used for 'risk' to filter boilerplate).
-    """
-    contexts = []
-
-    # Build pattern
-    target_pattern = '|'.join(re.escape(v) for v in variations)
-
-    # Pattern: [words before] TARGET [words after]
-    pattern = (
-        r'(?:(\S+)\s+){0,' + str(context_window) + r'}' +
-        r'\b(' + target_pattern + r')\b' +
-        r'(?:\s+(\S+)){0,' + str(max_intervening + context_window) + r'}'
-    )
-
-    # Sort qualifiers by length (longest first) for matching
-    sorted_quals = sorted(known_quals, key=lambda x: len(x), reverse=True)
-
-    for match in re.finditer(pattern, text, re.IGNORECASE):
-        full_match = match.group(0)
-        target_found = match.group(2)
-
-        # Split into sections
-        target_start = full_match.lower().find(target_found.lower())
-        before_target = full_match[:target_start]
-        after_target = full_match[target_start + len(target_found):]
-
-        # Get word lists
-        before_words = before_target.strip().split()
-        after_words = after_target.strip().split()
-
-        # Middle is the intervening words
-        middle_words = after_words[:max_intervening] if after_words else []
-
-        ctx = {
-            'target': target_found,
-            'before': ' '.join(before_words[-context_window:]) if before_words else '',
-            'middle': ' '.join(middle_words),
-            'after': ' '.join(after_words[max_intervening:max_intervening+context_window]) if len(after_words) > max_intervening else '',
-            'full_match': full_match.strip(),
-            'position': match.start()
-        }
-
-        # If requiring qualifier, check if one exists
-        if require_qualifier:
-            has_qualifier = False
-            combined_text = f"{ctx['before']} {ctx['middle']} {ctx['after']}".lower()
-            for qual in sorted_quals:
-                if qual.lower() in combined_text:
-                    has_qualifier = True
-                    break
-
-            if not has_qualifier:
-                continue  # Skip this match
-
-        contexts.append(ctx)
-
-    return contexts
-
-
-def check_special_uncertainty(context_dict, concept):
-    """
-    Check for special uncertainty patterns that require multiple words.
-
-    For konsekvens: "svårt/svår" + "bedöma" together = uncertainty
-
-    Returns: True if special uncertainty pattern found
-    """
-    if concept not in SPECIAL_UNCERTAINTY_PATTERNS:
+def check_special_uncertainty(tokens_set: set, concept: str, special_patterns: dict) -> bool:
+    """Check if special uncertainty pattern (e.g., svår + bedöm) is present."""
+    if concept not in special_patterns:
         return False
 
-    combined_text = f"{context_dict.get('before', '')} {context_dict.get('middle', '')} {context_dict.get('after', '')}".lower()
-
-    for pattern_pair in SPECIAL_UNCERTAINTY_PATTERNS[concept]:
-        word1_pattern, word2_pattern = pattern_pair
-        if re.search(word1_pattern, combined_text) and re.search(word2_pattern, combined_text):
+    for stem1, stem2 in special_patterns[concept]:
+        # Check if both stems appear in any token
+        has_stem1 = any(stem1 in t for t in tokens_set)
+        has_stem2 = any(stem2 in t for t in tokens_set)
+        if has_stem1 and has_stem2:
             return True
 
     return False
 
 
-def extract_qualification(context_dict, known_qualifications, term_to_level, concept=None):
+def find_qualification(tokens: list, concept: str, dicts: dict) -> tuple:
     """
-    Extract qualification from context and map to 5-level scale.
+    Find qualification level in token list.
 
-    Returns: (raw_qual, level, section)
+    Matches multi-word qualifications first (e.g., "mycket_hög"),
+    then single-word qualifications.
+
+    Returns:
+        (stem, level, raw_term) or (None, None, None)
     """
-    # First check for special uncertainty patterns (e.g., "svårt att bedöma" for konsekvens)
-    if concept and check_special_uncertainty(context_dict, concept):
-        return 'svårt att bedöma', 'uncertainty', 'special'
+    tokens_set = set(tokens)
 
-    # Sort by length (longest first) to match "mycket hög" before "hög"
-    sorted_quals = sorted(known_qualifications, key=lambda x: len(x), reverse=True)
+    # Check special uncertainty patterns first
+    if check_special_uncertainty(tokens_set, concept, dicts['special_uncertainty']):
+        return 'svår_bedöm', 'uncertainty', 'svårt att bedöma'
 
-    # Check in order: before, middle, after
-    for section in ['before', 'middle', 'after']:
-        section_text = context_dict.get(section, '').lower()
-        for qual in sorted_quals:
-            if qual.lower() in section_text:
-                level = term_to_level.get(qual.lower(), 'acceptability')
-                return qual, level, section
+    stem_to_level = dicts['stem_to_level'][concept]
+    stem_to_raw = dicts['stem_to_raw'][concept]
+
+    # Sort stems by length (longest first) to match "mycket_hög" before "hög"
+    sorted_stems = sorted(stem_to_level.keys(), key=len, reverse=True)
+
+    # Check for n-gram matches first (underscored compounds)
+    for stem in sorted_stems:
+        if '_' in stem:
+            # This is a multi-word qualifier - check if it exists as n-gram
+            if stem in tokens_set:
+                return stem, stem_to_level[stem], stem_to_raw[stem]
+
+    # Check for single-word matches
+    for stem in sorted_stems:
+        if '_' not in stem:
+            if stem in tokens_set:
+                return stem, stem_to_level[stem], stem_to_raw[stem]
 
     return None, None, None
 
 
-def analyze_qualifications(text, target_words, known_qualifications, term_to_level):
+def analyze_sentence_tokens(tokens: list, dicts: dict) -> dict:
     """
-    Analyze qualifications for a text.
+    Analyze a single sentence (token list) for qualifications.
 
-    RSA boilerplate is removed before analysis. All concepts are analyzed
-    without requiring a qualifier (the qualifier requirement was removed).
+    Returns:
+        dict with results for each concept (sannolikhet, konsekvens, risk)
     """
+    tokens_set = set(tokens)
     results = {}
-    unknown_examples = {}
 
-    for concept, variations in target_words.items():
-        # No longer require qualifier for risk - RSA removal handles boilerplate
-        contexts = extract_qualified_contexts(
-            text, concept, variations,
-            known_qualifications[concept],
-            require_qualifier=False
-        )
+    for concept, target_stems in dicts['targets'].items():
+        # Check if any target word stem is in the sentence
+        has_target = bool(target_stems & tokens_set)
 
-        # Count by 5-level categories
-        level_counts = Counter()  # very_low, low, medium, high, very_high, other
-        raw_counts = Counter()    # Keep raw counts too for reference
-        unknown_contexts = []
+        if not has_target:
+            results[concept] = None
+            continue
 
-        for ctx in contexts:
-            raw_qual, level, location = extract_qualification(
-                ctx, known_qualifications[concept], term_to_level[concept], concept=concept
-            )
-
-            if raw_qual and level:
-                level_counts[level] += 1
-                raw_counts[raw_qual] += 1
-            else:
-                level_counts['UNKNOWN'] += 1
-                raw_counts['UNKNOWN'] += 1
-                # Store example (collect more per doc for better random sampling later)
-                if len(unknown_contexts) < 10:
-                    unknown_contexts.append({
-                        'context': ctx['full_match'],
-                        'before': ctx['before'],
-                        'middle': ctx['middle'],
-                        'after': ctx['after']
-                    })
+        # Find qualification
+        stem, level, raw_term = find_qualification(tokens, concept, dicts)
 
         results[concept] = {
-            'total': len(contexts),
-            'level_counts': dict(level_counts),
-            'raw_counts': dict(raw_counts),
-            'unknown_examples': unknown_contexts
+            'found': True,
+            'level': level if level else 'UNKNOWN',
+            'stem': stem,
+            'raw_term': raw_term,
         }
 
     return results
 
+
+def is_boilerplate_sentence(tokens: list, boilerplate_stems: set) -> bool:
+    """Check if sentence is likely boilerplate (RSA title, etc.)."""
+    tokens_set = set(tokens)
+    # If sentence contains multiple boilerplate stems, skip it
+    overlap = tokens_set & boilerplate_stems
+    return len(overlap) >= 2
+
+
 # =============================================================================
-# MAIN ANALYSIS
+# CORPUS ANALYSIS
 # =============================================================================
-
-def analyze_document(
-    text: str,
-    risk_dictionary: dict,
-    target_words: dict,
-    known_qualifications: dict,
-    term_to_level: dict
-) -> dict:
-    """Analyze a single document for both risks and qualifications."""
-
-    # Clean text of RSA boilerplate for qualification analysis
-    cleaned_text = remove_rsa_boilerplate(text)
-
-    # Count risk terms (using original text for dictionary)
-    risk_counts = count_risk_terms(text, risk_dictionary)
-
-    # Analyze qualifications (using cleaned text)
-    qual_results = analyze_qualifications(
-        cleaned_text, target_words, known_qualifications, term_to_level
-    )
-
-    return {
-        'risk_counts': risk_counts,
-        'qualifications': qual_results
-    }
-
 
 def analyze_corpus(
-    texts_df: pd.DataFrame,
-    text_column: str = 'text',
+    df: pd.DataFrame,
+    dicts: dict,
     metadata_columns: list = None,
-    lemmatize: bool = True,
-    output_dir: Path = None
 ) -> tuple:
     """
-    Analyze entire corpus.
+    Analyze entire corpus using token matching.
 
-    Args:
-        texts_df: DataFrame with texts
-        text_column: Column containing text
-        metadata_columns: Metadata columns to include
-        lemmatize: If True, use lemmatized risk dictionary
-        output_dir: Output directory (for saving lemma mapping)
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Stemmed corpus with 'tokens' column (sentence-level).
+    dicts : dict
+        Stemmed dictionaries from initialize_stemmed_dictionaries().
+    metadata_columns : list
+        Metadata columns to include in output.
 
-    Returns:
-        (results_df, aggregated_stats)
+    Returns
+    -------
+    tuple: (results_df, aggregated_stats)
     """
-    # Get appropriate risk dictionary
-    risk_dict = get_risk_dictionary(lemmatize=lemmatize, output_dir=output_dir)
-
     doc_results = []
 
-    # Aggregate statistics (overall)
-    total_risk_counts = Counter()
+    # Aggregate statistics
     total_level_counts = defaultdict(Counter)
     total_raw_counts = defaultdict(Counter)
-    unknown_qual_examples = defaultdict(list)
+    unknown_examples = defaultdict(list)
 
     # Actor-level statistics
-    actor_risk_counts = defaultdict(Counter)  # actor -> category -> count
-    actor_level_counts = defaultdict(lambda: defaultdict(Counter))  # actor -> concept -> level -> count
-    actor_doc_counts = Counter()  # actor -> num docs
+    actor_level_counts = defaultdict(lambda: defaultdict(Counter))
+    actor_doc_counts = Counter()
 
-    for idx, row in texts_df.iterrows():
-        if idx % 50 == 0:
-            print(f"Processing document {idx}/{len(texts_df)}...")
+    total_rows = len(df)
+    report_interval = max(1000, total_rows // 20)
 
-        text = str(row.get(text_column, ''))
-        if not text:
-            continue
+    # Group by document for document-level results
+    doc_groups = df.groupby('doc_id')
+    total_docs = len(doc_groups)
 
-        # Analyze
-        analysis = analyze_document(
-            text, risk_dict, TARGET_WORDS,
-            KNOWN_QUALIFICATIONS, TERM_TO_LEVEL
-        )
+    logger.info(f"Analyzing {total_docs} documents ({total_rows} sentences)...")
+
+    for doc_idx, (doc_id, doc_df) in enumerate(doc_groups):
+        if doc_idx % max(1, total_docs // 20) == 0:
+            logger.info(f"  Processing document {doc_idx}/{total_docs} ({doc_idx/total_docs*100:.1f}%)...")
+
+        # Get metadata from first row
+        first_row = doc_df.iloc[0]
+        actor = first_row.get('actor_type', first_row.get('actor', 'unknown'))
+        actor_doc_counts[actor] += 1
+
+        # Initialize document counts
+        doc_level_counts = defaultdict(Counter)
+
+        for _, row in doc_df.iterrows():
+            tokens = row.get('tokens', [])
+
+            # Handle various token formats
+            if tokens is None:
+                continue
+            if isinstance(tokens, str):
+                tokens = tokens.split()
+            if not isinstance(tokens, list):
+                tokens = list(tokens)
+
+            # Skip boilerplate
+            if is_boilerplate_sentence(tokens, dicts['boilerplate']):
+                continue
+
+            # Analyze sentence
+            sentence_results = analyze_sentence_tokens(tokens, dicts)
+
+            for concept, result in sentence_results.items():
+                if result is None:
+                    continue
+
+                level = result['level']
+                doc_level_counts[concept][level] += 1
+                total_level_counts[concept][level] += 1
+                actor_level_counts[actor][concept][level] += 1
+
+                if result['raw_term']:
+                    total_raw_counts[concept][result['raw_term']] += 1
+
+                # Collect unknown examples
+                if level == 'UNKNOWN' and len(unknown_examples[concept]) < 100:
+                    unknown_examples[concept].append({
+                        'doc_id': doc_id,
+                        'tokens': ' '.join(tokens[:50]),  # First 50 tokens
+                    })
 
         # Build result row
-        result_row = {}
+        result_row = {'doc_id': doc_id}
 
         # Add metadata
         if metadata_columns:
             for col in metadata_columns:
-                if col in row:
-                    result_row[col] = row[col]
+                if col in first_row:
+                    result_row[col] = first_row[col]
 
-        result_row['doc_index'] = idx
+        # Add qualification counts
+        for concept in ['sannolikhet', 'konsekvens', 'risk']:
+            counts = doc_level_counts[concept]
+            result_row[f'{concept}_total'] = sum(counts.values())
 
-        # Add risk counts
-        result_row['total_risk_mentions'] = analysis['risk_counts']['total']
-        for category, count in analysis['risk_counts']['by_category'].items():
-            result_row[f'risk_{category}'] = count
-
-        # Add qualification counts (5-level scale)
-        for concept, data in analysis['qualifications'].items():
-            result_row[f'{concept}_total'] = data['total']
-
-            # Add level counts (5-level scale + change, uncertainty, acceptability)
-            for level in ['very_low', 'low', 'medium', 'high', 'very_high', 'change', 'uncertainty', 'acceptability', 'UNKNOWN']:
-                count = data['level_counts'].get(level, 0)
-                result_row[f'{concept}_{level}'] = count
+            for level in ['very_low', 'low', 'medium', 'high', 'very_high',
+                         'change', 'uncertainty', 'acceptability', 'UNKNOWN']:
+                result_row[f'{concept}_{level}'] = counts.get(level, 0)
 
         doc_results.append(result_row)
 
-        # Get actor for this document
-        actor = row.get('actor', 'unknown')
-        actor_doc_counts[actor] += 1
-
-        # Aggregate (overall)
-        for category, count in analysis['risk_counts']['by_category'].items():
-            total_risk_counts[category] += count
-            actor_risk_counts[actor][category] += count
-
-        for concept, data in analysis['qualifications'].items():
-            for level, count in data['level_counts'].items():
-                total_level_counts[concept][level] += count
-                actor_level_counts[actor][concept][level] += count
-            for raw, count in data['raw_counts'].items():
-                total_raw_counts[concept][raw] += count
-
-            # Collect unknown examples (collect up to 100 for random sampling later)
-            if data['unknown_examples'] and len(unknown_qual_examples[concept]) < 100:
-                for ex in data['unknown_examples']:
-                    if len(unknown_qual_examples[concept]) < 100:
-                        ex['doc_id'] = row.get('doc_id', f'doc_{idx}')
-                        unknown_qual_examples[concept].append(ex)
-
     results_df = pd.DataFrame(doc_results)
 
+    # Build aggregated stats
     aggregated = {
-        'total_documents': len(texts_df),
-        'risk_counts': {
-            'total': sum(total_risk_counts.values()),
-            'by_category': dict(total_risk_counts)
-        },
+        'total_documents': total_docs,
+        'total_sentences': total_rows,
         'qualifications': {
             concept: {
                 'total': sum(level_counts.values()),
                 'by_level': dict(level_counts),
                 'raw_distribution': dict(total_raw_counts[concept]),
-                'unknown_examples': unknown_qual_examples[concept]
+                'unknown_examples': unknown_examples[concept]
             }
             for concept, level_counts in total_level_counts.items()
         },
-        'level_mapping': QUALIFICATION_MAPPING,
-        # Actor-level statistics
+        'level_mapping': QUALIFICATION_MAPPING_RAW,
         'by_actor': {
             actor: {
                 'doc_count': actor_doc_counts[actor],
-                'risk_counts': {
-                    'total': sum(actor_risk_counts[actor].values()),
-                    'by_category': dict(actor_risk_counts[actor])
-                },
                 'qualifications': {
                     concept: dict(actor_level_counts[actor][concept])
                     for concept in ['sannolikhet', 'konsekvens', 'risk']
@@ -736,6 +423,319 @@ def analyze_corpus(
     }
 
     return results_df, aggregated
+
+
+# =============================================================================
+# VISUALIZATIONS
+# =============================================================================
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
+
+ACTOR_LABELS = {
+    'kommun': 'Municipality',
+    'lansstyrelse': 'Prefecture',
+    'länsstyrelse': 'Prefecture',
+    'MCF': 'MSB',
+}
+
+# Actor colors (consistent across all visualizations)
+ACTOR_COLORS = {
+    'kommun': '#e41a1c',        # Red
+    'lansstyrelse': '#377eb8',  # Blue
+    'MCF': '#4daf4a',           # Green
+}
+
+# Fixed order: Municipality, Prefecture, MSB (left to right)
+ACTOR_ORDER = ['kommun', 'lansstyrelse', 'MCF']
+
+LEVEL_ORDER = ['very_low', 'low', 'medium', 'high', 'very_high']
+LEVEL_LABELS = {
+    'very_low': 'Very Low',
+    'low': 'Low',
+    'medium': 'Medium',
+    'high': 'High',
+    'very_high': 'Very High',
+}
+LEVEL_COLORS = {
+    'very_low': '#2ecc71',
+    'low': '#a8e6cf',
+    'medium': '#ffd93d',
+    'high': '#ff6b6b',
+    'very_high': '#c0392b',
+}
+
+
+def create_qualifications_over_time(results_df: pd.DataFrame, output_dir: Path) -> None:
+    """Line chart showing qualification levels over time for each concept."""
+    if 'year' not in results_df.columns:
+        return
+
+    df = results_df.copy()
+    df['year'] = pd.to_numeric(df['year'], errors='coerce')
+    df = df.dropna(subset=['year'])
+    df['year'] = df['year'].astype(int)
+
+    # Only show meaningful levels (exclude UNKNOWN, acceptability)
+    severity_levels = ['very_low', 'low', 'medium', 'high', 'very_high']
+    concepts = ['sannolikhet', 'konsekvens', 'risk']
+    concept_labels = {
+        'sannolikhet': 'Probability',
+        'konsekvens': 'Consequence',
+        'risk': 'Risk',
+    }
+
+    fig, axes = plt.subplots(1, 3, figsize=(16, 5))
+
+    for ax, concept in zip(axes, concepts):
+        # Aggregate by year: average mentions per document
+        yearly_data = []
+        for year in sorted(df['year'].unique()):
+            year_df = df[df['year'] == year]
+            n_docs = len(year_df)
+            row = {'year': year, 'n_docs': n_docs}
+            for level in severity_levels:
+                col = f'{concept}_{level}'
+                if col in year_df.columns:
+                    row[level] = year_df[col].sum() / n_docs  # Average per doc
+            yearly_data.append(row)
+
+        yearly_df = pd.DataFrame(yearly_data)
+        if yearly_df.empty:
+            continue
+
+        # Plot each level
+        for level in severity_levels:
+            if level in yearly_df.columns:
+                ax.plot(yearly_df['year'], yearly_df[level],
+                        marker='o', markersize=4, linewidth=1.5,
+                        label=LEVEL_LABELS[level], color=LEVEL_COLORS[level])
+
+        ax.set_title(concept_labels[concept], fontsize=12, fontweight='bold')
+        ax.set_xlabel('Year')
+        ax.set_ylabel('Avg. mentions per document')
+        ax.legend(fontsize=8, loc='upper left')
+        ax.set_xlim(yearly_df['year'].min() - 0.5, yearly_df['year'].max() + 0.5)
+        ax.xaxis.set_major_locator(plt.MaxNLocator(integer=True))
+
+    plt.suptitle('Qualification Levels Over Time (Per Document Average)',
+                 fontsize=14, fontweight='bold')
+    plt.tight_layout()
+    plt.savefig(output_dir / 'qualification_over_time.png', dpi=150, bbox_inches='tight')
+    plt.savefig(output_dir / 'qualification_over_time.pdf', bbox_inches='tight')
+    plt.close()
+    logger.info("  Saved: qualification_over_time.png/pdf")
+
+
+def create_high_severity_over_time(results_df: pd.DataFrame, output_dir: Path) -> None:
+    """
+    Line chart showing high+very_high severity share over time by actor.
+    Normalized to share of all qualified mentions (excluding UNKNOWN).
+    """
+    if 'year' not in results_df.columns:
+        return
+
+    df = results_df.copy()
+    df['year'] = pd.to_numeric(df['year'], errors='coerce')
+    df = df.dropna(subset=['year'])
+    df['year'] = df['year'].astype(int)
+
+    actor_col = 'actor_type' if 'actor_type' in df.columns else 'actor'
+    if actor_col not in df.columns:
+        return
+
+    concepts = ['sannolikhet', 'konsekvens', 'risk']
+    concept_labels = {
+        'sannolikhet': 'Probability',
+        'konsekvens': 'Consequence',
+        'risk': 'Risk',
+    }
+
+    actor_colors = {
+        'kommun': '#e41a1c',        # Red
+        'lansstyrelse': '#377eb8',  # Blue
+        'länsstyrelse': '#377eb8',  # Blue
+        'MCF': '#4daf4a',           # Green
+    }
+    actor_labels = {
+        'kommun': 'Municipality',
+        'lansstyrelse': 'Prefecture',
+        'länsstyrelse': 'Prefecture',
+        'MCF': 'MCF',
+    }
+
+    severity_levels = ['very_low', 'low', 'medium', 'high', 'very_high']
+
+    fig, axes = plt.subplots(1, 3, figsize=(16, 5))
+
+    for ax, concept in zip(axes, concepts):
+        for actor in df[actor_col].unique():
+            if actor == 'unknown':
+                continue
+
+            actor_df = df[df[actor_col] == actor]
+            yearly_data = []
+
+            for year in sorted(actor_df['year'].unique()):
+                year_df = actor_df[actor_df['year'] == year]
+
+                # Sum high + very_high
+                high_col = f'{concept}_high'
+                vhigh_col = f'{concept}_very_high'
+                high_sum = year_df[high_col].sum() if high_col in year_df.columns else 0
+                vhigh_sum = year_df[vhigh_col].sum() if vhigh_col in year_df.columns else 0
+                high_total = high_sum + vhigh_sum
+
+                # Sum all severity levels (excluding UNKNOWN)
+                total_qualified = sum(
+                    year_df[f'{concept}_{level}'].sum()
+                    for level in severity_levels
+                    if f'{concept}_{level}' in year_df.columns
+                )
+
+                if total_qualified > 0:
+                    yearly_data.append({
+                        'year': year,
+                        'high_share': high_total / total_qualified * 100
+                    })
+
+            if yearly_data:
+                yearly_df = pd.DataFrame(yearly_data)
+                ax.plot(yearly_df['year'], yearly_df['high_share'],
+                        marker='o', markersize=4, linewidth=1.5,
+                        label=actor_labels.get(actor, actor),
+                        color=actor_colors.get(actor, '#999999'))
+
+        ax.set_title(concept_labels[concept], fontsize=12, fontweight='bold')
+        ax.set_xlabel('Year')
+        ax.set_ylabel('High+Very High share (%)')
+        ax.legend(fontsize=8)
+        ax.set_ylim(0, 100)
+        ax.xaxis.set_major_locator(plt.MaxNLocator(integer=True))
+
+    plt.suptitle('High Severity Share Over Time by Actor',
+                 fontsize=14, fontweight='bold')
+    plt.tight_layout()
+    plt.savefig(output_dir / 'high_severity_over_time.png', dpi=150, bbox_inches='tight')
+    plt.savefig(output_dir / 'high_severity_over_time.pdf', bbox_inches='tight')
+    plt.close()
+    logger.info("  Saved: high_severity_over_time.png/pdf")
+
+
+def create_visualizations(aggregated: dict, output_dir: Path, results_df: pd.DataFrame = None) -> None:
+    """Create all visualizations for risk context analysis."""
+    output_dir = Path(output_dir)
+    plt.style.use('seaborn-v0_8-whitegrid')
+
+    create_qualification_distribution(aggregated, output_dir)
+
+    if 'by_actor' in aggregated and len(aggregated['by_actor']) > 1:
+        # Filter out 'unknown' actor if others exist
+        actors = [a for a in aggregated['by_actor'].keys() if a != 'unknown']
+        if len(actors) > 1:
+            create_actor_comparison(aggregated, output_dir)
+
+    # Time-based visualizations
+    if results_df is not None and 'year' in results_df.columns:
+        create_qualifications_over_time(results_df, output_dir)
+        create_high_severity_over_time(results_df, output_dir)
+
+
+def create_qualification_distribution(aggregated: dict, output_dir: Path) -> None:
+    """Bar chart showing qualification counts by level for each concept."""
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+
+    concepts = ['sannolikhet', 'konsekvens', 'risk']
+    concept_labels = {
+        'sannolikhet': 'Probability (Sannolikhet)',
+        'konsekvens': 'Consequence (Konsekvens)',
+        'risk': 'Risk',
+    }
+
+    for ax, concept in zip(axes, concepts):
+        if concept not in aggregated['qualifications']:
+            continue
+
+        data = aggregated['qualifications'][concept]['by_level']
+        counts = [data.get(level, 0) for level in LEVEL_ORDER]
+        colors = [LEVEL_COLORS[level] for level in LEVEL_ORDER]
+        labels = [LEVEL_LABELS[level] for level in LEVEL_ORDER]
+
+        bars = ax.bar(labels, counts, color=colors, edgecolor='white', linewidth=0.5)
+
+        for bar, count in zip(bars, counts):
+            if count > 0:
+                ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.5,
+                        str(count), ha='center', va='bottom', fontsize=9)
+
+        ax.set_title(concept_labels[concept], fontsize=12, fontweight='bold')
+        ax.set_ylabel('Count')
+        ax.set_xlabel('Qualification Level')
+
+        total = sum(data.values())
+        unknown = data.get('UNKNOWN', 0)
+        ax.annotate(f'Total: {total}\nUnknown: {unknown} ({unknown/total*100:.1f}%)' if total > 0 else '',
+                    xy=(0.98, 0.98), xycoords='axes fraction',
+                    ha='right', va='top', fontsize=9,
+                    bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+
+    plt.suptitle('Qualification Distribution by Concept (5-Level Scale)', fontsize=14, fontweight='bold')
+    plt.tight_layout()
+    plt.savefig(output_dir / 'qualification_distribution.png', dpi=150, bbox_inches='tight')
+    plt.savefig(output_dir / 'qualification_distribution.pdf', bbox_inches='tight')
+    plt.close()
+    logger.info("  Saved: qualification_distribution.png/pdf")
+
+
+def create_actor_comparison(aggregated: dict, output_dir: Path) -> None:
+    """Grouped bar chart comparing qualification levels across actors."""
+    available_actors = [a for a in aggregated['by_actor'].keys() if a != 'unknown']
+    # Use fixed order: Municipality, Prefecture, MSB
+    actors = [a for a in ACTOR_ORDER if a in available_actors]
+    if len(actors) < 2:
+        return
+
+    fig, axes = plt.subplots(1, 3, figsize=(16, 7))
+
+    concepts = ['sannolikhet', 'konsekvens', 'risk']
+    concept_labels = {
+        'sannolikhet': 'Probability',
+        'konsekvens': 'Consequence',
+        'risk': 'Risk',
+    }
+
+    for ax, concept in zip(axes, concepts):
+        x = np.arange(len(LEVEL_ORDER))
+        width = 0.25
+        offsets = np.linspace(-width, width, len(actors))
+
+        for i, actor in enumerate(actors):
+            actor_data = aggregated['by_actor'][actor].get('qualifications', {}).get(concept, {})
+            total = sum(actor_data.values()) if actor_data else 0
+
+            if total == 0:
+                continue
+
+            pcts = [(actor_data.get(level, 0) / total * 100) for level in LEVEL_ORDER]
+            actor_label = ACTOR_LABELS.get(actor, actor)
+            color = ACTOR_COLORS.get(actor, '#999999')
+            ax.bar(x + offsets[i], pcts, width * 0.9, label=actor_label, color=color, alpha=0.8)
+
+        ax.set_title(concept_labels[concept], fontsize=12, fontweight='bold')
+        ax.set_ylabel('Percentage')
+        ax.set_xlabel('Qualification Level')
+        ax.set_xticks(x)
+        ax.set_xticklabels([LEVEL_LABELS[l] for l in LEVEL_ORDER], rotation=45, ha='right')
+        ax.legend(fontsize=8)
+
+    plt.suptitle('Qualification Distribution by Actor Type (Normalized)', fontsize=14, fontweight='bold')
+    plt.tight_layout()
+    plt.savefig(output_dir / 'qualification_by_actor.png', dpi=150, bbox_inches='tight')
+    plt.savefig(output_dir / 'qualification_by_actor.pdf', bbox_inches='tight')
+    plt.close()
+    logger.info("  Saved: qualification_by_actor.png/pdf")
+
 
 # =============================================================================
 # OUTPUT
@@ -749,269 +749,189 @@ def save_results(results_df: pd.DataFrame, aggregated: dict, output_dir: Path):
     # Save document-level results
     csv_path = output_dir / 'risk_context_analysis_by_document.csv'
     results_df.to_csv(csv_path, index=False, encoding='utf-8')
-    print(f"\nSaved document results: {csv_path}")
+    logger.info(f"Saved document results: {csv_path}")
 
     # Save aggregated results (JSON)
     json_path = output_dir / 'risk_context_analysis_aggregated.json'
     with open(json_path, 'w', encoding='utf-8') as f:
         json.dump(aggregated, f, ensure_ascii=False, indent=2)
-    print(f"Saved aggregated results: {json_path}")
+    logger.info(f"Saved aggregated results: {json_path}")
 
-    # Generate comprehensive report
+    # Create visualizations
+    logger.info("Creating visualizations...")
+    create_visualizations(aggregated, output_dir, results_df)
+
+    # Generate report
+    generate_report(aggregated, output_dir)
+
+
+def generate_report(aggregated: dict, output_dir: Path):
+    """Generate comprehensive text report."""
     report = []
-    report.append("="*80)
+    report.append("=" * 80)
     report.append("RISK CONTEXT ANALYSIS - COMPREHENSIVE REPORT")
-    report.append("="*80)
+    report.append("=" * 80)
 
     report.append(f"\nTotal documents analyzed: {aggregated['total_documents']}")
+    report.append(f"Total sentences analyzed: {aggregated['total_sentences']}")
 
-    report.append("\n" + "-"*40)
+    report.append("\n" + "-" * 40)
     report.append("METHODOLOGY NOTES:")
-    report.append("-"*40)
-    report.append("- 'risk- och sårbarhetsanalys' phrases excluded from analysis")
-    report.append("- Qualifications grouped into 5 severity levels: very_low, low, medium, high, very_high")
-    report.append("- Additional categories: 'change' (minska/öka), 'uncertainty', 'acceptability'")
-    report.append("- For konsekvens: 'svårt att bedöma' pattern detected for uncertainty")
-    report.append("- For sannolikhet: 'svår/lätt' alone indicates uncertainty")
+    report.append("-" * 40)
+    report.append("- Token-based matching on pre-stemmed corpus (fast)")
+    report.append("- Sentence-level qualifier matching")
+    report.append("- Qualifications grouped into 5 severity levels: very_low -> very_high")
+    report.append("- Additional categories: 'change', 'uncertainty', 'acceptability'")
 
-    # RISK COUNTS
-    report.append("\n" + "="*80)
-    report.append("RISK TERM COUNTS (from dictionary)")
-    report.append("="*80)
-
-    report.append(f"\nTotal risk term mentions: {aggregated['risk_counts']['total']}")
-    report.append("\nBy category:")
-    for category, count in sorted(
-        aggregated['risk_counts']['by_category'].items(),
-        key=lambda x: x[1],
-        reverse=True
-    ):
-        pct = (count / aggregated['risk_counts']['total'] * 100) if aggregated['risk_counts']['total'] > 0 else 0
-        report.append(f"  {category:30s}: {count:6d} ({pct:5.1f}%)")
-
-    # QUALIFICATIONS
-    report.append("\n" + "="*80)
+    # Qualifications
+    report.append("\n" + "=" * 80)
     report.append("QUALIFICATION ANALYSIS (5-level scale)")
-    report.append("="*80)
+    report.append("=" * 80)
 
     for concept in ['sannolikhet', 'konsekvens', 'risk']:
-        if concept in aggregated['qualifications']:
-            data = aggregated['qualifications'][concept]
+        if concept not in aggregated['qualifications']:
+            continue
+        data = aggregated['qualifications'][concept]
 
-            report.append(f"\n{concept.upper()}:")
-            report.append(f"  Total qualified mentions: {data['total']}")
-
-            report.append(f"\n  Distribution by level:")
-            level_order = ['very_low', 'low', 'medium', 'high', 'very_high', 'change', 'uncertainty', 'acceptability', 'UNKNOWN']
-            for level in level_order:
-                count = data['by_level'].get(level, 0)
-                if count > 0 or level != 'acceptability':
-                    pct = (count / data['total'] * 100) if data['total'] > 0 else 0
-                    report.append(f"    {level:15s}: {count:5d} ({pct:5.1f}%)")
-
-            # Show raw term counts
-            report.append(f"\n  Raw term breakdown:")
-            for term, count in sorted(
-                data['raw_distribution'].items(),
-                key=lambda x: x[1],
-                reverse=True
-            ):
-                if term != 'UNKNOWN':
-                    level = TERM_TO_LEVEL[concept].get(term.lower(), 'other')
-                    report.append(f"    {term:20s} -> {level:10s}: {count:5d}")
-
-            # Show unknown examples
-            unknown_count = data['by_level'].get('UNKNOWN', 0)
-            if unknown_count > 0 and data['unknown_examples']:
-                unknown_pct = (unknown_count / data['total'] * 100) if data['total'] > 0 else 0
-
-                report.append(f"\n  UNKNOWN QUALIFICATIONS ({unknown_count} total, {unknown_pct:.1f}%):")
-
-                # Randomly sample up to 20 examples
-                all_examples = data['unknown_examples']
-                if len(all_examples) > 20:
-                    sampled_examples = random.sample(all_examples, 20)
-                else:
-                    sampled_examples = all_examples
-
-                report.append(f"  {len(sampled_examples)} randomly sampled examples to help identify missing terms:")
-
-                for i, ex in enumerate(sampled_examples, 1):
-                    report.append(f"\n    Example {i}:")
-                    report.append(f"      Doc: {ex.get('doc_id', 'unknown')}")
-                    report.append(f"      Context: {ex['context']}")
-                    if ex['before']:
-                        report.append(f"      Words before: {ex['before']}")
-                    if ex['middle']:
-                        report.append(f"      Words in middle: {ex['middle']}")
-
-    # Actor comparison section
-    if 'by_actor' in aggregated and len(aggregated['by_actor']) > 1:
-        report.append("\n" + "="*80)
-        report.append("ACTOR COMPARISON")
-        report.append("="*80)
-
-        actors = list(aggregated['by_actor'].keys())
-        report.append(f"\nActors found: {', '.join(actors)}")
-
-        # Document counts
-        report.append("\nDocument counts:")
-        for actor in actors:
-            count = aggregated['by_actor'][actor]['doc_count']
-            report.append(f"  {actor}: {count}")
-
-        # Risk category comparison
-        report.append("\nRisk mentions by category (per document average):")
-        all_categories = set()
-        for actor in actors:
-            all_categories.update(aggregated['by_actor'][actor]['risk_counts']['by_category'].keys())
-
-        for category in sorted(all_categories):
-            report.append(f"\n  {category}:")
-            for actor in actors:
-                count = aggregated['by_actor'][actor]['risk_counts']['by_category'].get(category, 0)
-                doc_count = aggregated['by_actor'][actor]['doc_count']
-                avg = count / doc_count if doc_count > 0 else 0
-                report.append(f"    {actor}: {count} total ({avg:.2f} per doc)")
-
-        # Qualification comparison
-        report.append("\nQualification distribution by actor:")
-        for concept in ['sannolikhet', 'konsekvens', 'risk']:
-            report.append(f"\n  {concept.upper()}:")
-            level_order = ['very_low', 'low', 'medium', 'high', 'very_high', 'change', 'uncertainty']
-
-            for level in level_order:
-                counts_str = []
-                for actor in actors:
-                    qual_data = aggregated['by_actor'][actor].get('qualifications', {}).get(concept, {})
-                    count = qual_data.get(level, 0)
-                    total = sum(qual_data.values()) if qual_data else 0
-                    pct = (count / total * 100) if total > 0 else 0
-                    counts_str.append(f"{actor}: {count} ({pct:.1f}%)")
-                report.append(f"    {level:12s}: {' | '.join(counts_str)}")
-
-    # Show level mapping for reference
-    report.append("\n" + "="*80)
-    report.append("LEVEL MAPPING REFERENCE")
-    report.append("="*80)
-
-    for concept, mapping in QUALIFICATION_MAPPING.items():
         report.append(f"\n{concept.upper()}:")
-        for level, terms in mapping.items():
-            report.append(f"  {level:10s}: {', '.join(terms)}")
+        report.append(f"  Total mentions: {data['total']}")
+
+        report.append(f"\n  Distribution by level:")
+        level_order = ['very_low', 'low', 'medium', 'high', 'very_high',
+                       'change', 'uncertainty', 'acceptability', 'UNKNOWN']
+        for level in level_order:
+            count = data['by_level'].get(level, 0)
+            if count > 0:
+                pct = (count / data['total'] * 100) if data['total'] > 0 else 0
+                report.append(f"    {level:15s}: {count:5d} ({pct:5.1f}%)")
+
+        # Raw term breakdown
+        if data['raw_distribution']:
+            report.append(f"\n  Top raw terms:")
+            sorted_terms = sorted(data['raw_distribution'].items(),
+                                  key=lambda x: x[1], reverse=True)[:10]
+            for term, count in sorted_terms:
+                report.append(f"    {term:20s}: {count:5d}")
+
+        # Unknown examples
+        unknown_count = data['by_level'].get('UNKNOWN', 0)
+        if unknown_count > 0 and data['unknown_examples']:
+            report.append(f"\n  Sample unknown contexts ({unknown_count} total):")
+            samples = random.sample(data['unknown_examples'],
+                                    min(5, len(data['unknown_examples'])))
+            for ex in samples:
+                report.append(f"    Doc {ex['doc_id']}: {ex['tokens'][:80]}...")
+
+    # Actor comparison
+    if 'by_actor' in aggregated and len(aggregated['by_actor']) > 1:
+        report.append("\n" + "=" * 80)
+        report.append("ACTOR COMPARISON")
+        report.append("=" * 80)
+
+        actors = [a for a in aggregated['by_actor'].keys() if a != 'unknown']
+        report.append(f"\nActors: {', '.join(actors)}")
+
+        for actor in actors:
+            actor_data = aggregated['by_actor'][actor]
+            report.append(f"\n{ACTOR_LABELS.get(actor, actor)} ({actor_data['doc_count']} documents):")
+
+            for concept in ['sannolikhet', 'konsekvens', 'risk']:
+                qual_data = actor_data.get('qualifications', {}).get(concept, {})
+                if qual_data:
+                    total = sum(qual_data.values())
+                    high_pct = ((qual_data.get('high', 0) + qual_data.get('very_high', 0)) / total * 100) if total > 0 else 0
+                    low_pct = ((qual_data.get('low', 0) + qual_data.get('very_low', 0)) / total * 100) if total > 0 else 0
+                    report.append(f"  {concept}: {total} mentions (high+very_high: {high_pct:.1f}%, low+very_low: {low_pct:.1f}%)")
 
     # Save report
-    report_text = "\n".join(report)
+    report_text = '\n'.join(report)
     report_path = output_dir / 'risk_context_analysis_report.txt'
     with open(report_path, 'w', encoding='utf-8') as f:
         f.write(report_text)
-    print(f"Saved comprehensive report: {report_path}")
+    logger.info(f"Saved report: {report_path}")
 
-    # Print summary to console
     print("\n" + report_text)
 
 
+# =============================================================================
+# MAIN
+# =============================================================================
+
 def main():
     parser = argparse.ArgumentParser(
-        description='Risk context analysis: risk counts + 5-level qualifications'
+        description='Risk context analysis using token matching on stemmed corpus'
     )
 
     parser.add_argument(
-        '--texts',
+        '--corpus', '-c',
         type=Path,
         required=True,
-        help='Path to parquet file with texts'
+        help='Path to stemmed corpus parquet (e.g., bow_corpus_stemmed.parquet)'
     )
 
     parser.add_argument(
-        '--text-column',
-        type=str,
-        default='text',
-        help='Column name containing text (default: text)'
+        '--output', '-o',
+        type=Path,
+        default=Path('./results/01_bow_analysis/context'),
+        help='Output directory'
     )
 
     parser.add_argument(
         '--metadata',
         nargs='+',
-        default=['doc_id', 'municipality', 'year', 'actor'],
-        help='Metadata columns to include'
-    )
-
-    parser.add_argument(
-        '--output',
-        type=Path,
-        default=Path('./risk_context_analysis'),
-        help='Output directory'
-    )
-
-    parser.add_argument(
-        '--lemmatize',
-        action='store_true',
-        default=True,
-        help='Use lemmatized risk dictionary (default: True)'
-    )
-
-    parser.add_argument(
-        '--no-lemmatize',
-        dest='lemmatize',
-        action='store_false',
-        help='Use original (non-lemmatized) risk dictionary'
+        default=['doc_id', 'actor_type', 'year', 'wave'],
+        help='Metadata columns to include in output'
     )
 
     args = parser.parse_args()
 
-    print("="*80)
-    print("RISK CONTEXT ANALYSIS")
-    print("="*80)
+    print("=" * 80)
+    print("RISK CONTEXT ANALYSIS (Token-Based)")
+    print("=" * 80)
 
-    print(f"\nLoading texts from: {args.texts}")
-    texts_df = pd.read_parquet(args.texts)
-    print(f"Loaded {len(texts_df)} documents")
+    # Initialize stemmed dictionaries
+    logger.info("Initializing stemmed dictionaries...")
+    dicts = initialize_stemmed_dictionaries()
+    logger.info(f"  Target stems: {sum(len(v) for v in dicts['targets'].values())} total")
+    logger.info(f"  Qualification stems: {sum(len(v) for v in dicts['all_qual_stems'].values())} total")
 
-    print("\nAnalyzing documents...")
-    print("  - Removing 'risk- och sårbarhetsanalys' boilerplate")
-    if args.lemmatize:
-        print("  - Using lemmatized risk dictionary")
-    else:
-        print("  - Using original risk dictionary")
-    print("  - Counting risk terms from dictionary")
-    print("  - Extracting qualified mentions (sannolikhet, konsekvens, risk)")
-    print("  - Mapping to 5-level scale: very_low -> very_high")
+    # Load corpus
+    logger.info(f"\nLoading corpus: {args.corpus}")
+    df = pd.read_parquet(args.corpus)
+    logger.info(f"  Loaded {len(df)} sentences from {df['doc_id'].nunique()} documents")
 
-    results_df, aggregated = analyze_corpus(
-        texts_df,
-        text_column=args.text_column,
-        metadata_columns=args.metadata,
-        lemmatize=args.lemmatize,
-        output_dir=args.output
-    )
+    if 'tokens' not in df.columns:
+        logger.error("Corpus must have 'tokens' column (use bow_corpus_stemmed.parquet)")
+        return 1
 
-    print("\nSaving results...")
+    # Show actor distribution
+    actor_col = 'actor_type' if 'actor_type' in df.columns else 'actor'
+    if actor_col in df.columns:
+        actor_dist = df.groupby(actor_col)['doc_id'].nunique()
+        logger.info(f"  Actors: {actor_dist.to_dict()}")
+
+    # Analyze
+    logger.info("\nAnalyzing corpus...")
+    results_df, aggregated = analyze_corpus(df, dicts, args.metadata)
+
+    # Save
+    logger.info("\nSaving results...")
     save_results(results_df, aggregated, args.output)
 
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print("ANALYSIS COMPLETE")
-    print("="*80)
-    print(f"""
-Output files in {args.output}:
-  - risk_context_analysis_by_document.csv  (per-document counts)
-  - risk_context_analysis_aggregated.json  (corpus-level statistics)
-  - risk_context_analysis_report.txt       (comprehensive report)
-
-The CSV contains:
-  - Metadata columns (doc_id, municipality, year, etc.)
-  - Risk counts (total_risk_mentions, risk_naturhot, etc.)
-  - 5-level qualification counts (sannolikhet_very_low, sannolikhet_high, etc.)
-
-Key changes from previous version:
-  - 'risk- och sårbarhetsanalys' phrases excluded
-  - 'risk- och sårbarhetsanalys' phrases excluded
-  - Qualifications grouped into 5 levels + change, uncertainty, acceptability
-    """)
+    print("=" * 80)
+    print(f"\nOutput files in {args.output}:")
+    print("  - risk_context_analysis_by_document.csv")
+    print("  - risk_context_analysis_aggregated.json")
+    print("  - risk_context_analysis_report.txt")
+    print("  - qualification_distribution.png/pdf")
+    print("  - qualification_by_actor.png/pdf")
+    print("  - qualification_over_time.png/pdf")
+    print("  - high_severity_over_time.png/pdf")
 
     return 0
 
 
 if __name__ == '__main__':
-    import sys
     sys.exit(main())
