@@ -25,14 +25,14 @@ Usage:
     # Sample sentences (default)
     python stratified_sample.py \\
         --input data/processed/bert_corpus_filtered.parquet \\
-        --output results/sampling/ \\
+        --output results/00_data_preparation/sampling/ \\
         --n-units 1000 \\
         --seed 42
 
     # Sample paragraphs instead
     python stratified_sample.py \\
         --input data/processed/bert_corpus_filtered.parquet \\
-        --output results/sampling/ \\
+        --output results/00_data_preparation/sampling/ \\
         --unit paragraph \\
         --n-units 1000 \\
         --seed 42 \\
@@ -901,13 +901,13 @@ Examples:
     # Sample sentences (default)
     python stratified_sample.py \\
         --input data/processed/bert_corpus_filtered.parquet \\
-        --output results/sampling/ \\
+        --output results/00_data_preparation/sampling/ \\
         --n-units 1000 --seed 42
 
     # Sample paragraphs instead
     python stratified_sample.py \\
         --input data/processed/bert_corpus_filtered.parquet \\
-        --output results/sampling/ \\
+        --output results/00_data_preparation/sampling/ \\
         --unit paragraph \\
         --n-units 1000 --seed 42 --verbose
 """
@@ -923,8 +923,8 @@ Examples:
     parser.add_argument(
         '--output',
         type=Path,
-        default=Path('./results/sampling'),
-        help='Output directory (default: results/sampling/)'
+        default=Path('./results/00_data_preparation/sampling'),
+        help='Output directory (default: results/00_data_preparation/sampling/)'
     )
 
     parser.add_argument(

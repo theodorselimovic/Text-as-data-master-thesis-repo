@@ -18,9 +18,9 @@ This script:
 
 Usage:
     python recover_corrupted_sample.py \\
-        --input results/sampling/sample_full_annotated_v2.csv \\
+        --input results/00_data_preparation/sampling/sample_full_annotated_v2.csv \\
         --corpus data/processed/bert_corpus.parquet \\
-        --output results/sampling/sample_full_recovered.xlsx
+        --output results/00_data_preparation/sampling/sample_full_recovered.xlsx
 
 Author: Swedish Risk Analysis Text-as-Data Project
 Date: 2026-03-03
@@ -338,7 +338,7 @@ def main() -> int:
     parser.add_argument(
         '--input',
         type=Path,
-        default=Path('results/sampling/sample_full_annotated_v2.csv'),
+        default=Path('results/00_data_preparation/sampling/sample_full_annotated_v2.csv'),
         help='Path to corrupted CSV file',
     )
     parser.add_argument(
@@ -350,7 +350,7 @@ def main() -> int:
     parser.add_argument(
         '--output',
         type=Path,
-        default=Path('results/sampling/sample_full_recovered.xlsx'),
+        default=Path('results/00_data_preparation/sampling/sample_full_recovered.xlsx'),
         help='Path for output Excel file',
     )
     parser.add_argument(

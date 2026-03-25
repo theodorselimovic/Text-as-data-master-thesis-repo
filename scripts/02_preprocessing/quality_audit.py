@@ -29,18 +29,18 @@ Usage:
     # Audit the filtered corpus
     python quality_audit.py \\
         --input data/processed/bert_corpus_filtered.parquet \\
-        --output results/quality_audit/
+        --output results/00_data_preparation/quality_audit/
 
     # Audit the hand-coding sample
     python quality_audit.py \\
-        --input results/sampling/sample_full.csv \\
-        --output results/quality_audit/ \\
+        --input results/00_data_preparation/sampling/sample_full.csv \\
+        --output results/00_data_preparation/quality_audit/ \\
         --export-all
 
     # Adjust thresholds
     python quality_audit.py \\
         --input data/processed/bert_corpus_filtered.parquet \\
-        --output results/quality_audit/ \\
+        --output results/00_data_preparation/quality_audit/ \\
         --min-dictionary-coverage 0.4 \\
         --verbose
 
@@ -685,18 +685,18 @@ Examples:
     # Audit filtered corpus
     python quality_audit.py \\
         --input data/processed/bert_corpus_filtered.parquet \\
-        --output results/quality_audit/
+        --output results/00_data_preparation/quality_audit/
 
     # Audit hand-coding sample with all scores exported
     python quality_audit.py \\
-        --input results/sampling/sample_full.csv \\
-        --output results/quality_audit/ \\
+        --input results/00_data_preparation/sampling/sample_full.csv \\
+        --output results/00_data_preparation/quality_audit/ \\
         --export-all
 
     # Stricter thresholds
     python quality_audit.py \\
         --input data/processed/bert_corpus_filtered.parquet \\
-        --output results/quality_audit/ \\
+        --output results/00_data_preparation/quality_audit/ \\
         --min-dictionary-coverage 0.5
 """
     )
@@ -706,7 +706,7 @@ Examples:
         help='Input parquet or CSV file'
     )
     parser.add_argument(
-        '--output', type=Path, default=Path('results/quality_audit'),
+        '--output', type=Path, default=Path('results/00_data_preparation/quality_audit'),
         help='Output directory'
     )
     parser.add_argument(

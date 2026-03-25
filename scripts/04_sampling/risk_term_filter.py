@@ -534,7 +534,7 @@ Available categories:
     logger.info(f"  1. Run stratified_sample.py on the filtered corpus:")
     logger.info(f"     python scripts/04_sampling/stratified_sample.py \\")
     logger.info(f"         --input {args.output} \\")
-    logger.info(f"         --output results/sampling/ \\")
+    logger.info(f"         --output results/00_data_preparation/sampling/ \\")
     logger.info(f"         --n-sentences 500 --seed 42")
 
     return 0

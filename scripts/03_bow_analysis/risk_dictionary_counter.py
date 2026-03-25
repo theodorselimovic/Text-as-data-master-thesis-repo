@@ -27,24 +27,24 @@ Usage:
     # From raw text (document-level)
     python risk_dictionary_counter.py \\
         --input data/raw/pdf_texts.parquet \\
-        --output ./results/risk_matrices/
+        --output ./results/01_bow_analysis/term_matrices/
 
     # From pre-stemmed corpus (recommended for speed + n-gram matching)
     python risk_dictionary_counter.py \\
         --input data/processed/bow_corpus_stemmed.parquet \\
-        --output ./results/risk_matrices/ \\
+        --output ./results/01_bow_analysis/term_matrices/ \\
         --use-stems
 
     # From pre-lemmatized corpus (legacy Stanza mode)
     python risk_dictionary_counter.py \\
         --input data/processed/bow_corpus.parquet \\
-        --output ./results/risk_matrices/ \\
+        --output ./results/01_bow_analysis/term_matrices/ \\
         --use-lemmas
 
     # With verbose output
     python risk_dictionary_counter.py \\
         --input data/processed/bow_corpus_stemmed.parquet \\
-        --output ./results/risk_matrices/ \\
+        --output ./results/01_bow_analysis/term_matrices/ \\
         --use-stems --verbose
 
 Requirements:
@@ -61,7 +61,8 @@ import pandas as pd
 # Import the risk dictionaries from the analysis script
 import sys
 sys.path.insert(0, str(Path(__file__).parent))
-from risk_context_analysis import get_risk_dictionary, RISK_DICTIONARY_ORIGINAL
+from risk_dictionary_categories import RISK_DICTIONARY_CATEGORIES as RISK_DICTIONARY_ORIGINAL
+from risk_dictionary_individual import RISK_DICTIONARY_INDIVIDUAL
 
 # Import stemmer for --use-stems mode
 from nltk.stem.snowball import SnowballStemmer
@@ -91,39 +92,127 @@ logger = logging.getLogger(__name__)
 # DICTIONARY STEMMING
 # =============================================================================
 
-def stem_risk_dictionary(risk_dict: dict) -> dict:
+def stem_risk_dictionary(risk_dict: dict, stopwords: set = None) -> dict:
     """
-    Stem all terms in risk dictionary, including n-gram joining for multi-word terms.
+    Stem all terms in risk dictionary, removing stopwords to match corpus behavior.
 
-    Multi-word terms like "organiserad brottslighet" become "organiser_brottslig"
-    to match the n-gram format from preprocessing_bow.py.
+    Multi-word terms like "hot och våld" become "hot_våld" (stopword "och" removed)
+    to match the n-gram format from preprocessing_bow.py which filters stopwords
+    BEFORE n-gram generation.
 
     Parameters
     ----------
     risk_dict : dict
         The RISK_DICTIONARY mapping category -> list of terms.
+    stopwords : set, optional
+        Set of stopwords to remove. Uses SWEDISH_STOPWORDS from preprocessing_bow.py
+        if not provided.
 
     Returns
     -------
     dict
         Stemmed dictionary with same structure. Multi-word terms joined with underscore.
+        Stopwords are removed to match corpus preprocessing.
     """
+    # Import stopwords from preprocessing module
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent / '02_preprocessing'))
+    from preprocessing_bow import SWEDISH_STOPWORDS
+
+    if stopwords is None:
+        stopwords = SWEDISH_STOPWORDS
+
     stemmer = SnowballStemmer('swedish')
+
+    # Pre-stem stopwords for consistent filtering
+    stemmed_stopwords = {stemmer.stem(sw) for sw in stopwords}
+
     stemmed = {}
 
     for category, terms in risk_dict.items():
         stemmed_terms = set()
         for term in terms:
             words = term.lower().split()
-            stemmed_words = [stemmer.stem(w) for w in words]
+
+            # Stem words, filtering out stopwords (matching corpus behavior)
+            stemmed_words = []
+            for w in words:
+                stem = stemmer.stem(w)
+                # Skip if original word or stemmed form is a stopword
+                if w not in stopwords and stem not in stemmed_stopwords:
+                    stemmed_words.append(stem)
+
+            # Skip terms that become empty after stopword removal
+            if not stemmed_words:
+                continue
+
             if len(stemmed_words) == 1:
                 stemmed_terms.add(stemmed_words[0])
             else:
                 # Multi-word: add as joined n-gram
                 stemmed_terms.add('_'.join(stemmed_words))
+
         stemmed[category] = list(stemmed_terms)
 
     return stemmed
+
+
+def stem_individual_dictionary(stopwords: set = None) -> dict:
+    """
+    Stem the individual risk dictionary, mapping all stemmed variants to
+    their canonical risk name.
+
+    Returns a dict where keys are canonical risk names (e.g., 'översvämning')
+    and values are sets of stemmed forms to match in the corpus.
+
+    Parameters
+    ----------
+    stopwords : set, optional
+        Set of stopwords to remove. Uses SWEDISH_STOPWORDS if not provided.
+
+    Returns
+    -------
+    dict
+        {canonical_risk: set of stemmed forms}
+    """
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent / '02_preprocessing'))
+    from preprocessing_bow import SWEDISH_STOPWORDS
+
+    if stopwords is None:
+        stopwords = SWEDISH_STOPWORDS
+
+    stemmer = SnowballStemmer('swedish')
+    stemmed_stopwords = {stemmer.stem(sw) for sw in stopwords}
+
+    result = {}
+
+    for canonical, variants in RISK_DICTIONARY_INDIVIDUAL.items():
+        stemmed_forms = set()
+        for term in variants:
+            words = term.lower().split()
+
+            # Stem words, filtering out stopwords
+            stemmed_words = []
+            for w in words:
+                stem = stemmer.stem(w)
+                if w not in stopwords and stem not in stemmed_stopwords:
+                    stemmed_words.append(stem)
+
+            if not stemmed_words:
+                continue
+
+            if len(stemmed_words) == 1:
+                stemmed_forms.add(stemmed_words[0])
+            else:
+                stemmed_forms.add('_'.join(stemmed_words))
+
+        if stemmed_forms:
+            result[canonical] = stemmed_forms
+
+    return result
 
 
 # =============================================================================
@@ -554,7 +643,7 @@ def main():
     parser.add_argument(
         '--output',
         type=Path,
-        default=Path('./results/risk_matrices'),
+        default=Path('./results/01_bow_analysis/term_matrices'),
         help='Output directory'
     )
 
@@ -562,6 +651,12 @@ def main():
         '--verbose',
         action='store_true',
         help='Print progress messages'
+    )
+
+    parser.add_argument(
+        '--individual',
+        action='store_true',
+        help='Use individual risk dictionary (85 canonical risks with collapsed variants) instead of category-based'
     )
 
     args = parser.parse_args()
@@ -624,7 +719,21 @@ def main():
     print("BUILDING RISK TERM MATRICES")
     print(f"{'='*60}")
 
-    if args.use_stems:
+    if args.individual:
+        if not args.use_stems:
+            print("ERROR: --individual requires --use-stems (individual dict works with stemmed corpus)")
+            return 1
+        # Use individual dictionary with collapsed variants
+        ind_dict = stem_individual_dictionary()
+        # Convert to format expected by build_matrices: {canonical: [list of stemmed forms]}
+        risk_dict = {canonical: list(forms) for canonical, forms in ind_dict.items()}
+        dict_type = "individual (85 canonical risks)"
+        print(f"\n  Individual dictionary: {len(risk_dict)} canonical risks")
+        print("  Sample risks and their stemmed forms:")
+        for canonical in list(risk_dict.keys())[:3]:
+            forms = risk_dict[canonical][:4]
+            print(f"    {canonical}: {forms}")
+    elif args.use_stems:
         # Use stemmed dictionary to match stemmed tokens with n-grams
         risk_dict = stem_risk_dictionary(RISK_DICTIONARY_ORIGINAL)
         dict_type = "stemmed"
@@ -635,15 +744,16 @@ def main():
             stem_terms = terms[:3]
             print(f"    {cat}: {orig_terms} -> {stem_terms}")
     elif args.use_lemmas:
-        # Use lemmatized dictionary to match lemmatized tokens
-        risk_dict = get_risk_dictionary(lemmatize=True, output_dir=args.output)
-        dict_type = "lemmatized"
+        # Legacy: use original dictionary (lemmatization mode deprecated)
+        print("  Warning: --use-lemmas is deprecated, using original dictionary")
+        risk_dict = RISK_DICTIONARY_ORIGINAL
+        dict_type = "original (lemmas deprecated)"
     else:
         # Use original dictionary for raw text matching
         risk_dict = RISK_DICTIONARY_ORIGINAL
         dict_type = "original"
 
-    print(f"\nRisk dictionary ({dict_type}): {len(risk_dict)} categories")
+    print(f"\nRisk dictionary ({dict_type}): {len(risk_dict)} {'risks' if args.individual else 'categories'}")
     term_metadata = build_term_metadata(risk_dict)
     n_unique_terms = term_metadata['term'].nunique()
     n_total_mappings = len(term_metadata)

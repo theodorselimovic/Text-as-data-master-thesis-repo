@@ -7,11 +7,12 @@ For entities (municipalities, prefectures, MCF) with ≥2 documents in
 different waves, tracks which terms appear, disappear, or are newly
 adopted between consecutive waves.
 
-Waves:
-    Wave 0: pre-2015
+Waves (starting from 2015):
     Wave 1: 2015-2018
     Wave 2: 2019-2022
-    Wave 3: >= 2023
+    Wave 3: 2023+
+
+Note: Pre-2015 data (wave 0) is excluded from analysis.
 
 Includes actor-type comparisons throughout.
 
@@ -20,12 +21,12 @@ Output: persistence heatmaps, dropout/adoption rankings, Jaccard distributions
 
 Usage:
     python risk_persistence_analysis.py \\
-        --input results/term_document_matrix/term_document_matrix.csv \\
-        --output results/persistence/
+        --input results/01_bow_analysis/term_matrices/term_document_matrix.csv \\
+        --output results/01_bow_analysis/persistence/
 
     python risk_persistence_analysis.py \\
-        --input results/term_document_matrix/term_document_matrix.csv \\
-        --output results/persistence/ \\
+        --input results/01_bow_analysis/term_matrices/term_document_matrix.csv \\
+        --output results/01_bow_analysis/persistence/ \\
         --min-entities 5 --verbose
 
 Requirements:
@@ -52,7 +53,7 @@ METADATA_COLS = ['file', 'actor', 'entity', 'year', 'wave']
 
 ACTOR_TRANSLATIONS = {
     'kommun': 'Municipality',
-    'länsstyrelse': 'Prefecture',
+    'lansstyrelse': 'Prefecture',
     'MCF': 'MCF',
 }
 
@@ -251,7 +252,7 @@ def compute_year_transitions(df: pd.DataFrame, term_cols: list) -> pd.DataFrame:
     Compute year-by-year transitions for entities with multiple documents.
 
     Unlike wave-based transitions, this compares consecutive YEARS.
-    Useful for länsstyrelsen and MCF where wave categorisation is less meaningful.
+    Useful for prefectures and MCF where wave categorisation is less meaningful.
 
     Parameters
     ----------
@@ -313,7 +314,7 @@ def compute_year_transitions(df: pd.DataFrame, term_cols: list) -> pd.DataFrame:
 def compute_jaccard(panel: pd.DataFrame, term_cols: list) -> pd.DataFrame:
     """
     Compute Jaccard similarity between consecutive documents
-    for each entity (by wave).
+    for each entity (by wave). Used for municipalities.
 
     Returns
     -------
@@ -344,7 +345,58 @@ def compute_jaccard(panel: pd.DataFrame, term_cols: list) -> pd.DataFrame:
                 'actor': actor,
                 'wave_from': doc_t['wave'],
                 'wave_to': doc_t1['wave'],
-                'wave_pair': f"W{int(doc_t['wave'])}→W{int(doc_t1['wave'])}",
+                'period_pair': f"W{int(doc_t['wave'])}→W{int(doc_t1['wave'])}",
+                'n_terms_t': len(set_t),
+                'n_terms_t1': len(set_t1),
+                'n_intersection': len(intersection),
+                'n_union': len(union),
+                'jaccard': jaccard,
+            })
+
+    return pd.DataFrame(records)
+
+
+def compute_jaccard_yearly(df: pd.DataFrame, term_cols: list) -> pd.DataFrame:
+    """
+    Compute Jaccard similarity between consecutive documents
+    for each entity (by year). Used for prefectures and MCF.
+
+    Returns
+    -------
+    pd.DataFrame
+        One row per (entity, year_from, year_to) with Jaccard score.
+    """
+    records = []
+
+    for entity, group in df.groupby('entity'):
+        if len(group) < 2:
+            continue
+
+        group = group.sort_values('year')
+        actor = group['actor'].iloc[0]
+        docs = list(group.iterrows())
+
+        for i in range(len(docs) - 1):
+            _, doc_t = docs[i]
+            _, doc_t1 = docs[i + 1]
+
+            set_t = set(t for t in term_cols if doc_t[t] > 0)
+            set_t1 = set(t for t in term_cols if doc_t1[t] > 0)
+
+            union = set_t | set_t1
+            intersection = set_t & set_t1
+
+            jaccard = len(intersection) / len(union) if union else 0.0
+
+            year_from = int(doc_t['year'])
+            year_to = int(doc_t1['year'])
+
+            records.append({
+                'entity': entity,
+                'actor': actor,
+                'year_from': year_from,
+                'year_to': year_to,
+                'period_pair': f"{year_from}→{year_to}",
                 'n_terms_t': len(set_t),
                 'n_terms_t1': len(set_t1),
                 'n_intersection': len(intersection),
@@ -467,7 +519,7 @@ def plot_persistence_heatmap(
     Skip-wave transitions (e.g., W1→W3 for entities missing W2) are excluded.
     """
     # Only include consecutive wave transitions
-    CONSECUTIVE_PAIRS = ['W0→W1', 'W1→W2', 'W2→W3']
+    CONSECUTIVE_PAIRS = ['W1→W2', 'W2→W3']
 
     df = transitions.copy()
     df = df[df['wave_pair'].isin(CONSECUTIVE_PAIRS)]
@@ -548,7 +600,7 @@ def plot_year_persistence_heatmap(
     suffix: str = '',
 ) -> None:
     """
-    Heatmap for year-by-year transitions (for länsstyrelsen/MCF).
+    Heatmap for year-by-year transitions (for prefectures/MCF).
 
     Since there are fewer entities, uses lower thresholds.
     """
@@ -761,7 +813,11 @@ def plot_dropout_adoption_ranking(
 
 def plot_jaccard_by_actor(jaccard_df: pd.DataFrame, output_dir: Path) -> None:
     """
-    Boxplot of Jaccard similarity scores grouped by actor type.
+    Horizontal boxplot of Jaccard similarity scores grouped by actor type.
+    Actor on y-axis, Jaccard on x-axis.
+
+    Note: Municipalities use wave-based comparison, prefectures and MCF use
+    year-based comparison (combined in jaccard_df with 'period_pair' column).
     """
     if len(jaccard_df) == 0:
         return
@@ -769,24 +825,28 @@ def plot_jaccard_by_actor(jaccard_df: pd.DataFrame, output_dir: Path) -> None:
     df = jaccard_df.copy()
     df['actor_en'] = df['actor'].map(translate_actor)
 
-    fig, ax = plt.subplots(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=(10, 5))
 
     sns.boxplot(
-        data=df, x='actor_en', y='jaccard',
+        data=df, y='actor_en', x='jaccard',
         ax=ax, palette='Set1', width=0.5,
+        orient='h',
+        showfliers=False,  # Hide boxplot outliers since stripplot shows all points
     )
     sns.stripplot(
-        data=df, x='actor_en', y='jaccard',
-        ax=ax, color='black', alpha=0.3, size=4, jitter=True,
+        data=df, y='actor_en', x='jaccard',
+        ax=ax, color='black', alpha=0.4, size=5, jitter=True,
+        orient='h',
     )
 
-    ax.set_xlabel('Actor type', fontsize=12)
-    ax.set_ylabel('Jaccard similarity', fontsize=12)
+    ax.set_ylabel('Actor type', fontsize=12)
+    ax.set_xlabel('Jaccard similarity', fontsize=12)
     ax.set_title(
-        'Risk term overlap between consecutive RSAs by actor type',
-        fontsize=14, fontweight='bold'
+        'Risk term overlap between consecutive RSAs by actor type\n'
+        '(municipalities: wave-based, prefectures/MCF: year-based)',
+        fontsize=12, fontweight='bold'
     )
-    ax.set_ylim(-0.05, 1.05)
+    ax.set_xlim(-0.05, 1.05)
 
     plt.tight_layout()
     plt.savefig(output_dir / 'jaccard_by_actor.png', dpi=150, bbox_inches='tight')
@@ -796,51 +856,76 @@ def plot_jaccard_by_actor(jaccard_df: pd.DataFrame, output_dir: Path) -> None:
 
 
 def plot_actor_persistence_comparison(
-    transitions: pd.DataFrame, output_dir: Path
+    kommun_transitions: pd.DataFrame,
+    yearly_transitions: pd.DataFrame,
+    output_dir: Path
 ) -> None:
     """
-    Grouped bar chart: mean persistence rate per actor type per wave transition.
+    Horizontal boxplot: persistence rate distribution per actor type.
 
-    Only includes consecutive wave transitions (W0→W1, W1→W2, W2→W3).
+    Municipalities use wave-based transitions, prefectures/MCF use year-based.
+    Shows actual distribution rather than just means.
     """
-    CONSECUTIVE_PAIRS = ['W0→W1', 'W1→W2', 'W2→W3']
-
-    df = transitions[transitions['wave_pair'].isin(CONSECUTIVE_PAIRS)].copy()
-    present_in_t = df[df['present_from'] == 1].copy()
-
-    # Compute persistence rate per entity-wave transition, then average by actor
     entity_rates = []
-    for (entity, wave_pair), group in present_in_t.groupby(['entity', 'wave_pair']):
-        n_persist = (group['transition'] == 'persist').sum()
-        total = len(group)
-        entity_rates.append({
-            'entity': entity,
-            'actor': group['actor'].iloc[0],
-            'wave_pair': wave_pair,
-            'persistence_rate': n_persist / total if total > 0 else 0,
-        })
+
+    # Process municipality wave-based transitions
+    if len(kommun_transitions) > 0:
+        CONSECUTIVE_PAIRS = ['W1→W2', 'W2→W3']
+        df = kommun_transitions[kommun_transitions['wave_pair'].isin(CONSECUTIVE_PAIRS)].copy()
+        present_in_t = df[df['present_from'] == 1].copy()
+
+        for (entity, wave_pair), group in present_in_t.groupby(['entity', 'wave_pair']):
+            n_persist = (group['transition'] == 'persist').sum()
+            total = len(group)
+            entity_rates.append({
+                'entity': entity,
+                'actor': group['actor'].iloc[0],
+                'period': wave_pair,
+                'persistence_rate': n_persist / total if total > 0 else 0,
+            })
+
+    # Process yearly transitions for prefectures/MCF
+    if len(yearly_transitions) > 0:
+        present_in_t = yearly_transitions[yearly_transitions['present_from'] == 1].copy()
+
+        for (entity, year_pair), group in present_in_t.groupby(['entity', 'year_pair']):
+            n_persist = (group['transition'] == 'persist').sum()
+            total = len(group)
+            entity_rates.append({
+                'entity': entity,
+                'actor': group['actor'].iloc[0],
+                'period': year_pair,
+                'persistence_rate': n_persist / total if total > 0 else 0,
+            })
+
+    if not entity_rates:
+        return
 
     rates_df = pd.DataFrame(entity_rates)
     rates_df['actor_en'] = rates_df['actor'].map(translate_actor)
 
-    if len(rates_df) == 0:
-        return
+    fig, ax = plt.subplots(figsize=(10, 5))
 
-    fig, ax = plt.subplots(figsize=(10, 6))
-
-    sns.barplot(
-        data=rates_df, x='wave_pair', y='persistence_rate',
-        hue='actor_en', ax=ax, palette='Set1', alpha=0.8,
+    sns.boxplot(
+        data=rates_df, y='actor_en', x='persistence_rate',
+        ax=ax, palette='Set1', width=0.5,
+        orient='h',
+        showfliers=False,  # Hide boxplot outliers since stripplot shows all points
+    )
+    sns.stripplot(
+        data=rates_df, y='actor_en', x='persistence_rate',
+        ax=ax, color='black', alpha=0.4, size=5, jitter=True,
+        orient='h',
     )
 
-    ax.set_xlabel('Wave transition', fontsize=12)
-    ax.set_ylabel('Mean persistence rate', fontsize=12)
+    ax.set_ylabel('Actor type', fontsize=12)
+    ax.set_xlabel('Persistence rate', fontsize=12)
     ax.set_title(
-        'Mean persistence rate by actor type and wave',
-        fontsize=14, fontweight='bold'
+        'Persistence rate distribution by actor type\n'
+        '(municipalities: wave-based, prefectures/MCF: year-based)',
+        fontsize=12, fontweight='bold'
     )
-    ax.set_ylim(0, 1)
-    ax.legend(title='Actor')
+    ax.set_xlim(-0.05, 1.05)
 
     plt.tight_layout()
     plt.savefig(output_dir / 'persistence_by_actor.png', dpi=150, bbox_inches='tight')
@@ -948,7 +1033,7 @@ def main():
     parser.add_argument(
         '--output',
         type=Path,
-        default=Path('./results/persistence'),
+        default=Path('./results/01_bow_analysis/persistence'),
         help='Output directory for figures and data'
     )
 
@@ -976,6 +1061,11 @@ def main():
     print(f"\nLoading: {args.input}")
     df, term_cols = load_and_prepare(args.input)
 
+    # Filter out pre-2015 data (wave 0) - we only analyze from 2015 onwards
+    pre_filter_count = len(df)
+    df = df[df['wave'] >= 1].copy()
+    print(f"  Filtered to wave >= 1 (2015+): {pre_filter_count} -> {len(df)} documents")
+
     # Build panel
     print("\nBuilding longitudinal panel...")
     panel = build_panel(df, term_cols)
@@ -989,10 +1079,28 @@ def main():
     for t, c in transition_counts.items():
         print(f"    {t}: {c}")
 
-    # Compute Jaccard
+    # Compute Jaccard - wave-based for municipalities, year-based for others
     print("\nComputing Jaccard similarity...")
-    jaccard_df = compute_jaccard(panel, term_cols)
-    print(f"  {len(jaccard_df)} entity-pair comparisons")
+
+    # Municipalities: wave-based
+    kommun_panel = panel[panel['actor'] == 'kommun']
+    jaccard_kommun = compute_jaccard(kommun_panel, term_cols)
+    print(f"  Municipalities (wave-based): {len(jaccard_kommun)} comparisons")
+
+    # Prefectures and MCF: year-based
+    jaccard_yearly_list = []
+    for actor in ['lansstyrelse', 'MCF']:
+        actor_df = df[df['actor'] == actor]
+        if len(actor_df) >= 2:
+            actor_jaccard = compute_jaccard_yearly(actor_df, term_cols)
+            if len(actor_jaccard) > 0:
+                jaccard_yearly_list.append(actor_jaccard)
+                print(f"  {translate_actor(actor)} (year-based): {len(actor_jaccard)} comparisons")
+
+    # Combine all Jaccard scores
+    jaccard_parts = [jaccard_kommun] + jaccard_yearly_list
+    jaccard_df = pd.concat([j for j in jaccard_parts if len(j) > 0], ignore_index=True)
+    print(f"  Total: {len(jaccard_df)} entity-pair comparisons")
     print(f"  Mean Jaccard: {jaccard_df['jaccard'].mean():.3f}")
 
     # Aggregate persistence by term
@@ -1059,9 +1167,10 @@ def main():
     else:
         print("  No municipalities with both W1 and W3 documents")
 
-    # Year-by-year transitions for länsstyrelsen and MCF
-    print("\nComputing year-by-year transitions for länsstyrelsen and MCF...")
-    for actor in ['länsstyrelse', 'MCF']:
+    # Year-by-year transitions for prefectures and MCF
+    print("\nComputing year-by-year transitions for prefectures and MCF...")
+    yearly_transitions_list = []
+    for actor in ['lansstyrelse', 'MCF']:
         actor_df = df[df['actor'] == actor]
         if len(actor_df) < 2:
             print(f"  Skipping {actor}: not enough documents")
@@ -1072,6 +1181,7 @@ def main():
             print(f"  Skipping {actor}: no year transitions computed")
             continue
 
+        yearly_transitions_list.append(year_trans)
         n_entities = year_trans['entity'].nunique()
         n_pairs = year_trans['year_pair'].nunique()
         print(f"  {translate_actor(actor)}: {n_entities} entities, {n_pairs} year-pairs")
@@ -1088,14 +1198,18 @@ def main():
             index=False, encoding='utf-8'
         )
 
+    # Combine yearly transitions for comparison plot
+    yearly_transitions = pd.concat(yearly_transitions_list, ignore_index=True) if yearly_transitions_list else pd.DataFrame()
+
     # Dropout and adoption rankings
     plot_dropout_adoption_ranking(transitions, args.output)
 
     # Jaccard by actor
     plot_jaccard_by_actor(jaccard_df, args.output)
 
-    # Actor persistence comparison
-    plot_actor_persistence_comparison(transitions, args.output)
+    # Actor persistence comparison (municipalities wave-based, others year-based)
+    kommun_transitions = transitions[transitions['actor'] == 'kommun']
+    plot_actor_persistence_comparison(kommun_transitions, yearly_transitions, args.output)
 
     # Report
     print("\nGenerating report...")

@@ -8,6 +8,14 @@ Designed to:
 2. Focus on actual risks (not general concepts like 'säkerhet')
 3. Include all specific risk terms from Swedish RSA documents
 
+Sources:
+    Risk categories derived from official taxonomies. See docs/risk_dictionary_sources.bib:
+    - MSB Riskkatalog (msb_riskkatalog_2025)
+    - MSB Nationell risk- och sårbarhetsbedömning 2025 (msb_nrsb_2025)
+    - EU Civil Protection Knowledge Network (eu_natural_disaster_risks_2025, eu_human_induced_risks_2025)
+    - EU Global Threats Programme (eu_global_threats_2025)
+    - EU CBRN Risk Mitigation (eu_cbrn_2025)
+
 Usage:
     from risk_dictionary_individual import RISK_DICTIONARY_INDIVIDUAL
 
@@ -16,7 +24,7 @@ Usage:
         # variants includes the canonical form itself
 
 Author: Swedish Risk Analysis Text-as-Data Project
-Date: 2026-03-18
+Date: 2026-03-25
 """
 
 # =============================================================================
@@ -123,10 +131,17 @@ RISK_DICTIONARY_INDIVIDUAL = {
         'våldsbejakande extremism eller vansinnesdåd',
     ],
     'sabotage': ['sabotage'],
-    'spionage': ['spionage'],
+    'spionage': [
+        'spionage', 'underrättelseverksamhet', 'främmande underrättelsetjänst',
+        'utländsk underrättelseverksamhet',
+    ],
     'organiserad brottslighet': ['organiserad brottslighet', 'kriminalitet'],
     'vandalism': ['vandalism', 'skadegörelse', 'inbrott'],
-    'desinformation': ['desinformation', 'påverkanskampanj', 'påverkanskampanjer'],
+    'desinformation': [
+        'desinformation', 'påverkanskampanj', 'påverkanskampanjer',
+        'informationspåverkan', 'påverkansoperation', 'påverkansoperationer',
+        'falsk information', 'vilseledande information',
+    ],
     'hybridhot': ['hybrid hot', 'hybridhot'],
     'väpnat angrepp': ['väpnat angrepp'],
     'väpnat angrepp i närområdet': ['väpnat angrepp i närområdet'],
@@ -164,27 +179,21 @@ RISK_DICTIONARY_INDIVIDUAL = {
     'elavbrott': [
         'elavbrott', 'strömavbrott', 'kraftavbrott',
         'effektbrist', 'elbrist',
+        'elförsörjning', 'kraftförsörjning', 'energiförsörjning',
     ],
-    'elförsörjning': ['elförsörjning', 'kraftförsörjning', 'energiförsörjning'],
     'fjärrvärmebrott': ['fjärrvärmebrott', 'fjärrvärmeavbrott'],
     'vattenförsörjning': [
         'vattenförsörjning', 'dricksvattenförsörjning', 'dricksvatten',
         'vattenläcka', 'vattenläckor',
     ],
     'avloppsbrott': ['avloppsbrott', 'avloppssystem', 'avloppshaveri'],
-    'IT-avbrott': [
+    'IT- och teleavbrott': [
         'IT-bortfall', 'it-bortfall', 'IT-avbrott', 'it-avbrott',
         'dataförlust', 'systemfel', 'nätverksavbrott',
-    ],
-    'teleavbrott': [
         'kommunikationsavbrott', 'teleavbrott', 'telebrott',
         'telenätavbrott', 'mobilnätsavbrott',
-    ],
-    'it- och teleavbrott': [
         'it- och teleavbrott', 'IT- och teleavbrott',
         'it/teleavbrott', 'IT/teleavbrott',
-    ],
-    'elektroniska kommunikationer': [
         'elektroniska kommunikationer', 'elektronisk kommunikation',
     ],
     'transportavbrott': [
@@ -194,8 +203,8 @@ RISK_DICTIONARY_INDIVIDUAL = {
     'transporter': ['transporter'],
     'drivmedelsbrist': [
         'drivmedelsbrist', 'drivsmedelsbrist', 'bränslebrist',
+        'drivmedel', 'drivmedelsförsörjning',
     ],
-    'drivmedel': ['drivmedel', 'drivmedelsförsörjning'],
     'livsmedelsförsörjning': [
         'livsmedelsförsörjning', 'livsmedelsbrist', 'matförsörjning',
         'livsmedelsförsörjningen',
@@ -236,6 +245,103 @@ RISK_DICTIONARY_INDIVIDUAL = {
     'ekonomisk kris': ['ekonomisk kris', 'finanskris', 'recession', 'lågkonjuktur', 'ekonomisk nedgång'],
     'arbetslöshet': ['arbetslöshet'],
     'inflation': ['inflation'],
+
+    # -------------------------------------------------------------------------
+    # GEOPHYSICAL (EU Civil Protection taxonomy)
+    # Source: eu_natural_disaster_risks_2025
+    # -------------------------------------------------------------------------
+    'jordbävning': ['jordbävning', 'jordbävningar', 'jordskalv'],
+    'tsunami': ['tsunami', 'tsunamier', 'flodvåg', 'flodvågor'],
+    'vulkanutbrott': ['vulkanutbrott', 'vulkanisk aktivitet', 'vulkanaska'],
+
+    # -------------------------------------------------------------------------
+    # CBRN - CHEMICAL, BIOLOGICAL, RADIOLOGICAL, NUCLEAR
+    # Sources: eu_cbrn_2025, eu_human_induced_risks_2025
+    # -------------------------------------------------------------------------
+    'kemisk olycka': [
+        'kemisk olycka', 'kemiska olyckor',
+        'kemiskt utsläpp', 'giftiga ämnen', 'giftutsläpp',
+    ],
+    'biologisk olycka': [
+        'biologisk olycka', 'biologiska olyckor',
+        'biologiskt utsläpp', 'smittämnen',
+    ],
+    'radiologisk olycka': [
+        'radiologisk olycka', 'radiologiska olyckor',
+        'strålningsolycka', 'radioaktivt utsläpp', 'strålning',
+    ],
+    'cbrn-händelse': [
+        'cbrn', 'cbrn-händelse', 'cbrne',
+        'kemiska, biologiska, radiologiska och nukleära hot',
+    ],
+
+    # -------------------------------------------------------------------------
+    # ARMED CONFLICT / MILITARY THREATS
+    # Source: msb_nrsb_2025
+    # -------------------------------------------------------------------------
+    'fjärrangrepp': [
+        'fjärrangrepp', 'fjärrvapen', 'robotangrepp',
+        'missilangrepp', 'drönarangrepp',
+    ],
+    'strid på svenskt territorium': [
+        'strid på svenskt territorium', 'markstrid',
+        'invasion', 'ockupation',
+    ],
+    'blockad': ['blockad', 'sjöblockad', 'handelsblockad'],
+    'militär konflikt i närområdet': [
+        'militär konflikt i närområdet', 'krig i närområdet',
+        'regional konflikt', 'konflikt i östersjöområdet',
+    ],
+
+    # -------------------------------------------------------------------------
+    # ANIMAL AND PLANT DISEASES
+    # Source: eu_natural_disaster_risks_2025
+    # -------------------------------------------------------------------------
+    'växtsjukdom': [
+        'växtsjukdom', 'växtsjukdomar', 'växtskadegörare',
+        'skadeinsekter', 'svampsjukdomar',
+    ],
+    'invasiva arter': ['invasiva arter', 'främmande arter', 'invasiv art'],
+
+    # -------------------------------------------------------------------------
+    # ORGANIZED CRIME / SOCIAL THREATS
+    # Source: eu_global_threats_2025
+    # -------------------------------------------------------------------------
+    'människohandel': ['människohandel', 'trafficking'],
+    'narkotikabrottslighet': [
+        'narkotikabrottslighet', 'narkotikahandel',
+        'droghandel', 'narkotika',
+    ],
+    'gängkriminalitet': [
+        'gängkriminalitet', 'gängvåld', 'gängkonflikter',
+        'skjutningar', 'sprängningar',
+    ],
+
+    # -------------------------------------------------------------------------
+    # SUPPLY CHAIN / CRITICAL SUPPLIES
+    # Sources: msb_nrsb_2025, msb_riskkatalog_2025
+    # -------------------------------------------------------------------------
+    'läkemedelsbrist': [
+        'läkemedelsbrist', 'läkemedelsförsörjning',
+        'brist på läkemedel', 'medicinbrist',
+    ],
+    'medicinteknisk brist': [
+        'medicinteknisk brist', 'brist på medicinteknisk utrustning',
+        'sjukvårdsmaterial', 'skyddsutrustning',
+    ],
+    'råvarubrist': ['råvarubrist', 'materialbrist', 'komponentbrist'],
+
+    # -------------------------------------------------------------------------
+    # CLIMATE-SPECIFIC LONG-TERM RISKS
+    # Sources: eu_natural_disaster_risks_2025, msb_nrsb_2025
+    # -------------------------------------------------------------------------
+    'havsnivåhöjning': ['havsnivåhöjning', 'stigande havsnivåer', 'havsnivå'],
+    'försurning': ['försurning', 'havsförsurning'],
+    'grundvattenbrist': [
+        'grundvattenbrist', 'sjunkande grundvattennivåer',
+        'grundvattennivå', 'vattenbrist',
+    ],
+
 }
 
 

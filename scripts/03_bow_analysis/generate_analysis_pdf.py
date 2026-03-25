@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from PIL import Image
 import numpy as np
+import fitz  # PyMuPDF for high-quality PDF rendering
 
 
 # ============================================================================
@@ -24,8 +25,13 @@ import numpy as np
 # ============================================================================
 
 RESULTS_DIR = Path(__file__).parent.parent.parent / "results"
-PERSISTENCE_DIR = RESULTS_DIR / "persistence"
-CLUSTERING_DIR = RESULTS_DIR / "clustering"
+BOW_DIR = RESULTS_DIR / "01_bow_analysis"
+PERSISTENCE_DIR = BOW_DIR / "persistence"
+CLUSTERING_DIR = BOW_DIR / "clustering"
+PREVALENCE_DIR = BOW_DIR / "prevalence"
+DIFFUSION_DIR = BOW_DIR / "diffusion"
+CONTEXT_DIR = BOW_DIR / "context"
+ALLVARLIGA_DIR = BOW_DIR / "allvarliga_storningar"
 DEFAULT_OUTPUT = RESULTS_DIR / "risk_mapping_analysis_outputs.pdf"
 
 # Wave labels for clustering outputs
@@ -80,12 +86,24 @@ def add_text_page(pdf: PdfPages, text: str, title: str = "") -> None:
 
 
 def add_image_page(pdf: PdfPages, image_path: Path, title: str = "") -> None:
-    """Add an image as a full page to the PDF."""
-    if not image_path.exists():
+    """Add an image as a full page to the PDF. Prefers PDF source for vector quality."""
+    # Try PDF version first for vector quality
+    pdf_path = image_path.with_suffix('.pdf')
+    if pdf_path.exists():
+        # Render PDF at high resolution using PyMuPDF
+        doc = fitz.open(pdf_path)
+        page = doc[0]
+        # Render at 3x zoom for high quality
+        mat = fitz.Matrix(3, 3)
+        pix = page.get_pixmap(matrix=mat)
+        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+        doc.close()
+    elif image_path.exists():
+        img = Image.open(image_path)
+    else:
         print(f"  Warning: {image_path} not found, skipping")
         return
 
-    img = Image.open(image_path)
     img_array = np.array(img)
 
     # Calculate figure size to fit image while maintaining aspect ratio
@@ -110,7 +128,7 @@ def add_image_page(pdf: PdfPages, image_path: Path, title: str = "") -> None:
     ax.imshow(img_array)
     ax.axis('off')
 
-    pdf.savefig(fig, bbox_inches='tight', dpi=150)
+    pdf.savefig(fig, bbox_inches='tight', dpi=300)
     plt.close(fig)
 
 
@@ -138,7 +156,7 @@ def generate_pdf(output_path: Path) -> None:
         add_title_page(
             pdf,
             "Risk Mapping Analysis",
-            "Persistence, Diffusion & Clustering\n\nOutput Summary"
+            "Persistence, Diffusion, Clustering & Qualification\n\nOutput Summary"
         )
 
         # ====================================================================
@@ -226,6 +244,103 @@ def generate_pdf(output_path: Path) -> None:
             add_image_page(pdf, img_path, title)
 
         # ====================================================================
+        # PART 3: RISK PREVALENCE ANALYSIS
+        # ====================================================================
+        add_title_page(pdf, "PART 3: RISK PREVALENCE ANALYSIS")
+
+        # Prevalence bar chart
+        prevalence_images = [
+            ("risk_prevalence_barchart.png", "Top 30 Risk Terms by Mention Count"),
+        ]
+
+        for filename, title in prevalence_images:
+            img_path = PREVALENCE_DIR / filename
+            print(f"  Adding: {filename}")
+            add_image_page(pdf, img_path, title)
+
+        # ====================================================================
+        # PART 4: RISK DIFFUSION ANALYSIS
+        # ====================================================================
+        add_title_page(pdf, "PART 4: RISK DIFFUSION ANALYSIS")
+
+        # Diffusion report text
+        report_text = read_report(DIFFUSION_DIR / "diffusion_report.txt")
+        lines = report_text.split('\n')
+        if lines and '===' in lines[0]:
+            lines = lines[3:]  # Skip header
+        # Split into pages
+        chunk_size = 55
+        for i in range(0, len(lines), chunk_size):
+            chunk = '\n'.join(lines[i:i+chunk_size])
+            page_title = "Diffusion Analysis Summary" if i == 0 else "Diffusion Analysis Summary (cont.)"
+            add_text_page(pdf, chunk, page_title)
+
+        # Diffusion visualizations
+        diffusion_images = [
+            ("adoption_curves.png", "Adoption Curves — Selected Risk Terms"),
+            ("adoption_heatmap.png", "First Adoption Year Heatmap"),
+            ("gini_coefficients.png", "Gini Coefficients — Synchronicity of Adoption"),
+            ("lead_lag_MCF.png", "Lead-Lag Analysis — MCF vs Municipalities"),
+        ]
+
+        for filename, title in diffusion_images:
+            img_path = DIFFUSION_DIR / filename
+            print(f"  Adding: {filename}")
+            add_image_page(pdf, img_path, title)
+
+        # ====================================================================
+        # PART 5: ALLVARLIGA STÖRNINGAR ANALYSIS
+        # ====================================================================
+        add_title_page(pdf, "PART 5: ALLVARLIGA STÖRNINGAR ANALYSIS",
+                       "Risk terms in 'serious disruption' contexts")
+
+        # Allvarliga störningar visualizations
+        storningar_images = [
+            ("allvarliga_storningar_terms.png", "Top Individual Risk Terms in Disruption Contexts"),
+            ("allvarliga_storningar_overall.png", "Risk Categories in Disruption Paragraphs"),
+            ("allvarliga_storningar_over_time.png", "Risk Categories Over Time (Disruption Contexts)"),
+            ("allvarliga_storningar_normalized.png", "Risk Category Share Over Time (Normalized)"),
+            ("allvarliga_storningar_normalized_by_actor.png", "Normalized Risk Mentions by Actor Over Time"),
+            ("allvarliga_storningar_by_actor.png", "Risk Categories by Actor Type (Disruption Contexts)"),
+        ]
+
+        for filename, title in storningar_images:
+            img_path = ALLVARLIGA_DIR / filename
+            print(f"  Adding: {filename}")
+            add_image_page(pdf, img_path, title)
+
+        # ====================================================================
+        # PART 6: RISK CONTEXT ANALYSIS (Qualifications)
+        # ====================================================================
+        add_title_page(pdf, "PART 6: RISK QUALIFICATION ANALYSIS",
+                       "Sannolikhet, Konsekvens, Risk — 5-Level Scale")
+
+        # Context report text
+        report_text = read_report(CONTEXT_DIR / "risk_context_analysis_report.txt")
+        lines = report_text.split('\n')
+        if lines and '===' in lines[0]:
+            lines = lines[3:]  # Skip header
+        # Split into pages
+        chunk_size = 50
+        for i in range(0, len(lines), chunk_size):
+            chunk = '\n'.join(lines[i:i+chunk_size])
+            page_title = "Risk Qualification Summary" if i == 0 else "Risk Qualification Summary (cont.)"
+            add_text_page(pdf, chunk, page_title)
+
+        # Context visualizations
+        context_images = [
+            ("qualification_distribution.png", "Qualification Distribution by Concept (5-Level Scale)"),
+            ("qualification_by_actor.png", "Qualification Distribution by Actor Type"),
+            ("qualification_over_time.png", "Qualification Levels Over Time"),
+            ("high_severity_over_time.png", "High Severity Share Over Time by Actor"),
+        ]
+
+        for filename, title in context_images:
+            img_path = CONTEXT_DIR / filename
+            print(f"  Adding: {filename}")
+            add_image_page(pdf, img_path, title)
+
+        # ====================================================================
         # Metadata page
         # ====================================================================
         metadata = f"""
@@ -234,6 +349,10 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 Source directories:
   Persistence: {PERSISTENCE_DIR}
   Clustering: {CLUSTERING_DIR}
+  Prevalence: {PREVALENCE_DIR}
+  Diffusion: {DIFFUSION_DIR}
+  Allvarliga störningar: {ALLVARLIGA_DIR}
+  Risk Context: {CONTEXT_DIR}
 
 This PDF was automatically generated by:
   scripts/03_bow_analysis/generate_analysis_pdf.py

@@ -221,58 +221,58 @@ class DocumentPreviewGenerator:
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Document Preview - Quality Inspection</title>
     <style>
-        body {
+        body {{
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
             margin: 0;
             padding: 20px;
             background-color: #f5f5f5;
-        }
-        .container {
+        }}
+        .container {{
             max-width: 1400px;
             margin: 0 auto;
             background-color: white;
             padding: 30px;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        h1 {
+        }}
+        h1 {{
             color: #333;
             border-bottom: 3px solid #4CAF50;
             padding-bottom: 10px;
-        }
-        .stats {
+        }}
+        .stats {{
             background-color: #f0f0f0;
             padding: 15px;
             border-radius: 5px;
             margin: 20px 0;
-        }
-        .stats p {
+        }}
+        .stats p {{
             margin: 5px 0;
-        }
-        table {
+        }}
+        table {{
             width: 100%;
             border-collapse: collapse;
             margin-top: 20px;
-        }
-        thead {
+        }}
+        thead {{
             background-color: #4CAF50;
             color: white;
-        }
-        th, td {
+        }}
+        th, td {{
             padding: 12px;
             text-align: left;
             border-bottom: 1px solid #ddd;
-        }
-        th {
+        }}
+        th {{
             font-weight: 600;
             position: sticky;
             top: 0;
             background-color: #4CAF50;
-        }
-        tbody tr:hover {
+        }}
+        tbody tr:hover {{
             background-color: #f5f5f5;
-        }
-        .preview-text {
+        }}
+        .preview-text {{
             font-family: 'Courier New', monospace;
             font-size: 12px;
             white-space: pre-wrap;
@@ -280,19 +280,19 @@ class DocumentPreviewGenerator:
             padding: 10px;
             border-left: 3px solid #4CAF50;
             max-width: 800px;
-        }
-        .truncated {
+        }}
+        .truncated {{
             color: #ff9800;
             font-weight: bold;
-        }
-        .complete {
+        }}
+        .complete {{
             color: #4CAF50;
             font-weight: bold;
-        }
-        .metadata {
+        }}
+        .metadata {{
             color: #666;
             font-size: 0.9em;
-        }
+        }}
     </style>
 </head>
 <body>

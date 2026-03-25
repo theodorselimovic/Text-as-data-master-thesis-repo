@@ -41,11 +41,11 @@ Usage:
         --output data/processed/bow_corpus_stemmed.parquet \\
         --keep-stopwords
 
-    # Adjust max n-gram size (default: 3 for trigrams)
+    # Adjust max n-gram size (default: 5 for 5-grams)
     python preprocessing_bow.py \\
         --input data/processed/bert_corpus.parquet \\
         --output data/processed/bow_corpus_stemmed.parquet \\
-        --max-ngram 2
+        --max-ngram 3
 
 Author: Swedish Risk Analysis Text-as-Data Project
 Date: 2026-03-17
@@ -142,7 +142,7 @@ class BoWPreprocessor:
         stopwords: Optional[Set[str]] = None,
         keep_stopwords: bool = False,
         min_token_length: int = 2,
-        max_ngram: int = 3
+        max_ngram: int = 5
     ):
         """
         Initialize the preprocessor.
@@ -156,7 +156,7 @@ class BoWPreprocessor:
         min_token_length : int
             Minimum token length to keep (default: 2)
         max_ngram : int
-            Maximum n-gram size (default: 3 for trigrams)
+            Maximum n-gram size (default: 5 for 5-grams, covers most multi-word dict terms)
         """
         self.stopwords = stopwords if stopwords is not None else SWEDISH_STOPWORDS
         self.keep_stopwords = keep_stopwords
@@ -398,8 +398,8 @@ def main():
     parser.add_argument(
         '--max-ngram',
         type=int,
-        default=3,
-        help='Maximum n-gram size (default: 3 for trigrams)'
+        default=5,
+        help='Maximum n-gram size (default: 5, covers most multi-word dictionary terms)'
     )
 
     parser.add_argument(

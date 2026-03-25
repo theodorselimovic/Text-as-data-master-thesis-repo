@@ -56,6 +56,9 @@ Desktop.ini
 
 # Data files (too large for git, regenerable)
 *.parquet
+*.csv
+*.json
+*.html
 *.npy
 *.h5
 *.hdf5

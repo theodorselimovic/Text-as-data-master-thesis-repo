@@ -109,6 +109,16 @@ More concretely:
 - RSA filename pattern: `RSA [Municipality] [Year] [Maskad].pdf`
 - When measuring mentions, especially when creating graphs per actor, mentions should be averaged per document, as otherwise it simply reflects the number of documents.
 
+## Actor Names and Colors
+
+Use these **English names** and **hex colors** consistently across all visualizations:
+
+| Internal name | English display name | Color (hex) |
+|---------------|---------------------|-------------|
+| `kommun` | Municipality | `#e41a1c` (red) |
+| `lansstyrelse` | Prefecture | `#377eb8` (blue) |
+| `MCF` | MSB | `#4daf4a` (green) |
+
 ## Git & Data Policy
 
 - Large files (parquet, PDFs, `.bin` models, results) are gitignored

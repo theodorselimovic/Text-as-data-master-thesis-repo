@@ -19,8 +19,8 @@ from pathlib import Path
 # CONFIGURATION
 # =============================================================================
 
-INPUT_PATH = Path("results/ner/entities_by_document.csv")
-OUTPUT_DIR = Path("results/ner/visualizations")
+INPUT_PATH = Path("results/02_bert_analysis/ner/entities_by_document.csv")
+OUTPUT_DIR = Path("results/02_bert_analysis/ner/visualizations")
 
 # Wave mapping
 def year_to_wave(year: int) -> int:

@@ -34,23 +34,23 @@ Output Format:
 Usage:
     # Train (with combined Excel file containing train/test split)
     python mechanism_classifier.py --mode train \\
-        --data results/sampling/sample_full.xlsx \\
-        --output results/bert_classification/ \\
+        --data results/00_data_preparation/sampling/sample_full.xlsx \\
+        --output results/02_bert_analysis/classification/ \\
         --model-dir models/mechanism_classifier/ \\
         --epochs 5 --learning-rate 2e-5
 
     # Evaluate
     python mechanism_classifier.py --mode evaluate \\
-        --data results/sampling/sample_full.xlsx \\
+        --data results/00_data_preparation/sampling/sample_full.xlsx \\
         --model-dir models/mechanism_classifier/ \\
-        --output results/bert_classification/ \\
+        --output results/02_bert_analysis/classification/ \\
         --calibrate-thresholds
 
     # Predict on full corpus
     python mechanism_classifier.py --mode predict \\
         --input data/processed/bert_corpus_filtered.parquet \\
         --model-dir models/mechanism_classifier/ \\
-        --output results/bert_classification/
+        --output results/02_bert_analysis/classification/
 
 Requirements:
     pip install transformers torch pandas pyarrow scikit-learn openpyxl
@@ -1577,23 +1577,23 @@ Mechanisms:
 Examples:
     # Train model (using Excel file with train/test split column)
     python mechanism_classifier.py --mode train \\
-        --data results/sampling/sample_full.xlsx \\
-        --output results/bert_classification/ \\
+        --data results/00_data_preparation/sampling/sample_full.xlsx \\
+        --output results/02_bert_analysis/classification/ \\
         --model-dir models/mechanism_classifier/ \\
         --epochs 5 --learning-rate 2e-5
 
     # Evaluate model
     python mechanism_classifier.py --mode evaluate \\
-        --data results/sampling/sample_full.xlsx \\
+        --data results/00_data_preparation/sampling/sample_full.xlsx \\
         --model-dir models/mechanism_classifier/ \\
-        --output results/bert_classification/ \\
+        --output results/02_bert_analysis/classification/ \\
         --calibrate-thresholds
 
     # Predict on corpus
     python mechanism_classifier.py --mode predict \\
         --input data/processed/bert_corpus_filtered.parquet \\
         --model-dir models/mechanism_classifier/ \\
-        --output results/bert_classification/
+        --output results/02_bert_analysis/classification/
 
 Model:
     KBLab/bert-base-swedish-cased (Royal Library of Sweden)
@@ -1634,8 +1634,8 @@ Model:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("results/bert_classification"),
-        help="Output directory (default: results/bert_classification/)",
+        default=Path("results/02_bert_analysis/classification"),
+        help="Output directory (default: results/02_bert_analysis/classification/)",
     )
     parser.add_argument(
         "--model-dir",

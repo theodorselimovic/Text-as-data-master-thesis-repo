@@ -752,12 +752,13 @@ def save_results(
         merge_with: Path to existing parquet file to merge with
     """
     # 1. Save successful extractions in preprocessing-compatible format
-    # Column names: 'file', 'text', and optionally 'actor'
+    # Column names: 'file', 'text', 'method', and optionally 'actor'
     successful = [r for r in results if r.success]
     if successful:
         df_new = pd.DataFrame({
             'file': [r.filename for r in successful],
-            'text': [r.text for r in successful]
+            'text': [r.text for r in successful],
+            'method': [r.method for r in successful]
         })
 
         # Add actor column if specified
@@ -775,8 +776,22 @@ def save_results(
                     print(f"  Warning: Existing data has no 'actor' column, adding 'unknown'")
                     df_existing['actor'] = 'unknown'
 
-                df_readtext = pd.concat([df_existing, df_new], ignore_index=True)
-                print(f"✓ Merged: {len(df_existing)} existing + {len(df_new)} new = {len(df_readtext)} total")
+                # Ensure method column exists in both
+                if 'method' not in df_existing.columns:
+                    print(f"  Warning: Existing data has no 'method' column, adding 'unknown'")
+                    df_existing['method'] = 'unknown'
+
+                df_merged = pd.concat([df_existing, df_new], ignore_index=True)
+
+                # Deduplicate by file, keeping the last (newest) entry
+                n_before = len(df_merged)
+                df_readtext = df_merged.drop_duplicates(subset=['file'], keep='last')
+                n_dups = n_before - len(df_readtext)
+
+                n_new_unique = len(df_new) - n_dups
+                print(f"✓ Merged: {len(df_existing)} existing + {n_new_unique} new = {len(df_readtext)} total")
+                if n_dups > 0:
+                    print(f"  ({n_dups} duplicates replaced with updated extractions)")
             except Exception as e:
                 print(f"  Warning: Could not merge with {merge_with}: {e}")
                 df_readtext = df_new

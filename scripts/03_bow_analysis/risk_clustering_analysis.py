@@ -23,12 +23,12 @@ Output: elbow plots, dendrograms, PCA scatter, centroid heatmaps,
 
 Usage:
     python risk_clustering_analysis.py \\
-        --input results/term_document_matrix/category_document_matrix.csv \\
-        --output results/clustering/
+        --input results/01_bow_analysis/term_matrices/category_document_matrix.csv \\
+        --output results/01_bow_analysis/clustering/
 
     python risk_clustering_analysis.py \\
-        --input results/term_document_matrix/category_document_matrix.csv \\
-        --output results/clustering/ \\
+        --input results/01_bow_analysis/term_matrices/category_document_matrix.csv \\
+        --output results/01_bow_analysis/clustering/ \\
         --waves 0 1 2 3 --verbose
 
 Requirements:
@@ -60,13 +60,15 @@ METADATA_COLS = ['file', 'actor', 'entity', 'year', 'wave', 'total_risk_mentions
 
 ACTOR_TRANSLATIONS = {
     'kommun': 'Municipality',
-    'länsstyrelse': 'Prefecture',
+    'lansstyrelse': 'Prefecture',
+    'länsstyrelse': 'Prefecture',  # Handle both spellings
     'MCF': 'MCF',
 }
 
 ACTOR_MARKERS = {
     'kommun': 'o',
-    'länsstyrelse': 's',
+    'lansstyrelse': 's',
+    'länsstyrelse': 's',  # Handle both spellings
     'MCF': '^',
 }
 
@@ -274,7 +276,7 @@ def characterise_clusters(
             'cluster': cluster_id,
             'size': len(cluster_data),
             'n_kommun': (cluster_data['actor'] == 'kommun').sum(),
-            'n_lansstyrelse': (cluster_data['actor'] == 'länsstyrelse').sum(),
+            'n_lansstyrelse': (cluster_data['actor'].isin(['lansstyrelse', 'länsstyrelse'])).sum(),
             'n_MCF': (cluster_data['actor'] == 'MCF').sum(),
         }
 
@@ -487,7 +489,9 @@ def plot_actor_distribution(
     data.index = [f"Cluster {int(c)}" for c in cluster_info['cluster']]
 
     fig, ax = plt.subplots(figsize=(8, 5))
-    data.plot(kind='bar', stacked=True, ax=ax, alpha=0.8, color=sns.color_palette("Set1", 3))
+    # Standard colors: Municipality=red, Prefecture=blue, MCF=green
+    actor_colors = ['#e41a1c', '#377eb8', '#4daf4a']
+    data.plot(kind='bar', stacked=True, ax=ax, alpha=0.8, color=actor_colors)
 
     ax.set_xlabel('Cluster', fontsize=12)
     ax.set_ylabel('Number of entities', fontsize=12)
