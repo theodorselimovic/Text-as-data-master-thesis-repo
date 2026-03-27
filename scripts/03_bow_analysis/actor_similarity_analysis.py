@@ -210,11 +210,15 @@ def compute_actor_pair_similarities(
     """
     Compute mean similarity for each actor pair.
 
+    Excludes within-entity pairs to avoid inflating similarity scores
+    (e.g., Stockholm 2018 vs Stockholm 2020 would be artificially high).
+
     Returns
     -------
     pd.DataFrame with columns: actor1, actor2, mean_similarity, n_pairs
     """
     actors = df['actor'].values
+    entities = df['entity'].values
     unique_actors = sorted(df['actor'].unique())
 
     records = []
@@ -223,13 +227,16 @@ def compute_actor_pair_similarities(
             mask1 = actors == a1
             mask2 = actors == a2
 
-            # Get similarities between all pairs
+            # Get similarities between all pairs, excluding within-entity
             sims = []
             idx1 = np.where(mask1)[0]
             idx2 = np.where(mask2)[0]
 
             for i in idx1:
                 for j in idx2:
+                    # Skip within-entity pairs
+                    if entities[i] == entities[j]:
+                        continue
                     if i < j:
                         sims.append(sim_matrix[i, j])
                     elif i > j:

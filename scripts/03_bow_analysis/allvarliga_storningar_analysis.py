@@ -2,9 +2,9 @@
 """
 Allvarliga Störningar Risk Analysis (Stemmed Token-Based)
 
-Analyzes which risk categories co-occur with "allvarliga störningar" (serious
-disruptions) phrases in RSA documents. This reveals how different actors frame
-risks in terms of their potential to cause operational disruptions.
+Analyzes which individual risks co-occur with serious disruption/consequence
+phrases in RSA documents. This reveals how different actors frame risks in
+terms of their potential to cause operational disruptions.
 
 Uses pre-stemmed corpus for fast token matching (consistent with other BOW scripts).
 
@@ -12,9 +12,9 @@ Input:
     data/processed/bow_corpus_stemmed.parquet (sentence-level with tokens)
 
 Output:
-    results/01_bow_analysis/allvarliga_storningar/allvarliga_storningar_risks.csv
-    results/01_bow_analysis/allvarliga_storningar/allvarliga_storningar_by_actor.csv
-    results/01_bow_analysis/allvarliga_storningar/allvarliga_storningar_by_wave.csv
+    results/01_bow_analysis/allvarliga_storningar/allvarliga_storningar_terms.csv
+    results/01_bow_analysis/allvarliga_storningar/allvarliga_storningar_terms_by_actor.csv
+    results/01_bow_analysis/allvarliga_storningar/allvarliga_storningar_terms_by_wave.csv
     results/01_bow_analysis/allvarliga_storningar/allvarliga_storningar_sample.csv
 
 Usage:
@@ -23,7 +23,7 @@ Usage:
     python allvarliga_storningar_analysis.py --verbose --sample-size 50
 
 Requirements:
-    pip install pandas pyarrow nltk
+    pip install pandas pyarrow nltk matplotlib seaborn
 """
 
 import argparse
@@ -31,16 +31,15 @@ import logging
 import sys
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Dict, Set, Optional
 
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from nltk.stem.snowball import SnowballStemmer
 
-# Import risk dictionaries
+# Import risk dictionary
 from risk_dictionary_individual import RISK_DICTIONARY_INDIVIDUAL
-from risk_dictionary_categories import RISK_DICTIONARY_CATEGORIES as RISK_DICTIONARY
 
 # Import stopwords from preprocessing
 sys.path.insert(0, str(Path(__file__).parent.parent / '02_preprocessing'))
@@ -74,17 +73,13 @@ def stem_phrase(phrase: str, stopwords: Set[str]) -> str:
     return '_'.join(stemmed) if stemmed else ''
 
 
-def stem_term(term: str) -> str:
-    """Stem a single term."""
-    return STEMMER.stem(term.lower())
-
-
 # =============================================================================
 # DISRUPTION PATTERNS (STEMMED)
 # =============================================================================
 
-# Phrases indicating "serious disruptions" to actor's operations
+# Phrases indicating serious disruptions/consequences to institutional operations
 DISRUPTION_PHRASES_RAW = [
+    # Core störning variants
     'allvarliga störningar',
     'allvarlig störning',
     'störningar i verksamheten',
@@ -96,6 +91,23 @@ DISRUPTION_PHRASES_RAW = [
     'samhällsstörningar',
     'allvarlig samhällsstörning',
     'allvarliga samhällsstörningar',
+
+    # Consequences
+    'allvarliga konsekvenser',
+    'allvarlig konsekvens',
+    'svåra konsekvenser',
+    'svår konsekvens',
+    'omfattande konsekvenser',
+    'omfattande skador',
+    'stora skador',
+    'allvarliga följder',
+
+    # Functional failures
+    'driftavbrott',
+    'driftstörning',
+    'driftstörningar',
+    'funktionsbortfall',
+    'avbrott i verksamheten',
 ]
 
 
@@ -113,20 +125,7 @@ def build_stemmed_disruption_terms(stopwords: Set[str]) -> Set[str]:
 # STEMMED RISK DICTIONARY
 # =============================================================================
 
-def build_stemmed_category_dict(stopwords: Set[str]) -> Dict[str, Set[str]]:
-    """Build stemmed version of category dictionary."""
-    stemmed_dict = {}
-    for category, terms in RISK_DICTIONARY.items():
-        stemmed_terms = set()
-        for term in terms:
-            stemmed = stem_phrase(term, stopwords)
-            if stemmed:
-                stemmed_terms.add(stemmed)
-        stemmed_dict[category] = stemmed_terms
-    return stemmed_dict
-
-
-def build_stemmed_individual_dict(stopwords: Set[str]) -> Dict[str, Set[str]]:
+def build_stemmed_risk_dict(stopwords: Set[str]) -> Dict[str, Set[str]]:
     """Build stemmed version of individual risk dictionary."""
     stemmed_dict = {}
     for canonical, variants in RISK_DICTIONARY_INDIVIDUAL.items():
@@ -144,45 +143,25 @@ def build_stemmed_individual_dict(stopwords: Set[str]) -> Dict[str, Set[str]]:
 # TOKEN MATCHING FUNCTIONS
 # =============================================================================
 
-def tokens_contain_any(tokens: List[str], target_terms: Set[str]) -> bool:
-    """Check if token list contains any of the target terms."""
+def tokens_contain_any(tokens, target_terms: Set[str]) -> bool:
+    """Check if token list/array contains any of the target terms."""
+    if hasattr(tokens, 'tolist'):
+        tokens = tokens.tolist()
+    if not isinstance(tokens, (list, tuple)):
+        return False
     token_set = set(tokens)
     return bool(token_set & target_terms)
 
 
-def count_term_occurrences(tokens: List[str], target_terms: Set[str]) -> int:
-    """Count how many times any target term appears in tokens."""
-    count = 0
-    for token in tokens:
-        if token in target_terms:
-            count += 1
-    return count
-
-
-def count_risk_terms_by_category_tokens(
-    tokens: List[str],
-    stemmed_dict: Dict[str, Set[str]],
-) -> Dict[str, int]:
-    """Count occurrences of risk terms by category using token matching."""
-    results = {}
-    token_set = set(tokens)
-
-    for category, terms in stemmed_dict.items():
-        # Count matches
-        count = sum(1 for t in tokens if t in terms)
-        results[category] = count
-
-    return results
-
-
-def count_individual_risk_terms_tokens(
-    tokens: List[str],
-    stemmed_individual_dict: Dict[str, Set[str]],
-) -> Dict[str, int]:
+def count_risk_terms(tokens, stemmed_dict: Dict[str, Set[str]]) -> Dict[str, int]:
     """Count individual risk terms using token matching."""
-    results = {}
+    if hasattr(tokens, 'tolist'):
+        tokens = tokens.tolist()
+    if not isinstance(tokens, (list, tuple)):
+        return {}
 
-    for canonical, variants in stemmed_individual_dict.items():
+    results = {}
+    for canonical, variants in stemmed_dict.items():
         count = sum(1 for t in tokens if t in variants)
         if count > 0:
             results[canonical] = count
@@ -212,35 +191,18 @@ def derive_wave(year) -> int:
 
 
 def group_sentences_to_paragraphs(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Group sentences by paragraph, aggregating tokens.
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        Sentence-level dataframe with doc_id, paragraph_id, tokens columns.
-
-    Returns
-    -------
-    pd.DataFrame
-        Paragraph-level dataframe with aggregated tokens and metadata.
-    """
+    """Group sentences by paragraph, aggregating tokens."""
     logger.info("Grouping sentences into paragraphs...")
 
-    # Columns to aggregate
     meta_cols = ['doc_id', 'paragraph_id', 'actor_type', 'year', 'municipality']
     available_meta = [col for col in meta_cols if col in df.columns]
 
-    # Parse tokens if stored as string
-    if df['tokens'].dtype == object and isinstance(df['tokens'].iloc[0], str):
-        df = df.copy()
-        df['tokens'] = df['tokens'].apply(eval)
-
-    # Aggregate: concatenate token lists, keep first metadata
     def concat_tokens(token_lists):
         all_tokens = []
         for tl in token_lists:
-            if isinstance(tl, list):
+            if hasattr(tl, 'tolist'):
+                tl = tl.tolist()
+            if isinstance(tl, (list, tuple)):
                 all_tokens.extend(tl)
         return all_tokens
 
@@ -249,17 +211,14 @@ def group_sentences_to_paragraphs(df: pd.DataFrame) -> pd.DataFrame:
         if col not in ['doc_id', 'paragraph_id']:
             agg_dict[col] = 'first'
 
-    # Also keep sentence_text for samples if available
     if 'sentence_text' in df.columns:
         agg_dict['sentence_text'] = lambda x: ' '.join(x.astype(str))
 
     paragraphs = df.groupby(['doc_id', 'paragraph_id']).agg(agg_dict).reset_index()
 
-    # Rename sentence_text to full_text
     if 'sentence_text' in paragraphs.columns:
         paragraphs.rename(columns={'sentence_text': 'full_text'}, inplace=True)
 
-    # Derive wave from year if not present
     if 'wave' not in paragraphs.columns and 'year' in paragraphs.columns:
         paragraphs['wave'] = paragraphs['year'].apply(derive_wave)
 
@@ -275,8 +234,6 @@ def filter_disruption_paragraphs(
     logger.info("Filtering paragraphs with disruption phrases...")
 
     def has_disruption(tokens):
-        if not isinstance(tokens, list):
-            return False
         return tokens_contain_any(tokens, disruption_terms)
 
     mask = paragraphs['tokens'].apply(has_disruption)
@@ -292,28 +249,26 @@ def filter_disruption_paragraphs(
 # ANALYSIS
 # =============================================================================
 
-def analyze_individual_terms(
+def analyze_risk_terms(
     paragraphs: pd.DataFrame,
-    stemmed_individual_dict: Dict[str, Set[str]],
+    stemmed_dict: Dict[str, Set[str]],
     group_col: Optional[str] = None,
 ) -> pd.DataFrame:
-    """
-    Count individual risk terms in paragraphs using token matching.
-    """
+    """Count individual risk terms in paragraphs using token matching."""
     if group_col is None:
         mention_totals = defaultdict(int)
         para_totals = defaultdict(int)
+        char_totals = defaultdict(int)
 
         for _, row in paragraphs.iterrows():
             tokens = row['tokens']
-            if not isinstance(tokens, list):
-                continue
-
-            counts = count_individual_risk_terms_tokens(tokens, stemmed_individual_dict)
+            counts = count_risk_terms(tokens, stemmed_dict)
+            text_len = len(row.get('full_text', '')) if 'full_text' in row else 0
 
             for term, count in counts.items():
                 mention_totals[term] += count
                 para_totals[term] += 1
+                char_totals[term] += text_len
 
         rows = []
         for term in mention_totals.keys():
@@ -321,6 +276,7 @@ def analyze_individual_terms(
                 'term': term,
                 'mentions': mention_totals[term],
                 'paragraphs': para_totals[term],
+                'characters': char_totals[term],
             })
 
         df = pd.DataFrame(rows)
@@ -336,17 +292,17 @@ def analyze_individual_terms(
         for group_val, group_df in paragraphs.groupby(group_col):
             mention_totals = defaultdict(int)
             para_totals = defaultdict(int)
+            char_totals = defaultdict(int)
 
             for _, row in group_df.iterrows():
                 tokens = row['tokens']
-                if not isinstance(tokens, list):
-                    continue
-
-                counts = count_individual_risk_terms_tokens(tokens, stemmed_individual_dict)
+                counts = count_risk_terms(tokens, stemmed_dict)
+                text_len = len(row.get('full_text', '')) if 'full_text' in row else 0
 
                 for term, count in counts.items():
                     mention_totals[term] += count
                     para_totals[term] += 1
+                    char_totals[term] += text_len
 
             for term in mention_totals.keys():
                 results.append({
@@ -354,6 +310,7 @@ def analyze_individual_terms(
                     'term': term,
                     'mentions': mention_totals[term],
                     'paragraphs': para_totals[term],
+                    'characters': char_totals[term],
                 })
 
         df = pd.DataFrame(results)
@@ -362,61 +319,6 @@ def analyze_individual_terms(
 
         df['pct_mentions'] = df.groupby(group_col)['mentions'].transform(
             lambda x: (x / x.sum() * 100).round(2)
-        )
-
-        return df
-
-
-def analyze_risk_categories(
-    paragraphs: pd.DataFrame,
-    stemmed_category_dict: Dict[str, Set[str]],
-    group_col: Optional[str] = None,
-) -> pd.DataFrame:
-    """Count risk categories in paragraphs using token matching."""
-    categories = list(stemmed_category_dict.keys())
-
-    if group_col is None:
-        totals = {cat: 0 for cat in categories}
-
-        for _, row in paragraphs.iterrows():
-            tokens = row['tokens']
-            if not isinstance(tokens, list):
-                continue
-            counts = count_risk_terms_by_category_tokens(tokens, stemmed_category_dict)
-            for cat, count in counts.items():
-                totals[cat] += count
-
-        df = pd.DataFrame([{
-            'category': cat,
-            'count': totals[cat],
-        } for cat in categories])
-        df = df.sort_values('count', ascending=False).reset_index(drop=True)
-        df['pct'] = (df['count'] / df['count'].sum() * 100).round(1)
-        return df
-
-    else:
-        results = []
-        for group_val, group_df in paragraphs.groupby(group_col):
-            totals = {cat: 0 for cat in categories}
-
-            for _, row in group_df.iterrows():
-                tokens = row['tokens']
-                if not isinstance(tokens, list):
-                    continue
-                counts = count_risk_terms_by_category_tokens(tokens, stemmed_category_dict)
-                for cat, count in counts.items():
-                    totals[cat] += count
-
-            for cat in categories:
-                results.append({
-                    group_col: group_val,
-                    'category': cat,
-                    'count': totals[cat],
-                })
-
-        df = pd.DataFrame(results)
-        df['pct'] = df.groupby(group_col)['count'].transform(
-            lambda x: (x / x.sum() * 100).round(1) if x.sum() > 0 else 0
         )
 
         return df
@@ -440,18 +342,6 @@ def extract_sample_paragraphs(
 # VISUALIZATION
 # =============================================================================
 
-CATEGORY_LABELS = {
-    'naturhot': 'Natural hazards',
-    'antagonistiska_hot': 'Antagonistic threats',
-    'biologiska_hot': 'Biological threats',
-    'teknisk_infrastruktur': 'Technical infrastructure',
-    'olyckor': 'Accidents',
-    'miljö_klimat': 'Environment/climate',
-    'sociala_risker': 'Social risks',
-    'cyber_hot': 'Cyber threats',
-    'ekonomi': 'Economy',
-}
-
 WAVE_LABELS = {
     0: 'Pre-2015',
     1: '2015-2018',
@@ -467,100 +357,10 @@ ACTOR_LABELS = {
 }
 
 ACTOR_COLORS = {
-    'kommun': '#e41a1c',
-    'lansstyrelse': '#377eb8',
-    'MCF': '#4daf4a',
+    'Municipality': '#e41a1c',
+    'Prefecture': '#377eb8',
+    'MSB': '#4daf4a',
 }
-
-
-def create_visualizations(
-    overall: pd.DataFrame,
-    by_wave: pd.DataFrame,
-    by_actor: pd.DataFrame,
-    output_dir: Path,
-) -> None:
-    """Create and save visualizations."""
-    logger.info("Creating visualizations...")
-
-    sns.set_style("whitegrid")
-    plt.rcParams['figure.dpi'] = 150
-
-    # 1. Overall risk category distribution
-    fig, ax = plt.subplots(figsize=(10, 6))
-
-    overall_plot = overall.copy()
-    overall_plot['label'] = overall_plot['category'].map(CATEGORY_LABELS)
-
-    bars = ax.barh(
-        overall_plot['label'],
-        overall_plot['count'],
-        color=sns.color_palette("Blues_r", n_colors=len(overall_plot)),
-    )
-
-    ax.set_xlabel('Number of mentions')
-    ax.set_title('Risk Categories in "Allvarliga Störningar" Paragraphs', fontsize=12)
-    ax.invert_yaxis()
-
-    for bar, pct in zip(bars, overall_plot['pct']):
-        ax.text(bar.get_width() + 20, bar.get_y() + bar.get_height() / 2,
-                f'{pct:.1f}%', va='center', fontsize=9)
-
-    plt.tight_layout()
-    fig.savefig(output_dir / 'allvarliga_storningar_overall.png')
-    fig.savefig(output_dir / 'allvarliga_storningar_overall.pdf')
-    plt.close(fig)
-
-    # 2. Development over time
-    fig, ax = plt.subplots(figsize=(12, 7))
-
-    pivot = by_wave.pivot(index='wave', columns='category', values='count')
-    cat_order = overall['category'].tolist()
-    pivot = pivot[[c for c in cat_order if c in pivot.columns]]
-    pivot.columns = [CATEGORY_LABELS.get(c, c) for c in pivot.columns]
-    pivot.index = [WAVE_LABELS.get(w, w) for w in pivot.index]
-
-    pivot.plot(kind='line', marker='o', markersize=8, linewidth=2.5, ax=ax,
-               color=sns.color_palette("husl", n_colors=len(pivot.columns)))
-
-    ax.set_xlabel('Time period')
-    ax.set_ylabel('Number of mentions')
-    ax.set_title('Risk Categories Over Time in "Allvarliga Störningar" Paragraphs', fontsize=12)
-    ax.legend(title='Risk category', bbox_to_anchor=(1.02, 1), loc='upper left', fontsize=8)
-
-    plt.tight_layout()
-    fig.savefig(output_dir / 'allvarliga_storningar_over_time.png')
-    fig.savefig(output_dir / 'allvarliga_storningar_over_time.pdf')
-    plt.close(fig)
-
-    # 3. By actor type
-    fig, ax = plt.subplots(figsize=(12, 6))
-
-    pivot_actor = by_actor.pivot(index='category', columns='actor_type', values='count')
-    pivot_actor['total'] = pivot_actor.sum(axis=1)
-    pivot_actor = pivot_actor.sort_values('total', ascending=False).drop(columns='total')
-    pivot_actor = pivot_actor.head(8)
-
-    pivot_actor.index = [CATEGORY_LABELS.get(c, c) for c in pivot_actor.index]
-    pivot_actor.columns = [ACTOR_LABELS.get(c, c) for c in pivot_actor.columns]
-
-    col_order = ['Municipality', 'Prefecture', 'MSB']
-    col_colors = {'Municipality': '#e41a1c', 'Prefecture': '#377eb8', 'MSB': '#4daf4a'}
-    pivot_actor = pivot_actor[[c for c in col_order if c in pivot_actor.columns]]
-
-    pivot_actor.plot(kind='barh', ax=ax, width=0.8,
-                     color=[col_colors[c] for c in pivot_actor.columns])
-
-    ax.set_xlabel('Number of mentions')
-    ax.set_title('Risk Categories by Actor Type', fontsize=12)
-    ax.legend(title='Actor type')
-    ax.invert_yaxis()
-
-    plt.tight_layout()
-    fig.savefig(output_dir / 'allvarliga_storningar_by_actor.png')
-    fig.savefig(output_dir / 'allvarliga_storningar_by_actor.pdf')
-    plt.close(fig)
-
-    logger.info("  All visualizations saved")
 
 
 def create_term_visualization(
@@ -575,20 +375,20 @@ def create_term_visualization(
 
     fig, ax = plt.subplots(figsize=(10, 10))
 
-    top_by_mentions = terms_df.nlargest(top_n, 'mentions').iloc[::-1]
+    top_terms = terms_df.nlargest(top_n, 'mentions').iloc[::-1]
     colors = sns.color_palette("Blues", n_colors=top_n)
 
-    bars = ax.barh(top_by_mentions['term'], top_by_mentions['mentions'],
+    bars = ax.barh(top_terms['term'], top_terms['mentions'],
                    color=colors, edgecolor='none')
 
-    for bar, val in zip(bars, top_by_mentions['mentions']):
-        ax.text(val + 5, bar.get_y() + bar.get_height()/2, f'{val:,}',
+    for bar, val in zip(bars, top_terms['mentions']):
+        ax.text(val + 20, bar.get_y() + bar.get_height()/2, f'{val:,}',
                 va='center', ha='left', fontsize=8)
 
     ax.set_xlabel('Mentions', fontsize=11)
-    ax.set_title(f'Top {top_n} Risks in "Allvarliga Störningar" Paragraphs',
+    ax.set_title(f'Top {top_n} Risks in Disruption/Consequence Paragraphs',
                  fontsize=12, fontweight='bold')
-    ax.set_xlim(0, top_by_mentions['mentions'].max() * 1.15)
+    ax.set_xlim(0, top_terms['mentions'].max() * 1.15)
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
 
@@ -600,13 +400,146 @@ def create_term_visualization(
     logger.info("  Saved term-level chart")
 
 
+def create_mentions_vs_text_visualization(
+    terms_df: pd.DataFrame,
+    output_dir: Path,
+    top_n: int = 20,
+) -> None:
+    """Create side-by-side comparison of mentions vs text devoted (characters)."""
+    logger.info("Creating mentions vs text devoted visualization...")
+
+    sns.set_style("whitegrid")
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 10))
+
+    # Left plot: Top N by mentions, ordered by mentions
+    top_by_mentions = terms_df.nlargest(top_n, 'mentions').sort_values('mentions', ascending=True)
+    colors_mentions = sns.color_palette("Blues", n_colors=top_n)
+    bars1 = axes[0].barh(top_by_mentions['term'], top_by_mentions['mentions'],
+                         color=colors_mentions, edgecolor='none')
+    for bar, val in zip(bars1, top_by_mentions['mentions']):
+        axes[0].text(val + 20, bar.get_y() + bar.get_height()/2, f'{val:,}',
+                     va='center', ha='left', fontsize=9)
+    axes[0].set_xlabel('Mentions (term occurrences)', fontsize=11)
+    axes[0].set_title('Mentions', fontsize=12, fontweight='bold')
+    axes[0].set_xlim(0, top_by_mentions['mentions'].max() * 1.2)
+    axes[0].spines['top'].set_visible(False)
+    axes[0].spines['right'].set_visible(False)
+
+    # Right plot: Top N by characters, ordered by characters
+    top_by_chars = terms_df.nlargest(top_n, 'characters').sort_values('characters', ascending=True)
+    colors_chars = sns.color_palette("Oranges", n_colors=top_n)
+    bars2 = axes[1].barh(top_by_chars['term'], top_by_chars['characters'],
+                         color=colors_chars, edgecolor='none')
+    for bar, val in zip(bars2, top_by_chars['characters']):
+        axes[1].text(val + 5000, bar.get_y() + bar.get_height()/2, f'{val:,}',
+                     va='center', ha='left', fontsize=9)
+    axes[1].set_xlabel('Characters (text devoted)', fontsize=11)
+    axes[1].set_title('Text Devoted', fontsize=12, fontweight='bold')
+    axes[1].set_xlim(0, top_by_chars['characters'].max() * 1.15)
+    axes[1].spines['top'].set_visible(False)
+    axes[1].spines['right'].set_visible(False)
+
+    fig.suptitle('Mentions vs Text Devoted in Disruption/Consequence Contexts',
+                 fontsize=14, fontweight='bold', y=0.98)
+
+    plt.tight_layout()
+    fig.savefig(output_dir / 'allvarliga_storningar_mentions_vs_text.png', dpi=150)
+    fig.savefig(output_dir / 'allvarliga_storningar_mentions_vs_text.pdf')
+    plt.close(fig)
+
+    logger.info("  Saved mentions vs text chart")
+
+
+def create_terms_by_actor_visualization(
+    terms_by_actor: pd.DataFrame,
+    output_dir: Path,
+    top_n: int = 15,
+) -> None:
+    """Create visualization comparing top risks by actor type."""
+    logger.info("Creating terms by actor visualization...")
+
+    # Get top N terms overall
+    top_terms = terms_by_actor.groupby('term')['mentions'].sum().nlargest(top_n).index.tolist()
+
+    # Filter to top terms
+    plot_data = terms_by_actor[terms_by_actor['term'].isin(top_terms)].copy()
+    plot_data['actor_label'] = plot_data['actor_type'].map(ACTOR_LABELS)
+
+    # Pivot for grouped bar chart
+    pivot = plot_data.pivot(index='term', columns='actor_label', values='mentions').fillna(0)
+
+    # Order by total mentions
+    pivot['total'] = pivot.sum(axis=1)
+    pivot = pivot.sort_values('total', ascending=True).drop(columns='total')
+
+    # Reorder columns
+    col_order = ['Municipality', 'Prefecture', 'MSB']
+    pivot = pivot[[c for c in col_order if c in pivot.columns]]
+
+    fig, ax = plt.subplots(figsize=(12, 8))
+
+    pivot.plot(kind='barh', ax=ax, width=0.8,
+               color=[ACTOR_COLORS[c] for c in pivot.columns])
+
+    ax.set_xlabel('Mentions', fontsize=11)
+    ax.set_ylabel('')
+    ax.set_title(f'Top {top_n} Risks by Actor Type in Disruption Contexts',
+                 fontsize=12, fontweight='bold')
+    ax.legend(title='Actor type', loc='lower right')
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+
+    plt.tight_layout()
+    fig.savefig(output_dir / 'allvarliga_storningar_terms_by_actor.png', dpi=150)
+    fig.savefig(output_dir / 'allvarliga_storningar_terms_by_actor.pdf')
+    plt.close(fig)
+
+    logger.info("  Saved terms by actor chart")
+
+
+def create_terms_over_time_visualization(
+    terms_by_wave: pd.DataFrame,
+    output_dir: Path,
+    top_n: int = 10,
+) -> None:
+    """Create visualization showing top risks over time."""
+    logger.info("Creating terms over time visualization...")
+
+    # Get top N terms overall
+    top_terms = terms_by_wave.groupby('term')['mentions'].sum().nlargest(top_n).index.tolist()
+
+    # Filter and pivot
+    plot_data = terms_by_wave[terms_by_wave['term'].isin(top_terms)].copy()
+    pivot = plot_data.pivot(index='wave', columns='term', values='mentions').fillna(0)
+    pivot.index = [WAVE_LABELS.get(w, str(w)) for w in pivot.index]
+
+    fig, ax = plt.subplots(figsize=(12, 7))
+
+    pivot.plot(kind='line', marker='o', markersize=8, linewidth=2, ax=ax,
+               color=sns.color_palette("husl", n_colors=len(pivot.columns)))
+
+    ax.set_xlabel('Time period', fontsize=11)
+    ax.set_ylabel('Mentions', fontsize=11)
+    ax.set_title(f'Top {top_n} Risks Over Time in Disruption Contexts',
+                 fontsize=12, fontweight='bold')
+    ax.legend(title='Risk', bbox_to_anchor=(1.02, 1), loc='upper left', fontsize=9)
+
+    plt.tight_layout()
+    fig.savefig(output_dir / 'allvarliga_storningar_terms_over_time.png', dpi=150)
+    fig.savefig(output_dir / 'allvarliga_storningar_terms_over_time.pdf')
+    plt.close(fig)
+
+    logger.info("  Saved terms over time chart")
+
+
 # =============================================================================
 # MAIN
 # =============================================================================
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description='Analyze risks associated with "allvarliga störningar"',
+        description='Analyze risks in disruption/consequence contexts',
     )
     parser.add_argument(
         '--corpus',
@@ -647,12 +580,10 @@ def main() -> int:
     logger.info("Building stemmed dictionaries...")
     stopwords = SWEDISH_STOPWORDS
     disruption_terms = build_stemmed_disruption_terms(stopwords)
-    stemmed_category_dict = build_stemmed_category_dict(stopwords)
-    stemmed_individual_dict = build_stemmed_individual_dict(stopwords)
+    stemmed_risk_dict = build_stemmed_risk_dict(stopwords)
 
     logger.info(f"  Disruption terms: {len(disruption_terms)}")
-    logger.info(f"  Category dict: {len(stemmed_category_dict)} categories")
-    logger.info(f"  Individual dict: {len(stemmed_individual_dict)} risks")
+    logger.info(f"  Risk terms: {len(stemmed_risk_dict)} risks")
 
     # Load corpus
     logger.info(f"Loading corpus from {args.corpus}...")
@@ -671,46 +602,30 @@ def main() -> int:
 
     # Analyze individual risk terms
     logger.info("Analyzing individual risk terms...")
-    terms_overall = analyze_individual_terms(filtered, stemmed_individual_dict)
+    terms_overall = analyze_risk_terms(filtered, stemmed_risk_dict)
     terms_overall.to_csv(args.output / 'allvarliga_storningar_terms.csv', index=False)
 
-    print("\n=== Top Individual Risks in 'Allvarliga Störningar' Paragraphs ===")
+    print("\n=== Top Individual Risks in Disruption/Consequence Paragraphs ===")
     print(f"{'Risk':<35} {'Mentions':>10} {'Paragraphs':>10}")
     print("-" * 58)
     for _, row in terms_overall.head(20).iterrows():
         print(f"{row['term']:<35} {row['mentions']:>10,} {row['paragraphs']:>10,}")
     print()
 
-    # Analyze risk categories
-    logger.info("Analyzing risk categories...")
-    overall = analyze_risk_categories(filtered, stemmed_category_dict)
-    overall.to_csv(args.output / 'allvarliga_storningar_risks.csv', index=False)
-
-    print("=== Top Risk Categories ===")
-    print(overall.head(10).to_string(index=False))
-    print()
-
     # Analyze by actor
-    by_actor = None
+    terms_by_actor = None
     if 'actor_type' in filtered.columns:
         logger.info("Analyzing by actor_type...")
-        # Normalize actor names
         filtered['actor_type'] = filtered['actor_type'].replace('länsstyrelse', 'lansstyrelse')
 
-        by_actor = analyze_risk_categories(filtered, stemmed_category_dict, group_col='actor_type')
-        by_actor.to_csv(args.output / 'allvarliga_storningar_by_actor.csv', index=False)
-
-        terms_by_actor = analyze_individual_terms(filtered, stemmed_individual_dict, group_col='actor_type')
+        terms_by_actor = analyze_risk_terms(filtered, stemmed_risk_dict, group_col='actor_type')
         terms_by_actor.to_csv(args.output / 'allvarliga_storningar_terms_by_actor.csv', index=False)
 
     # Analyze by wave
-    by_wave = None
+    terms_by_wave = None
     if 'wave' in filtered.columns:
         logger.info("Analyzing by wave...")
-        by_wave = analyze_risk_categories(filtered, stemmed_category_dict, group_col='wave')
-        by_wave.to_csv(args.output / 'allvarliga_storningar_by_wave.csv', index=False)
-
-        terms_by_wave = analyze_individual_terms(filtered, stemmed_individual_dict, group_col='wave')
+        terms_by_wave = analyze_risk_terms(filtered, stemmed_risk_dict, group_col='wave')
         terms_by_wave.to_csv(args.output / 'allvarliga_storningar_terms_by_wave.csv', index=False)
 
     # Extract sample paragraphs
@@ -719,11 +634,16 @@ def main() -> int:
     sample.to_csv(args.output / 'allvarliga_storningar_sample.csv', index=False)
 
     # Create visualizations
-    if by_actor is not None and by_wave is not None:
-        create_visualizations(overall, by_wave, by_actor, args.output)
-
+    logger.info("Creating visualizations...")
     if len(terms_overall) > 0:
         create_term_visualization(terms_overall, args.output)
+        create_mentions_vs_text_visualization(terms_overall, args.output)
+
+    if terms_by_actor is not None and len(terms_by_actor) > 0:
+        create_terms_by_actor_visualization(terms_by_actor, args.output)
+
+    if terms_by_wave is not None and len(terms_by_wave) > 0:
+        create_terms_over_time_visualization(terms_by_wave, args.output)
 
     # Summary
     print("=== Summary Statistics ===")

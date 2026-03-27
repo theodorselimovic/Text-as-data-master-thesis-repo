@@ -205,7 +205,11 @@ def get_lan_for_entity(entity: str, actor: str) -> int | None:
 
 # Import term metadata for grouping by category
 sys.path.insert(0, str(Path(__file__).parent))
-from risk_dictionary_categories import RISK_DICTIONARY_CATEGORIES as RISK_DICTIONARY
+try:
+    from risk_dictionary_categories import RISK_DICTIONARY_CATEGORIES as RISK_DICTIONARY
+except ImportError:
+    # Fallback: no category grouping available
+    RISK_DICTIONARY = {}
 
 
 def translate_actor(actor: str) -> str:
@@ -775,31 +779,92 @@ def plot_lead_lag(lead_lag_df: pd.DataFrame, output_dir: Path) -> None:
         if len(df) < 3:
             continue
 
-        fig, ax = plt.subplots(figsize=(8, 8))
+        fig, ax = plt.subplots(figsize=(12, 12))
 
-        # Color by category
+        # Color by category if available, otherwise by lag magnitude
         df = df.copy()
         df['category'] = df['term'].apply(_get_category_for_term)
-        cat_colors = dict(zip(
-            sorted(df['category'].unique()),
-            sns.color_palette("Set1", df['category'].nunique())
-        ))
-        colors = [cat_colors.get(c, 'gray') for c in df['category']]
+        df['lag'] = df[col_y] - df[col_x]
 
-        ax.scatter(df[col_x], df[col_y], c=colors, alpha=0.7, s=40)
+        # Check if categories are meaningful (not all "unknown")
+        known_categories = df[df['category'] != 'unknown']['category'].nunique()
+        if known_categories >= 2:
+            cat_colors = dict(zip(
+                sorted(df['category'].unique()),
+                sns.color_palette("Set1", df['category'].nunique())
+            ))
+            colors = [cat_colors.get(c, 'gray') for c in df['category']]
+            use_category_legend = True
+        else:
+            # Color by lag magnitude (blue = leads, red = lags)
+            colors = df['lag'].values
+            use_category_legend = False
+
+        scatter = ax.scatter(df[col_x], df[col_y], c=colors, alpha=0.7, s=40,
+                             cmap='RdYlBu_r' if not use_category_legend else None)
 
         # Diagonal line (= simultaneous adoption)
         lim_min = min(df[col_x].min(), df[col_y].min()) - 1
         lim_max = max(df[col_x].max(), df[col_y].max()) + 1
         ax.plot([lim_min, lim_max], [lim_min, lim_max], 'k--', alpha=0.3)
 
-        # Label some points
-        for _, row in df.iterrows():
-            ax.annotate(
-                row['term'][:15], (row[col_x], row[col_y]),
-                fontsize=6, alpha=0.7,
-                xytext=(3, 3), textcoords='offset points',
+        # Label points: max 5 per (x,y) coordinate, prioritized by corpus adoption
+        df = df.copy()
+
+        # Group by coordinate and keep top 5 most common terms per position
+        max_labels_per_pos = 5
+        df['coord'] = list(zip(df[col_x].round(0), df[col_y].round(0)))
+
+        # Get term adoption counts (total entities that adopted each term)
+        adoption_cols = [c for c in df.columns if c.startswith('n_') and c != 'n_entities']
+        if adoption_cols:
+            df['total_adoption'] = df[adoption_cols].sum(axis=1)
+            adoption_col = 'total_adoption'
+        else:
+            # Fallback: use inverse of absolute lag (prefer terms near diagonal)
+            df['adoption_rank'] = -abs(df[col_y] - df[col_x])
+            adoption_col = 'adoption_rank'
+
+        # For each coordinate, keep top N by adoption
+        labels_to_show = []
+        for coord, group in df.groupby('coord'):
+            top_n = group.nlargest(max_labels_per_pos, adoption_col)
+            labels_to_show.extend(top_n.index.tolist())
+
+        df_to_label = df.loc[labels_to_show].copy()
+
+        # Add small jitter to label positions for readability
+        np.random.seed(42)
+        jitter_x = np.random.uniform(-0.3, 0.3, len(df_to_label))
+        jitter_y = np.random.uniform(-0.3, 0.3, len(df_to_label))
+
+        try:
+            from adjustText import adjust_text
+            texts = []
+            for i, (_, row) in enumerate(df_to_label.iterrows()):
+                texts.append(ax.text(
+                    row[col_x] + jitter_x[i],
+                    row[col_y] + jitter_y[i],
+                    row['term'][:15],
+                    fontsize=7, alpha=0.85,
+                ))
+            adjust_text(
+                texts, ax=ax,
+                arrowprops=dict(arrowstyle='-', color='gray', alpha=0.3, lw=0.4),
+                expand_points=(1.5, 1.5),
+                force_text=(0.4, 0.4),
+                lim=300,
             )
+        except ImportError:
+            # Fallback: simple jittered labels
+            for i, (_, row) in enumerate(df_to_label.iterrows()):
+                ax.annotate(
+                    row['term'][:15],
+                    (row[col_x], row[col_y]),
+                    fontsize=7, alpha=0.85,
+                    xytext=(5 + jitter_x[i]*10, 5 + jitter_y[i]*10),
+                    textcoords='offset points',
+                )
 
         ax.set_xlabel(f'{translate_actor(ref_actor)} median first year', fontsize=12)
         ax.set_ylabel('Municipality median first year', fontsize=12)
@@ -813,10 +878,17 @@ def plot_lead_lag(lead_lag_df: pd.DataFrame, output_dir: Path) -> None:
 
         # Legend
         from matplotlib.patches import Patch
-        legend_elements = [
-            Patch(facecolor=cat_colors[c], label=c) for c in sorted(cat_colors.keys())
-        ]
-        ax.legend(handles=legend_elements, loc='lower right', fontsize=8)
+        if use_category_legend:
+            legend_elements = [
+                Patch(facecolor=cat_colors[c], label=c) for c in sorted(cat_colors.keys())
+            ]
+        else:
+            # Add colorbar for lag magnitude
+            cbar = plt.colorbar(scatter, ax=ax, shrink=0.6)
+            cbar.set_label('Lag (years)', fontsize=10)
+            legend_elements = []
+        if legend_elements:
+            ax.legend(handles=legend_elements, loc='lower right', fontsize=8)
 
         plt.tight_layout()
         fname = f'lead_lag_{ref_actor}'
