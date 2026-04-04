@@ -39,6 +39,8 @@ from pathlib import Path
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy import stats
+from scipy.optimize import curve_fit
 from nltk.stem.snowball import SnowballStemmer
 
 # Import dictionary and stopwords
@@ -206,13 +208,19 @@ def calculate_prevalence(
     """
     logger.info("Calculating prevalence metrics...")
 
-    # Initialize counters for each term
-    metrics = {term: {
+    # Build reverse mapping: stemmed term -> canonical
+    term_to_canonical = {term: info['canonical'] for term, info in term_info.items()}
+
+    # Track per canonical risk (avoids double-counting paragraphs with multiple variants)
+    canonical_metrics = defaultdict(lambda: {
         'mentions': 0,
-        'paragraphs': 0,
-        'characters': 0,
+        'paragraphs': set(),  # Track unique (doc_id, para_id) tuples
         'documents': set(),
-    } for term in term_info}
+        'variants': set(),
+    })
+
+    # Also track paragraph char counts for later summation
+    paragraph_chars = {}  # (doc_id, para_id) -> char_count
 
     total_paragraphs = len(paragraphs_df)
 
@@ -224,46 +232,34 @@ def calculate_prevalence(
         if not tokens:
             continue
 
-        # Count token occurrences in this paragraph
         token_counts = Counter(tokens)
         doc_id = row['doc_id']
+        para_id = row['paragraph_id']
         char_count = row['char_count']
 
-        # Check each dictionary term
-        for term in term_info:
-            count = token_counts.get(term, 0)
-            if count > 0:
-                metrics[term]['mentions'] += count
-                metrics[term]['paragraphs'] += 1
-                metrics[term]['characters'] += char_count
-                metrics[term]['documents'].add(doc_id)
+        # Store paragraph char count
+        paragraph_chars[(doc_id, para_id)] = char_count
 
-    # Aggregate by canonical form
-    canonical_metrics = defaultdict(lambda: {
-        'mentions': 0,
-        'paragraphs': 0,
-        'characters': 0,
-        'documents': set(),
-        'variants': [],
-    })
+        # Check each dictionary term and aggregate by canonical form
+        for term, count in token_counts.items():
+            if term in term_to_canonical and count > 0:
+                canonical = term_to_canonical[term]
+                canonical_metrics[canonical]['mentions'] += count
+                canonical_metrics[canonical]['paragraphs'].add((doc_id, para_id))
+                canonical_metrics[canonical]['documents'].add(doc_id)
+                canonical_metrics[canonical]['variants'].add(term)
 
-    for term, m in metrics.items():
-        canonical = term_info[term]['canonical']
-        canonical_metrics[canonical]['mentions'] += m['mentions']
-        canonical_metrics[canonical]['paragraphs'] += m['paragraphs']
-        canonical_metrics[canonical]['characters'] += m['characters']
-        canonical_metrics[canonical]['documents'].update(m['documents'])
-        if m['mentions'] > 0:
-            canonical_metrics[canonical]['variants'].append(term)
-
-    # Convert to DataFrame
+    # Convert to DataFrame with proper character counts (no double-counting)
     rows = []
     for canonical, m in canonical_metrics.items():
+        # Sum characters from unique paragraphs only
+        total_chars = sum(paragraph_chars.get(p, 0) for p in m['paragraphs'])
+
         rows.append({
             'risk': canonical,
             'mentions': m['mentions'],
-            'paragraphs': m['paragraphs'],
-            'characters': m['characters'],
+            'paragraphs': len(m['paragraphs']),
+            'characters': total_chars,
             'documents': len(m['documents']),
             'stemmed_variants': ', '.join(sorted(m['variants'])),
         })
@@ -300,6 +296,9 @@ def calculate_prevalence_by_group(
     """
     logger.info(f"Calculating prevalence by {group_col}...")
 
+    # Build reverse mapping
+    term_to_canonical = {term: info['canonical'] for term, info in term_info.items()}
+
     groups = paragraphs_df[group_col].dropna().unique()
     all_results = []
 
@@ -307,13 +306,13 @@ def calculate_prevalence_by_group(
         subset = paragraphs_df[paragraphs_df[group_col] == group_val]
         n_docs = subset['doc_id'].nunique()
 
-        # Calculate for this group
-        group_metrics = {term: {
+        # Track per canonical risk (avoids double-counting)
+        canonical_metrics = defaultdict(lambda: {
             'mentions': 0,
-            'paragraphs': 0,
-            'characters': 0,
+            'paragraphs': set(),
             'documents': set(),
-        } for term in term_info}
+        })
+        paragraph_chars = {}
 
         for _, row in subset.iterrows():
             tokens = row['tokens']
@@ -322,42 +321,30 @@ def calculate_prevalence_by_group(
 
             token_counts = Counter(tokens)
             doc_id = row['doc_id']
+            para_id = row['paragraph_id']
             char_count = row['char_count']
 
-            for term in term_info:
-                count = token_counts.get(term, 0)
-                if count > 0:
-                    group_metrics[term]['mentions'] += count
-                    group_metrics[term]['paragraphs'] += 1
-                    group_metrics[term]['characters'] += char_count
-                    group_metrics[term]['documents'].add(doc_id)
+            paragraph_chars[(doc_id, para_id)] = char_count
 
-        # Aggregate by canonical form
-        canonical_metrics = defaultdict(lambda: {
-            'mentions': 0,
-            'paragraphs': 0,
-            'characters': 0,
-            'documents': set(),
-        })
-
-        for term, m in group_metrics.items():
-            canonical = term_info[term]['canonical']
-            canonical_metrics[canonical]['mentions'] += m['mentions']
-            canonical_metrics[canonical]['paragraphs'] += m['paragraphs']
-            canonical_metrics[canonical]['characters'] += m['characters']
-            canonical_metrics[canonical]['documents'].update(m['documents'])
+            for term, count in token_counts.items():
+                if term in term_to_canonical and count > 0:
+                    canonical = term_to_canonical[term]
+                    canonical_metrics[canonical]['mentions'] += count
+                    canonical_metrics[canonical]['paragraphs'].add((doc_id, para_id))
+                    canonical_metrics[canonical]['documents'].add(doc_id)
 
         for canonical, m in canonical_metrics.items():
+            total_chars = sum(paragraph_chars.get(p, 0) for p in m['paragraphs'])
             all_results.append({
                 group_col: group_val,
                 'risk': canonical,
                 'mentions': m['mentions'],
-                'paragraphs': m['paragraphs'],
-                'characters': m['characters'],
+                'paragraphs': len(m['paragraphs']),
+                'characters': total_chars,
                 'documents': len(m['documents']),
                 'total_docs_in_group': n_docs,
                 'mentions_per_doc': round(m['mentions'] / n_docs, 2) if n_docs > 0 else 0,
-                'chars_per_doc': round(m['characters'] / n_docs, 1) if n_docs > 0 else 0,
+                'chars_per_doc': round(total_chars / n_docs, 1) if n_docs > 0 else 0,
             })
 
     result = pd.DataFrame(all_results)
@@ -494,6 +481,311 @@ def plot_prevalence_by_actor(
 
 
 # =============================================================================
+# Distribution Analysis
+# =============================================================================
+
+def zipf_func(rank: np.ndarray, c: float, alpha: float) -> np.ndarray:
+    """Zipf's law: f(r) = c / r^alpha"""
+    return c / np.power(rank, alpha)
+
+
+def exponential_func(rank: np.ndarray, a: float, b: float) -> np.ndarray:
+    """Exponential decay: f(r) = a * exp(-b * r)"""
+    return a * np.exp(-b * rank)
+
+
+def power_exponential_func(rank: np.ndarray, c: float, alpha: float, b: float) -> np.ndarray:
+    """Combined power-exponential: f(r) = c / r^alpha * exp(-b*r)"""
+    return c / np.power(rank, alpha) * np.exp(-b * rank)
+
+
+def fit_distributions(ranks: np.ndarray, values: np.ndarray) -> dict:
+    """Fit Zipf, exponential, and power-exponential distributions."""
+    results = {}
+
+    # Zipf's Law
+    try:
+        popt, _ = curve_fit(zipf_func, ranks, values, p0=[values[0], 1.0], maxfev=5000)
+        fitted = zipf_func(ranks, *popt)
+        r2 = 1 - np.sum((values - fitted)**2) / np.sum((values - np.mean(values))**2)
+        results['zipf'] = {
+            'params': {'c': popt[0], 'alpha': popt[1]},
+            'r2': r2,
+            'fitted': fitted,
+            'aic': len(ranks) * np.log(np.mean((values - fitted)**2)) + 2 * 2
+        }
+    except Exception as e:
+        logger.warning(f"Zipf fit failed: {e}")
+
+    # Exponential
+    try:
+        popt, _ = curve_fit(exponential_func, ranks, values, p0=[values[0], 0.1], maxfev=5000)
+        fitted = exponential_func(ranks, *popt)
+        r2 = 1 - np.sum((values - fitted)**2) / np.sum((values - np.mean(values))**2)
+        results['exponential'] = {
+            'params': {'a': popt[0], 'b': popt[1]},
+            'r2': r2,
+            'fitted': fitted,
+            'aic': len(ranks) * np.log(np.mean((values - fitted)**2)) + 2 * 2
+        }
+    except Exception as e:
+        logger.warning(f"Exponential fit failed: {e}")
+
+    # Power-Exponential
+    try:
+        popt, _ = curve_fit(
+            power_exponential_func, ranks, values,
+            p0=[values[0], 0.8, 0.01],
+            bounds=([0, 0, 0], [np.inf, 5, 1]),
+            maxfev=5000
+        )
+        fitted = power_exponential_func(ranks, *popt)
+        r2 = 1 - np.sum((values - fitted)**2) / np.sum((values - np.mean(values))**2)
+        results['power_exponential'] = {
+            'params': {'c': popt[0], 'alpha': popt[1], 'b': popt[2]},
+            'r2': r2,
+            'fitted': fitted,
+            'aic': len(ranks) * np.log(np.mean((values - fitted)**2)) + 2 * 3
+        }
+    except Exception as e:
+        logger.warning(f"Power-Exponential fit failed: {e}")
+
+    return results
+
+
+def plot_full_distribution(prevalence_df: pd.DataFrame, output_dir: Path) -> None:
+    """Create full distribution graph with all risks ranked by mentions."""
+    df_sorted = prevalence_df.sort_values('mentions', ascending=False).reset_index(drop=True)
+
+    fig, ax = plt.subplots(figsize=(14, 8))
+
+    # Bars - single color
+    ax.bar(range(len(df_sorted)), df_sorted['mentions'], color='#377eb8', alpha=0.9)
+
+    # Bold axes
+    ax.set_xlabel('Risk (ranked by mentions)', fontsize=14, fontweight='bold')
+    ax.set_ylabel('Total mentions', fontsize=14, fontweight='bold')
+    ax.set_title('Distribution of Risk Mentions Across Corpus', fontsize=16, fontweight='bold')
+
+    # Remove x-axis tick labels, keep tick marks
+    ax.set_xticks([0, 25, 50, 75, 100])
+    ax.set_xticklabels(['1', '25', '50', '75', '100'], fontsize=12, fontweight='bold')
+    ax.tick_params(axis='y', labelsize=12)
+    for label in ax.get_yticklabels():
+        label.set_fontweight('bold')
+
+    # Remove grid lines
+    ax.grid(False)
+    ax.set_facecolor('white')
+
+    # Bold spines, remove top
+    ax.spines['top'].set_visible(False)
+    for spine in ['bottom', 'left', 'right']:
+        ax.spines[spine].set_linewidth(1.5)
+
+    # Cumulative percentage lines on secondary axis
+    ax2 = ax.twinx()
+    cumsum_mentions = df_sorted['mentions'].cumsum() / df_sorted['mentions'].sum() * 100
+    cumsum_chars = df_sorted['characters'].cumsum() / df_sorted['characters'].sum() * 100
+
+    ax2.plot(range(len(df_sorted)), cumsum_mentions, 'k--', linewidth=2.5, label='Mentions')
+    ax2.plot(range(len(df_sorted)), cumsum_chars, color='#e41a1c', linestyle='--',
+             linewidth=2.5, label='Text devoted')
+    ax2.set_ylabel('Cumulative percentage', fontsize=14, fontweight='bold')
+    ax2.set_ylim(0, 105)
+    ax2.tick_params(axis='y', labelsize=12)
+    for label in ax2.get_yticklabels():
+        label.set_fontweight('bold')
+    ax2.grid(False)
+    ax2.legend(loc='center right', fontsize=11, framealpha=0.9)
+
+    # Bold spines for secondary axis, remove top
+    ax2.spines['top'].set_visible(False)
+    for spine in ['bottom', 'left', 'right']:
+        ax2.spines[spine].set_linewidth(1.5)
+
+    # Mark 80% threshold for mentions
+    idx_80 = (cumsum_mentions >= 80).idxmax()
+    ax2.axvline(idx_80, color='gray', linestyle=':', alpha=0.7, linewidth=1.5)
+    ax2.annotate(f'80% at rank {idx_80+1}', xy=(idx_80, 80), xytext=(idx_80+10, 85),
+                 fontsize=11, fontweight='bold', arrowprops=dict(arrowstyle='->', color='gray'))
+
+    plt.tight_layout()
+    plt.savefig(output_dir / 'risk_distribution_full.png', dpi=150, bbox_inches='tight')
+    plt.savefig(output_dir / 'risk_distribution_full.pdf', bbox_inches='tight')
+    plt.close()
+    logger.info("Saved: risk_distribution_full.png/pdf")
+
+
+def plot_zipf_analysis(prevalence_df: pd.DataFrame, fit_results: dict, output_dir: Path) -> None:
+    """Create log-log plot with distribution fits."""
+    plt.style.use('seaborn-v0_8-whitegrid')
+    df_sorted = prevalence_df.sort_values('mentions', ascending=False).reset_index(drop=True)
+    ranks = np.arange(1, len(df_sorted) + 1)
+    values = df_sorted['mentions'].values
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+
+    # Left: Log-log with fits
+    ax1 = axes[0]
+    ax1.scatter(ranks, values, s=40, alpha=0.7, color='#377eb8', label='Observed', zorder=3)
+
+    colors = {'zipf': '#e41a1c', 'exponential': '#4daf4a', 'power_exponential': '#984ea3'}
+    labels = {'zipf': "Zipf's Law", 'exponential': 'Exponential', 'power_exponential': 'Power-Exponential'}
+
+    for name, result in fit_results.items():
+        ax1.plot(ranks, result['fitted'], color=colors.get(name, 'gray'),
+                 linewidth=2, label=f"{labels.get(name, name)} (R²={result['r2']:.3f})")
+
+    ax1.set_xscale('log')
+    ax1.set_yscale('log')
+    ax1.set_xlabel('Rank', fontsize=12)
+    ax1.set_ylabel('Mentions', fontsize=12)
+    ax1.set_title('Log-Log Plot: Rank vs Mentions', fontsize=14, fontweight='bold')
+    ax1.legend(loc='upper right', fontsize=10)
+    ax1.grid(True, alpha=0.3)
+
+    # Right: Residuals for best fit
+    ax2 = axes[1]
+    best_fit = max(fit_results.items(), key=lambda x: x[1]['r2'])
+    residuals = values - best_fit[1]['fitted']
+
+    ax2.scatter(ranks, residuals, s=30, alpha=0.6, color='#377eb8')
+    ax2.axhline(0, color='red', linestyle='--', linewidth=1)
+    ax2.set_xlabel('Rank', fontsize=12)
+    ax2.set_ylabel('Residuals', fontsize=12)
+    ax2.set_title(f'Residuals: {labels.get(best_fit[0], best_fit[0])} Fit', fontsize=14, fontweight='bold')
+    ax2.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(output_dir / 'risk_distribution_zipf.png', dpi=150, bbox_inches='tight')
+    plt.savefig(output_dir / 'risk_distribution_zipf.pdf', bbox_inches='tight')
+    plt.close()
+    logger.info("Saved: risk_distribution_zipf.png/pdf")
+
+
+def plot_rank_correlation(prevalence_df: pd.DataFrame, output_dir: Path) -> dict:
+    """Create scatter plots and compute rank correlations."""
+    df = prevalence_df.copy()
+    df['mention_rank'] = df['mentions'].rank(ascending=False)
+    df['char_rank'] = df['characters'].rank(ascending=False)
+
+    # Compute correlations
+    spearman_r, spearman_p = stats.spearmanr(df['mention_rank'], df['char_rank'])
+    kendall_tau, kendall_p = stats.kendalltau(df['mention_rank'], df['char_rank'])
+
+    correlations = {
+        'spearman': {'r': spearman_r, 'p': spearman_p},
+        'kendall': {'tau': kendall_tau, 'p': kendall_p},
+    }
+
+    # Plot 1: Rank vs Rank
+    fig1, ax1 = plt.subplots(figsize=(8, 8))
+    ax1.scatter(df['mention_rank'], df['char_rank'], s=50, alpha=0.6, color='#377eb8')
+    max_rank = max(df['mention_rank'].max(), df['char_rank'].max())
+    ax1.plot([1, max_rank], [1, max_rank], 'r--', linewidth=2, label='Perfect correlation')
+
+    # Invert axes so rank 1 is at top-left
+    ax1.invert_xaxis()
+    ax1.invert_yaxis()
+
+    # Annotate outliers
+    df['rank_diff'] = abs(df['mention_rank'] - df['char_rank'])
+    outliers = df.nlargest(5, 'rank_diff')
+    for _, row in outliers.iterrows():
+        ax1.annotate(row['risk'], xy=(row['mention_rank'], row['char_rank']),
+                     xytext=(-5, -5), textcoords='offset points', fontsize=9, alpha=0.8)
+
+    ax1.set_xlabel('Rank by Mentions', fontsize=14, fontweight='bold')
+    ax1.set_ylabel('Rank by Text Devoted', fontsize=14, fontweight='bold')
+    ax1.set_title(f'Rank Correlation: Mentions vs Text Devoted\nSpearman r={spearman_r:.3f}, p={spearman_p:.2e}',
+                  fontsize=14, fontweight='bold')
+    ax1.legend(loc='lower left', fontsize=11)
+    ax1.grid(True, alpha=0.3)
+    ax1.spines['top'].set_visible(False)
+    ax1.spines['right'].set_visible(False)
+
+    plt.tight_layout()
+    plt.savefig(output_dir / 'risk_rank_correlation.png', dpi=150, bbox_inches='tight')
+    plt.savefig(output_dir / 'risk_rank_correlation.pdf', bbox_inches='tight')
+    plt.close()
+    logger.info("Saved: risk_rank_correlation.png/pdf")
+
+    # Plot 2: Characters per mention vs mentions
+    fig2, ax2 = plt.subplots(figsize=(10, 7))
+    ax2.scatter(df['mentions'], df['chars_per_mention'], s=50, alpha=0.6, color='#377eb8')
+
+    # Add trend line
+    z = np.polyfit(df['mentions'], df['chars_per_mention'], 1)
+    p = np.poly1d(z)
+    x_line = np.linspace(df['mentions'].min(), df['mentions'].max(), 100)
+    ax2.plot(x_line, p(x_line), 'r--', linewidth=2)
+
+    # Annotate outliers (highest and lowest chars_per_mention)
+    top3 = df.nlargest(3, 'chars_per_mention')
+    bottom3 = df.nsmallest(3, 'chars_per_mention')
+    for _, row in pd.concat([top3, bottom3]).iterrows():
+        ax2.annotate(row['risk'], xy=(row['mentions'], row['chars_per_mention']),
+                     xytext=(5, 5), textcoords='offset points', fontsize=9, alpha=0.8)
+
+    ax2.set_xlabel('Mentions', fontsize=14, fontweight='bold')
+    ax2.set_ylabel('Characters per mention', fontsize=14, fontweight='bold')
+    ax2.set_title('Text Density: Do frequent risks get more text per mention?',
+                  fontsize=14, fontweight='bold')
+    ax2.grid(True, alpha=0.3)
+    ax2.spines['top'].set_visible(False)
+    ax2.spines['right'].set_visible(False)
+
+    plt.tight_layout()
+    plt.savefig(output_dir / 'risk_text_density.png', dpi=150, bbox_inches='tight')
+    plt.savefig(output_dir / 'risk_text_density.pdf', bbox_inches='tight')
+    plt.close()
+    logger.info("Saved: risk_text_density.png/pdf")
+
+    return correlations
+
+
+def print_distribution_analysis(prevalence_df: pd.DataFrame, fit_results: dict, correlations: dict) -> None:
+    """Print distribution analysis results."""
+    print("\n" + "=" * 70)
+    print("DISTRIBUTION ANALYSIS")
+    print("=" * 70)
+
+    # Concentration
+    df_sorted = prevalence_df.sort_values('mentions', ascending=False)
+    cumsum = df_sorted['mentions'].cumsum() / df_sorted['mentions'].sum()
+    top10_pct = cumsum.iloc[9] * 100 if len(cumsum) >= 10 else cumsum.iloc[-1] * 100
+    idx_50 = (cumsum >= 0.5).idxmax() + 1
+    idx_80 = (cumsum >= 0.8).idxmax() + 1
+
+    print(f"\nConcentration:")
+    print(f"  Top 10 risks: {top10_pct:.1f}% of all mentions")
+    print(f"  Top {idx_50} risks: 50% of all mentions")
+    print(f"  Top {idx_80} risks: 80% of all mentions")
+
+    # Distribution fits
+    print(f"\nDistribution Fits:")
+    for name, result in sorted(fit_results.items(), key=lambda x: -x[1]['r2']):
+        params_str = ', '.join(f"{k}={v:.3f}" for k, v in result['params'].items())
+        print(f"  {name}: R²={result['r2']:.4f}, AIC={result['aic']:.1f} ({params_str})")
+
+    best = max(fit_results.items(), key=lambda x: x[1]['r2'])
+    print(f"\n  Best fit: {best[0]} (R²={best[1]['r2']:.4f})")
+
+    if 'zipf' in fit_results:
+        alpha = fit_results['zipf']['params']['alpha']
+        if alpha < 1:
+            print(f"  Zipf alpha={alpha:.3f} (flatter than classic Zipf=1: more evenly distributed)")
+        else:
+            print(f"  Zipf alpha={alpha:.3f} (steeper than classic Zipf=1: more concentrated)")
+
+    # Rank correlation
+    print(f"\nRank Correlation (mentions vs text devoted):")
+    print(f"  Spearman r = {correlations['spearman']['r']:.4f} (p={correlations['spearman']['p']:.2e})")
+    print(f"  Kendall tau = {correlations['kendall']['tau']:.4f} (p={correlations['kendall']['p']:.2e})")
+
+
+# =============================================================================
 # Main
 # =============================================================================
 
@@ -612,6 +904,28 @@ def main():
     logger.info("\nGenerating visualizations...")
     plot_prevalence_comparison(prevalence_df, args.output, top_n=30)
     plot_prevalence_by_actor(by_actor_df, args.output, top_n=10)
+
+    # Distribution analysis
+    logger.info("\nRunning distribution analysis...")
+    df_sorted = prevalence_df.sort_values('mentions', ascending=False).reset_index(drop=True)
+    ranks = np.arange(1, len(df_sorted) + 1)
+    values = df_sorted['mentions'].values
+    fit_results = fit_distributions(ranks, values)
+
+    plot_full_distribution(prevalence_df, args.output)
+    plot_zipf_analysis(prevalence_df, fit_results, args.output)
+    correlations = plot_rank_correlation(prevalence_df, args.output)
+
+    print_distribution_analysis(prevalence_df, fit_results, correlations)
+
+    # Save distribution fit results
+    fit_df = pd.DataFrame([
+        {'distribution': name, 'r2': r['r2'], 'aic': r['aic'],
+         **{f'param_{k}': v for k, v in r['params'].items()}}
+        for name, r in fit_results.items()
+    ])
+    fit_df.to_csv(args.output / 'distribution_fits.csv', index=False)
+    logger.info("Saved: distribution_fits.csv")
 
     print("\n" + "=" * 70)
     print("DONE")

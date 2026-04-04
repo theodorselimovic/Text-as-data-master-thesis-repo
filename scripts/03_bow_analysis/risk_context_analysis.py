@@ -41,10 +41,27 @@ logger = logging.getLogger(__name__)
 
 # Target words for qualification analysis (will be stemmed)
 TARGET_WORDS_RAW = {
-    'sannolikhet': ['sannolikhet', 'sannolikheten', 'sannolikhets', 'trolig', 'troligt', 'troliga'],
+    'sannolikhet': ['sannolikhet', 'sannolikheten', 'sannolikhets',
+                    'trolig', 'troligt', 'troliga',
+                    'sannolik', 'sannolikt', 'sannolika',
+                    'osannolik', 'osannolikt', 'osannolika'],
     'konsekvens': ['konsekvens', 'konsekvensen', 'konsekvenser'],
     'risk': ['risk', 'risken', 'risker', 'riskens']
 }
+
+# Default levels for probability targets (when no other qualifier found)
+# Maps stemmed target to default level
+# Note: sannolik alone is ambiguous, but trolig/osannolik have clear meaning
+PROBABILITY_TARGET_DEFAULTS = {
+    'osannolik': 'low',      # osannolik alone → low
+    'trolig': 'high',        # trolig alone → high
+}
+
+# Intensifiers that bump to very_low (osannolik) or very_high (sannolik/trolig)
+INTENSIFIERS_RAW = ['mycket', 'ytterst', 'extremt', 'högst']
+
+# Targets that become very_high when combined with intensifier (but have no default alone)
+PROBABILITY_INTENSIFIED_HIGH = ['sannolik']
 
 # Boilerplate tokens to exclude (stemmed forms)
 # These will be checked as n-grams in tokens
@@ -56,49 +73,57 @@ RSA_BOILERPLATE_STEMS = None  # Will be initialized after stemmer
 
 QUALIFICATION_MAPPING_RAW = {
     'sannolikhet': {
-        'very_low': ['mycket låg', 'mycket liten', 'osannolik', 'sällsynt'],
+        # Note: osannolik/sannolik/trolig handled separately as target defaults
+        'very_low': ['mycket låg', 'mycket liten', 'sällsynt'],
         'low': ['låg', 'liten', 'små'],
         'medium': ['medelhög', 'mellan', 'möjlig'],
         'high': ['hög', 'stor'],
         'very_high': ['mycket hög', 'mycket stora', 'stora'],
-        'change': ['minska', 'minskar', 'minskad', 'minskande', 'öka', 'ökar', 'ökad', 'ökande',
-                   'förändras', 'förändrad', 'stiger', 'stigande', 'sjunker', 'sjunkande'],
-        'uncertainty': ['svår', 'svårt', 'svåra', 'lätt', 'lätta', 'lättare',
-                        'osäker', 'osäkert', 'osäkra', 'osäkerhet',
-                        'säker', 'säkert', 'säkra', 'säkerhet'],
-        'acceptability': ['acceptabel', 'oacceptabel']
+        'increasing': ['öka', 'ökar', 'ökad', 'ökande', 'stiger', 'stigande',
+                       'tilltar', 'tilltagande', 'förvärras', 'förvärrad',
+                       'eskalerar', 'eskalerande', 'förhöjd', 'förhöjda', 'växer', 'växande'],
+        'decreasing': ['minska', 'minskar', 'minskad', 'minskande', 'sjunker', 'sjunkande',
+                       'avtar', 'avtagande', 'reducerad', 'reduceras',
+                       'lindras', 'lindrad', 'förbättras', 'förbättrad', 'sänks', 'sänkt', 'mildras', 'mildrad'],
+        'stable': ['stabil', 'stabilt', 'stabila', 'oförändrad', 'oförändrat', 'oförändrade',
+                   'konstant', 'konstanta', 'bibehållen', 'bibehållet', 'bibehållna',
+                   'kvarstår', 'kvarstående', 'bestående', 'beständig'],
     },
     'konsekvens': {
-        'very_low': ['mycket begränsade', 'mycket liten', 'försumbara'],
-        'low': ['begränsade', 'lindriga', 'liten', 'små'],
-        'medium': ['kännbara', 'måttliga', 'direkta'],
-        'high': ['allvarlig', 'allvarliga', 'betydande', 'stor', 'stora', 'omfattande', 'svåra'],
-        'very_high': ['mycket allvarlig', 'mycket allvarliga', 'mycket stora', 'mycket omfattande', 'katastrofal', 'katastrofala'],
-        'change': ['minska', 'minskar', 'minskad', 'minskande', 'öka', 'ökar', 'ökad', 'ökande',
-                   'förändras', 'förändrad', 'stiger', 'stigande', 'sjunker', 'sjunkande'],
-        'uncertainty': ['osäker', 'osäkert', 'osäkra', 'osäkerhet',
-                        'säker', 'säkert', 'säkra', 'säkerhet'],
-        'acceptability': ['acceptabel', 'oacceptabel']
+        'very_low': ['mycket begränsade', 'mycket liten', 'försumbara',
+                     'obetydlig', 'obetydliga', 'marginell', 'marginella', 'minimal', 'minimala'],
+        'low': ['begränsade', 'lindriga', 'liten', 'små', 'ringa', 'måttlig', 'måttliga'],
+        'medium': ['kännbara', 'måttliga', 'direkta', 'märkbar', 'märkbara', 'påtaglig', 'påtagliga'],
+        'high': ['allvarlig', 'allvarliga', 'betydande', 'stor', 'stora', 'omfattande', 'svåra',
+                 'kraftig', 'kraftiga', 'avsevärd', 'avsevärda', 'väsentlig', 'väsentliga'],
+        'very_high': ['mycket allvarlig', 'mycket allvarliga', 'mycket stora', 'mycket omfattande',
+                      'katastrofal', 'katastrofala', 'extrem', 'extrema', 'förödande', 'ödesdigra'],
+        'increasing': ['öka', 'ökar', 'ökad', 'ökande', 'stiger', 'stigande',
+                       'tilltar', 'tilltagande', 'förvärras', 'förvärrad',
+                       'eskalerar', 'eskalerande', 'förhöjd', 'förhöjda', 'växer', 'växande'],
+        'decreasing': ['minska', 'minskar', 'minskad', 'minskande', 'sjunker', 'sjunkande',
+                       'avtar', 'avtagande', 'reducerad', 'reduceras',
+                       'lindras', 'lindrad', 'förbättras', 'förbättrad', 'sänks', 'sänkt', 'mildras', 'mildrad'],
+        'stable': ['stabil', 'stabilt', 'stabila', 'oförändrad', 'oförändrat', 'oförändrade',
+                   'konstant', 'konstanta', 'bibehållen', 'bibehållet', 'bibehållna',
+                   'kvarstår', 'kvarstående', 'bestående', 'beständig'],
     },
     'risk': {
-        'very_low': ['mycket låg', 'mycket liten'],
-        'low': ['låg', 'liten', 'små'],
-        'medium': ['medelhög', 'mellan'],
-        'high': ['hög', 'stor', 'stora', 'omfattande'],
-        'very_high': ['mycket hög', 'mycket stora', 'mycket omfattande'],
-        'change': ['minska', 'minskar', 'minskad', 'minskande', 'öka', 'ökar', 'ökad', 'ökande',
-                   'förändras', 'förändrad', 'stiger', 'stigande', 'sjunker', 'sjunkande'],
-        'uncertainty': ['osäker', 'osäkert', 'osäkra', 'osäkerhet',
-                        'säker', 'säkert', 'säkra', 'säkerhet'],
-        'acceptability': ['acceptabel', 'oacceptabel', 'tolerabel', 'intolerabel']
+        'very_low': ['mycket låg', 'mycket liten', 'försumbar', 'obetydlig', 'minimal'],
+        'low': ['låg', 'liten', 'små', 'begränsad', 'måttlig'],
+        'medium': ['medelhög', 'mellan', 'påtaglig', 'märkbar'],
+        'high': ['hög', 'stor', 'stora', 'omfattande', 'avsevärd', 'betydande', 'väsentlig'],
+        'very_high': ['mycket hög', 'mycket stora', 'mycket omfattande', 'extrem', 'kritisk', 'akut', 'överhängande'],
+        'increasing': ['öka', 'ökar', 'ökad', 'ökande', 'stiger', 'stigande',
+                       'tilltar', 'tilltagande', 'förvärras', 'förvärrad',
+                       'eskalerar', 'eskalerande', 'förhöjd', 'förhöjda', 'växer', 'växande'],
+        'decreasing': ['minska', 'minskar', 'minskad', 'minskande', 'sjunker', 'sjunkande',
+                       'avtar', 'avtagande', 'reducerad', 'reduceras',
+                       'lindras', 'lindrad', 'förbättras', 'förbättrad', 'sänks', 'sänkt', 'mildras', 'mildrad'],
+        'stable': ['stabil', 'stabilt', 'stabila', 'oförändrad', 'oförändrat', 'oförändrade',
+                   'konstant', 'konstanta', 'bibehållen', 'bibehållet', 'bibehållna',
+                   'kvarstår', 'kvarstående', 'bestående', 'beständig'],
     }
-}
-
-# Special uncertainty patterns: if BOTH stems appear in sentence, it's uncertainty
-# e.g., "svår" + "bedöm" = "svårt att bedöma"
-SPECIAL_UNCERTAINTY_STEMS = {
-    'konsekvens': [('svår', 'bedöm')],
-    'risk': [('svår', 'bedöm')],
 }
 
 # =============================================================================
@@ -156,13 +181,6 @@ def initialize_stemmed_dictionaries():
             all_stems.update(stems)
         all_qual_stems[concept] = all_stems
 
-    # Stem special uncertainty patterns
-    stemmed_special = {}
-    for concept, patterns in SPECIAL_UNCERTAINTY_STEMS.items():
-        stemmed_special[concept] = [
-            (stemmer.stem(p1), stemmer.stem(p2)) for p1, p2 in patterns
-        ]
-
     # Boilerplate stems to exclude
     boilerplate_phrases = ['risk och sårbarhetsanalys', 'risk- och sårbarhetsanalys', 'rsa']
     boilerplate_stems = set()
@@ -171,14 +189,28 @@ def initialize_stemmed_dictionaries():
         for w in words:
             boilerplate_stems.add(stemmer.stem(w))
 
+    # Stem probability target defaults (osannolik → low)
+    prob_target_defaults = {
+        stemmer.stem(target): level
+        for target, level in PROBABILITY_TARGET_DEFAULTS.items()
+    }
+
+    # Stem intensifiers (mycket, ytterst, etc.)
+    intensifier_stems = set(stemmer.stem(w) for w in INTENSIFIERS_RAW)
+
+    # Stem targets that become very_high only with intensifier
+    prob_intensified_high = set(stemmer.stem(w) for w in PROBABILITY_INTENSIFIED_HIGH)
+
     return {
         'targets': stemmed_targets,
         'qualifications': stemmed_qualifications,
         'all_qual_stems': all_qual_stems,
         'stem_to_level': stem_to_level,
         'stem_to_raw': stem_to_raw,
-        'special_uncertainty': stemmed_special,
         'boilerplate': boilerplate_stems,
+        'prob_target_defaults': prob_target_defaults,
+        'intensifiers': intensifier_stems,
+        'prob_intensified_high': prob_intensified_high,
         'stemmer': stemmer,
     }
 
@@ -186,21 +218,6 @@ def initialize_stemmed_dictionaries():
 # =============================================================================
 # TOKEN-BASED ANALYSIS
 # =============================================================================
-
-def check_special_uncertainty(tokens_set: set, concept: str, special_patterns: dict) -> bool:
-    """Check if special uncertainty pattern (e.g., svår + bedöm) is present."""
-    if concept not in special_patterns:
-        return False
-
-    for stem1, stem2 in special_patterns[concept]:
-        # Check if both stems appear in any token
-        has_stem1 = any(stem1 in t for t in tokens_set)
-        has_stem2 = any(stem2 in t for t in tokens_set)
-        if has_stem1 and has_stem2:
-            return True
-
-    return False
-
 
 def find_qualification(tokens: list, concept: str, dicts: dict) -> tuple:
     """
@@ -213,11 +230,6 @@ def find_qualification(tokens: list, concept: str, dicts: dict) -> tuple:
         (stem, level, raw_term) or (None, None, None)
     """
     tokens_set = set(tokens)
-
-    # Check special uncertainty patterns first
-    if check_special_uncertainty(tokens_set, concept, dicts['special_uncertainty']):
-        return 'svår_bedöm', 'uncertainty', 'svårt att bedöma'
-
     stem_to_level = dicts['stem_to_level'][concept]
     stem_to_raw = dicts['stem_to_raw'][concept]
 
@@ -260,6 +272,36 @@ def analyze_sentence_tokens(tokens: list, dicts: dict) -> dict:
 
         # Find qualification
         stem, level, raw_term = find_qualification(tokens, concept, dicts)
+
+        # Special handling for probability: use target word as default level
+        if concept == 'sannolikhet' and level is None:
+            prob_defaults = dicts['prob_target_defaults']
+            prob_intensified_high = dicts['prob_intensified_high']
+            intensifiers = dicts['intensifiers']
+            has_intensifier = bool(intensifiers & tokens_set)
+
+            for token in tokens:
+                # osannolik/trolig: use default, with intensifier bump appropriately
+                if token in prob_defaults:
+                    default_level = prob_defaults[token]
+                    if has_intensifier:
+                        if default_level == 'low':
+                            level = 'very_low'
+                            raw_term = 'mycket osannolik'
+                        elif default_level == 'high':
+                            level = 'very_high'
+                            raw_term = 'mycket trolig'
+                    else:
+                        level = default_level
+                        raw_term = token
+                    stem = token
+                    break
+                # sannolik: only classify if intensifier present → very_high
+                elif token in prob_intensified_high and has_intensifier:
+                    level = 'very_high'
+                    raw_term = 'mycket sannolik'
+                    stem = token
+                    break
 
         results[concept] = {
             'found': True,
@@ -388,7 +430,7 @@ def analyze_corpus(
             result_row[f'{concept}_total'] = sum(counts.values())
 
             for level in ['very_low', 'low', 'medium', 'high', 'very_high',
-                         'change', 'uncertainty', 'acceptability', 'UNKNOWN']:
+                         'increasing', 'stable', 'decreasing', 'UNKNOWN']:
                 result_row[f'{concept}_{level}'] = counts.get(level, 0)
 
         doc_results.append(result_row)
@@ -437,7 +479,7 @@ ACTOR_LABELS = {
     'kommun': 'Municipality',
     'lansstyrelse': 'Prefecture',
     'länsstyrelse': 'Prefecture',
-    'MCF': 'MSB',
+    'MCF': 'MCF',
 }
 
 # Actor colors (consistent across all visualizations)
@@ -447,7 +489,7 @@ ACTOR_COLORS = {
     'MCF': '#4daf4a',           # Green
 }
 
-# Fixed order: Municipality, Prefecture, MSB (left to right)
+# Fixed order: Municipality, Prefecture, MCF (left to right)
 ACTOR_ORDER = ['kommun', 'lansstyrelse', 'MCF']
 
 LEVEL_ORDER = ['very_low', 'low', 'medium', 'high', 'very_high']
@@ -464,6 +506,19 @@ LEVEL_COLORS = {
     'medium': '#ffd93d',
     'high': '#ff6b6b',
     'very_high': '#c0392b',
+}
+
+# Meta-categories (non-scalar qualifications)
+META_ORDER = ['decreasing', 'stable', 'increasing']
+META_LABELS = {
+    'increasing': 'Increasing',
+    'stable': 'Stable',
+    'decreasing': 'Decreasing',
+}
+META_COLORS = {
+    'increasing': '#e74c3c',   # red (bad - risk going up)
+    'stable': '#f39c12',       # orange (neutral)
+    'decreasing': '#27ae60',   # green (good - risk going down)
 }
 
 
@@ -629,12 +684,14 @@ def create_visualizations(aggregated: dict, output_dir: Path, results_df: pd.Dat
     plt.style.use('seaborn-v0_8-whitegrid')
 
     create_qualification_distribution(aggregated, output_dir)
+    create_meta_qualification_distribution(aggregated, output_dir)
 
     if 'by_actor' in aggregated and len(aggregated['by_actor']) > 1:
         # Filter out 'unknown' actor if others exist
         actors = [a for a in aggregated['by_actor'].keys() if a != 'unknown']
         if len(actors) > 1:
             create_actor_comparison(aggregated, output_dir)
+            create_meta_qualification_by_actor(aggregated, output_dir)
 
     # Time-based visualizations
     if results_df is not None and 'year' in results_df.columns:
@@ -673,9 +730,9 @@ def create_qualification_distribution(aggregated: dict, output_dir: Path) -> Non
         ax.set_ylabel('Count')
         ax.set_xlabel('Qualification Level')
 
-        total = sum(data.values())
-        unknown = data.get('UNKNOWN', 0)
-        ax.annotate(f'Total: {total}\nUnknown: {unknown} ({unknown/total*100:.1f}%)' if total > 0 else '',
+        # Only count known qualification levels (exclude UNKNOWN)
+        total = sum(data.get(level, 0) for level in LEVEL_ORDER)
+        ax.annotate(f'n = {total:,}',
                     xy=(0.98, 0.98), xycoords='axes fraction',
                     ha='right', va='top', fontsize=9,
                     bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
@@ -688,10 +745,104 @@ def create_qualification_distribution(aggregated: dict, output_dir: Path) -> Non
     logger.info("  Saved: qualification_distribution.png/pdf")
 
 
+def create_meta_qualification_distribution(aggregated: dict, output_dir: Path) -> None:
+    """Bar chart showing directional change counts (increasing, stable, decreasing) by concept."""
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+
+    concepts = ['sannolikhet', 'konsekvens', 'risk']
+    concept_labels = {
+        'sannolikhet': 'Probability (Sannolikhet)',
+        'konsekvens': 'Consequence (Konsekvens)',
+        'risk': 'Risk',
+    }
+
+    for ax, concept in zip(axes, concepts):
+        if concept not in aggregated['qualifications']:
+            continue
+
+        data = aggregated['qualifications'][concept]['by_level']
+        counts = [data.get(cat, 0) for cat in META_ORDER]
+        colors = [META_COLORS[cat] for cat in META_ORDER]
+        labels = [META_LABELS[cat] for cat in META_ORDER]
+
+        bars = ax.bar(labels, counts, color=colors, edgecolor='white', linewidth=0.5)
+
+        for bar, count in zip(bars, counts):
+            if count > 0:
+                ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.5,
+                        str(count), ha='center', va='bottom', fontsize=9)
+
+        ax.set_title(concept_labels[concept], fontsize=12, fontweight='bold')
+        ax.set_ylabel('Count')
+        ax.set_xlabel('Qualification Type')
+
+        total = sum(counts)
+        ax.annotate(f'n = {total:,}',
+                    xy=(0.98, 0.98), xycoords='axes fraction',
+                    ha='right', va='top', fontsize=9,
+                    bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+
+    plt.suptitle('Directional Change by Concept', fontsize=14, fontweight='bold')
+    plt.tight_layout()
+    plt.savefig(output_dir / 'meta_qualification_distribution.png', dpi=150, bbox_inches='tight')
+    plt.savefig(output_dir / 'meta_qualification_distribution.pdf', bbox_inches='tight')
+    plt.close()
+    logger.info("  Saved: meta_qualification_distribution.png/pdf")
+
+
+def create_meta_qualification_by_actor(aggregated: dict, output_dir: Path) -> None:
+    """Grouped bar chart comparing directional change (increasing/stable/decreasing) across actors."""
+    available_actors = [a for a in aggregated['by_actor'].keys() if a != 'unknown']
+    actors = [a for a in ACTOR_ORDER if a in available_actors]
+    if len(actors) < 2:
+        return
+
+    fig, axes = plt.subplots(1, 3, figsize=(16, 7))
+
+    concepts = ['sannolikhet', 'konsekvens', 'risk']
+    concept_labels = {
+        'sannolikhet': 'Probability',
+        'konsekvens': 'Consequence',
+        'risk': 'Risk',
+    }
+
+    for ax, concept in zip(axes, concepts):
+        x = np.arange(len(META_ORDER))
+        width = 0.25
+        offsets = np.linspace(-width, width, len(actors))
+
+        for i, actor in enumerate(actors):
+            actor_data = aggregated['by_actor'][actor].get('qualifications', {}).get(concept, {})
+            # Sum only meta categories for total
+            total = sum(actor_data.get(cat, 0) for cat in META_ORDER) if actor_data else 0
+
+            if total == 0:
+                continue
+
+            pcts = [(actor_data.get(cat, 0) / total * 100) for cat in META_ORDER]
+            actor_label = ACTOR_LABELS.get(actor, actor)
+            color = ACTOR_COLORS.get(actor, '#999999')
+            ax.bar(x + offsets[i], pcts, width * 0.9, label=actor_label, color=color, alpha=0.8)
+
+        ax.set_title(concept_labels[concept], fontsize=12, fontweight='bold')
+        ax.set_ylabel('Percentage')
+        ax.set_xlabel('Direction of Change')
+        ax.set_xticks(x)
+        ax.set_xticklabels([META_LABELS[m] for m in META_ORDER])
+        ax.legend(fontsize=8)
+
+    plt.suptitle('Directional Change by Actor Type (Normalized)', fontsize=14, fontweight='bold')
+    plt.tight_layout()
+    plt.savefig(output_dir / 'meta_qualification_by_actor.png', dpi=150, bbox_inches='tight')
+    plt.savefig(output_dir / 'meta_qualification_by_actor.pdf', bbox_inches='tight')
+    plt.close()
+    logger.info("  Saved: meta_qualification_by_actor.png/pdf")
+
+
 def create_actor_comparison(aggregated: dict, output_dir: Path) -> None:
     """Grouped bar chart comparing qualification levels across actors."""
     available_actors = [a for a in aggregated['by_actor'].keys() if a != 'unknown']
-    # Use fixed order: Municipality, Prefecture, MSB
+    # Use fixed order: Municipality, Prefecture, MCF
     actors = [a for a in ACTOR_ORDER if a in available_actors]
     if len(actors) < 2:
         return
@@ -712,7 +863,8 @@ def create_actor_comparison(aggregated: dict, output_dir: Path) -> None:
 
         for i, actor in enumerate(actors):
             actor_data = aggregated['by_actor'][actor].get('qualifications', {}).get(concept, {})
-            total = sum(actor_data.values()) if actor_data else 0
+            # Exclude UNKNOWN from total when normalizing
+            total = sum(v for k, v in actor_data.items() if k != 'UNKNOWN') if actor_data else 0
 
             if total == 0:
                 continue
@@ -781,7 +933,7 @@ def generate_report(aggregated: dict, output_dir: Path):
     report.append("- Token-based matching on pre-stemmed corpus (fast)")
     report.append("- Sentence-level qualifier matching")
     report.append("- Qualifications grouped into 5 severity levels: very_low -> very_high")
-    report.append("- Additional categories: 'change', 'uncertainty', 'acceptability'")
+    report.append("- Directional change categories: 'increasing', 'stable', 'decreasing'")
 
     # Qualifications
     report.append("\n" + "=" * 80)
@@ -798,7 +950,7 @@ def generate_report(aggregated: dict, output_dir: Path):
 
         report.append(f"\n  Distribution by level:")
         level_order = ['very_low', 'low', 'medium', 'high', 'very_high',
-                       'change', 'uncertainty', 'acceptability', 'UNKNOWN']
+                       'increasing', 'stable', 'decreasing', 'UNKNOWN']
         for level in level_order:
             count = data['by_level'].get(level, 0)
             if count > 0:
@@ -883,6 +1035,13 @@ def main():
         help='Metadata columns to include in output'
     )
 
+    parser.add_argument(
+        '--min-year',
+        type=int,
+        default=2015,
+        help='Minimum year to include (default: 2015)'
+    )
+
     args = parser.parse_args()
 
     print("=" * 80)
@@ -899,6 +1058,12 @@ def main():
     logger.info(f"\nLoading corpus: {args.corpus}")
     df = pd.read_parquet(args.corpus)
     logger.info(f"  Loaded {len(df)} sentences from {df['doc_id'].nunique()} documents")
+
+    # Filter by year
+    if args.min_year and 'year' in df.columns:
+        before_count = len(df)
+        df = df[pd.to_numeric(df['year'], errors='coerce') >= args.min_year]
+        logger.info(f"  Filtered to {args.min_year}+: {len(df)} sentences ({len(df)/before_count*100:.1f}%)")
 
     if 'tokens' not in df.columns:
         logger.error("Corpus must have 'tokens' column (use bow_corpus_stemmed.parquet)")
@@ -926,6 +1091,8 @@ def main():
     print("  - risk_context_analysis_aggregated.json")
     print("  - risk_context_analysis_report.txt")
     print("  - qualification_distribution.png/pdf")
+    print("  - meta_qualification_distribution.png/pdf")
+    print("  - meta_qualification_by_actor.png/pdf")
     print("  - qualification_by_actor.png/pdf")
     print("  - qualification_over_time.png/pdf")
     print("  - high_severity_over_time.png/pdf")

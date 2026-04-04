@@ -75,7 +75,7 @@ RISK_DICTIONARY_INDIVIDUAL = {
         'epizooti', 'epizootier',
         'djursjukdom', 'djursjukdomar', 'zoonos', 'zoonoser',
     ],
-    'covid': ['covid', 'coronaviruset', 'corona'],
+    'coronavirus': ['covid', 'coronaviruset', 'corona', 'coronavirus', 'sars-cov', 'mers-cov'],
     'smittspridning': [
         'smittsam sjukdom', 'smittsamma sjukdomar',
         'smitta', 'smittspridning', 'sjukdomsutbrott',

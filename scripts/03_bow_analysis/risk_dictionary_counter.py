@@ -61,7 +61,13 @@ import pandas as pd
 # Import the risk dictionaries from the analysis script
 import sys
 sys.path.insert(0, str(Path(__file__).parent))
-from risk_dictionary_categories import RISK_DICTIONARY_CATEGORIES as RISK_DICTIONARY_ORIGINAL
+
+# Categories dictionary is optional (may not exist if only using --individual)
+try:
+    from risk_dictionary_categories import RISK_DICTIONARY_CATEGORIES as RISK_DICTIONARY_ORIGINAL
+except ImportError:
+    RISK_DICTIONARY_ORIGINAL = None
+
 from risk_dictionary_individual import RISK_DICTIONARY_INDIVIDUAL
 
 # Import stemmer for --use-stems mode
@@ -480,6 +486,7 @@ def build_matrices(
     text_column: str = 'text',
     use_lemmas: bool = False,
     verbose: bool = False,
+    collapse_variants: bool = False,
 ) -> tuple:
     """
     Build term-level and category-level document matrices.
@@ -496,6 +503,10 @@ def build_matrices(
         If True, count from 'tokens' column instead of raw text.
     verbose : bool
         Whether to print progress.
+    collapse_variants : bool
+        If True (for --individual mode), term_matrix columns are canonical
+        risk names with summed variant counts. If False, each variant is
+        a separate column.
 
     Returns
     -------
@@ -510,6 +521,10 @@ def build_matrices(
             if term not in seen:
                 all_terms.append(term)
                 seen.add(term)
+
+    # For collapse_variants mode, use canonical names as columns
+    if collapse_variants:
+        canonical_names = list(risk_dictionary.keys())
 
     term_rows = []
     category_rows = []
@@ -548,8 +563,13 @@ def build_matrices(
 
         # Term-level row
         term_row = {**metadata}
-        for term in all_terms:
-            term_row[term] = term_counts.get(term, 0)
+        if collapse_variants:
+            # Sum counts for all variants under canonical name
+            for canonical, variants in risk_dictionary.items():
+                term_row[canonical] = sum(term_counts.get(v, 0) for v in variants)
+        else:
+            for term in all_terms:
+                term_row[term] = term_counts.get(term, 0)
         term_rows.append(term_row)
 
         # Category-level row
@@ -735,6 +755,9 @@ def main():
             print(f"    {canonical}: {forms}")
     elif args.use_stems:
         # Use stemmed dictionary to match stemmed tokens with n-grams
+        if RISK_DICTIONARY_ORIGINAL is None:
+            print("ERROR: Category dictionary not found. Use --individual for individual risk terms.")
+            sys.exit(1)
         risk_dict = stem_risk_dictionary(RISK_DICTIONARY_ORIGINAL)
         dict_type = "stemmed"
         # Show some example transformations
@@ -745,11 +768,17 @@ def main():
             print(f"    {cat}: {orig_terms} -> {stem_terms}")
     elif args.use_lemmas:
         # Legacy: use original dictionary (lemmatization mode deprecated)
+        if RISK_DICTIONARY_ORIGINAL is None:
+            print("ERROR: Category dictionary not found. Use --individual for individual risk terms.")
+            sys.exit(1)
         print("  Warning: --use-lemmas is deprecated, using original dictionary")
         risk_dict = RISK_DICTIONARY_ORIGINAL
         dict_type = "original (lemmas deprecated)"
     else:
         # Use original dictionary for raw text matching
+        if RISK_DICTIONARY_ORIGINAL is None:
+            print("ERROR: Category dictionary not found. Use --individual for individual risk terms.")
+            sys.exit(1)
         risk_dict = RISK_DICTIONARY_ORIGINAL
         dict_type = "original"
 
@@ -772,6 +801,7 @@ def main():
         text_column=args.text_column,
         use_lemmas=use_tokens,  # True for both --use-lemmas and --use-stems
         verbose=args.verbose,
+        collapse_variants=args.individual,  # Collapse variants to canonical names
     )
 
     # Summary statistics

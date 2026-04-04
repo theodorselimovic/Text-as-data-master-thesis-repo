@@ -203,13 +203,9 @@ def get_lan_for_entity(entity: str, actor: str) -> int | None:
     return None
 
 
-# Import term metadata for grouping by category
+# Import individual risk dictionary
 sys.path.insert(0, str(Path(__file__).parent))
-try:
-    from risk_dictionary_categories import RISK_DICTIONARY_CATEGORIES as RISK_DICTIONARY
-except ImportError:
-    # Fallback: no category grouping available
-    RISK_DICTIONARY = {}
+from risk_dictionary_individual import RISK_DICTIONARY_INDIVIDUAL
 
 
 def translate_actor(actor: str) -> str:
@@ -221,11 +217,13 @@ def translate_actor(actor: str) -> str:
 # DATA LOADING
 # =============================================================================
 
-def load_and_prepare(input_path: Path) -> tuple:
-    """Load term-document matrix."""
+def load_and_prepare(input_path: Path, min_year: int = 2015) -> tuple:
+    """Load term-document matrix and filter to min_year onwards."""
     df = pd.read_csv(input_path)
+    n_total = len(df)
+    df = df[df['year'] >= min_year]
     term_cols = [c for c in df.columns if c not in METADATA_COLS]
-    print(f"  Loaded {len(df)} documents, {len(term_cols)} terms")
+    print(f"  Loaded {n_total} documents, filtered to {len(df)} (>= {min_year}), {len(term_cols)} terms")
     return df, term_cols
 
 
@@ -293,26 +291,34 @@ def compute_adoption_curves(
     For each term (and optionally per actor type), compute cumulative
     adoption fraction over time.
 
+    Uses year-varying denominator: only counts entities that have at least
+    one document in or before each year. This avoids artificially suppressing
+    early adoption rates due to entities that only appear in later waves.
+
     Returns
     -------
     pd.DataFrame
-        Columns: term, actor, year, cumulative_count, total_entities,
+        Columns: term, actor, year, cumulative_count, observable_entities,
         cumulative_fraction.
     """
     all_years = sorted(df['year'].unique())
     records = []
 
+    # Pre-compute: for each entity, what's their earliest document year?
+    entity_first_year = df.groupby('entity')['year'].min()
+
     for actor_filter in [None] + list(df['actor'].unique()):
         if actor_filter is None:
             subset = first_appearances
-            total_entities = df['entity'].nunique()
+            actor_entities = entity_first_year
             actor_label = 'all'
         else:
             subset = first_appearances[first_appearances['actor'] == actor_filter]
-            total_entities = df[df['actor'] == actor_filter]['entity'].nunique()
+            actor_entity_list = df[df['actor'] == actor_filter]['entity'].unique()
+            actor_entities = entity_first_year[entity_first_year.index.isin(actor_entity_list)]
             actor_label = actor_filter
 
-        if total_entities == 0:
+        if len(actor_entities) == 0:
             continue
 
         for term in term_cols:
@@ -321,14 +327,19 @@ def compute_adoption_curves(
                 continue
 
             for year in all_years:
+                # Count entities observable by this year (have docs in or before this year)
+                observable_entities = (actor_entities <= year).sum()
+                if observable_entities == 0:
+                    continue
+
                 cum_count = (term_data['first_year'] <= year).sum()
                 records.append({
                     'term': term,
                     'actor': actor_label,
                     'year': year,
                     'cumulative_count': cum_count,
-                    'total_entities': total_entities,
-                    'cumulative_fraction': cum_count / total_entities,
+                    'observable_entities': observable_entities,
+                    'cumulative_fraction': cum_count / observable_entities,
                 })
 
     return pd.DataFrame(records)
@@ -346,15 +357,16 @@ def detect_adoption_spikes(
     """
     Detect years with unusually high adoption of a term.
 
-    A spike occurs when ≥ threshold fraction of entities first mention
-    a term in the same year.
+    A spike occurs when ≥ threshold fraction of observable entities first
+    mention a term in the same year. Uses year-varying denominator to only
+    count entities with documents in or before each year.
 
     Parameters
     ----------
     first_appearances : pd.DataFrame
         First appearance data.
     df : pd.DataFrame
-        Full data (for total entity counts).
+        Full data (for entity counts per year).
     threshold : float
         Minimum fraction to flag as a spike.
 
@@ -362,21 +374,30 @@ def detect_adoption_spikes(
     -------
     pd.DataFrame
         Detected spikes with columns: term, year, new_adopters,
-        total_entities, adoption_fraction, is_spike.
+        observable_entities, adoption_fraction, is_spike.
     """
-    total_entities = df['entity'].nunique()
+    # Pre-compute: for each entity, what's their earliest document year?
+    entity_first_year = df.groupby('entity')['year'].min()
+    all_years = sorted(df['year'].unique())
+
+    # Pre-compute observable entities per year
+    observable_by_year = {year: (entity_first_year <= year).sum() for year in all_years}
+
     records = []
 
     for term, group in first_appearances.groupby('term'):
         yearly_counts = group.groupby('first_year').size()
 
         for year, count in yearly_counts.items():
-            fraction = count / total_entities
+            observable = observable_by_year.get(year, 0)
+            if observable == 0:
+                continue
+            fraction = count / observable
             records.append({
                 'term': term,
                 'year': year,
                 'new_adopters': count,
-                'total_entities': total_entities,
+                'observable_entities': observable,
                 'adoption_fraction': fraction,
                 'is_spike': fraction >= threshold,
             })
@@ -459,9 +480,36 @@ def compute_gini_coefficients(
 # LEAD-LAG ANALYSIS
 # =============================================================================
 
-def compute_lead_lag(first_appearances: pd.DataFrame) -> pd.DataFrame:
+def get_balanced_panel_entities(df: pd.DataFrame) -> set:
+    """
+    Identify entities with documents in all 3 waves (2015-2018, 2019-2022, 2023+).
+    """
+    def get_wave(year):
+        if year <= 2018:
+            return 1
+        elif year <= 2022:
+            return 2
+        else:
+            return 3
+
+    df = df.copy()
+    df['wave_num'] = df['year'].apply(get_wave)
+    entity_waves = df.groupby('entity')['wave_num'].apply(set)
+    balanced = entity_waves[entity_waves.apply(lambda x: x == {1, 2, 3})]
+    return set(balanced.index)
+
+
+def compute_lead_lag(
+    first_appearances: pd.DataFrame,
+    balanced_entities: set = None,
+) -> pd.DataFrame:
     """
     For each term, compare median first-appearance year between actor types.
+
+    Parameters
+    ----------
+    balanced_entities : set, optional
+        If provided, restrict to entities in this set (balanced panel).
 
     Returns
     -------
@@ -472,10 +520,15 @@ def compute_lead_lag(first_appearances: pd.DataFrame) -> pd.DataFrame:
     """
     records = []
 
-    # Normalize actor names and collapse pre-2015 adoptions into 2014 bucket
+    # Normalize actor names
     first_appearances = first_appearances.copy()
-    first_appearances.loc[first_appearances['first_year'] < 2015, 'first_year'] = 2014
     first_appearances['actor'] = first_appearances['actor'].replace('länsstyrelse', 'lansstyrelse')
+
+    # Filter to balanced panel if specified
+    if balanced_entities is not None:
+        first_appearances = first_appearances[
+            first_appearances['entity'].isin(balanced_entities)
+        ]
 
     for term, group in first_appearances.groupby('term'):
         medians = group.groupby('actor')['first_year'].median()
@@ -506,27 +559,46 @@ def compute_lead_lag(first_appearances: pd.DataFrame) -> pd.DataFrame:
 # WITHIN-LÄN ANALYSIS
 # =============================================================================
 
-def compute_within_lan_lag(first_appearances: pd.DataFrame) -> pd.DataFrame:
+def compute_within_lan_lag(
+    first_appearances: pd.DataFrame,
+    df: pd.DataFrame = None,
+) -> pd.DataFrame:
     """
     For each län and term, compare when the prefecture adopted vs municipalities.
 
-    This tests whether municipalities follow their own regional prefecture
-    or if adoption patterns are independent.
+    Only includes municipality adoptions that occur on or after the prefecture's
+    earliest document year, to avoid bias from prefectures with incomplete coverage.
+
+    Parameters
+    ----------
+    first_appearances : pd.DataFrame
+        First appearance data.
+    df : pd.DataFrame, optional
+        Original document data, used to determine each prefecture's earliest doc year.
+        If not provided, uses min first_year from first_appearances (less accurate).
 
     Returns
     -------
     pd.DataFrame
-        Columns: lan, lan_name, term, prefecture_year, municipality_median_year,
-        municipality_mean_year, n_municipalities, lag.
+        Columns: lan, lan_name, term, prefecture_year, prefecture_first_doc_year,
+        municipality_median_year, municipality_mean_year, n_municipalities, lag.
         Positive lag = municipalities adopt after their prefecture.
     """
     records = []
 
-    # Filter to entities with län info and collapse pre-2015
+    # Filter to entities with län info
     fa = first_appearances.copy()
     fa = fa[fa['lan'].notna()]
-    fa.loc[fa['first_year'] < 2015, 'first_year'] = 2014
     fa['actor'] = fa['actor'].replace('länsstyrelse', 'lansstyrelse')
+
+    # Compute each prefecture's earliest document year
+    if df is not None:
+        df_pref = df[df['actor'].isin(['lansstyrelse', 'länsstyrelse'])].copy()
+        pref_first_doc = df_pref.groupby('entity')['year'].min().to_dict()
+    else:
+        # Fallback: use min first_year from first_appearances
+        pref_fa = fa[fa['actor'] == 'lansstyrelse']
+        pref_first_doc = pref_fa.groupby('entity')['first_year'].min().to_dict()
 
     for lan_id in sorted(fa['lan'].unique()):
         lan_data = fa[fa['lan'] == lan_id]
@@ -540,6 +612,10 @@ def compute_within_lan_lag(first_appearances: pd.DataFrame) -> pd.DataFrame:
         if len(prefecture_data) == 0 or len(municipality_data) == 0:
             continue
 
+        # Get prefecture's earliest document year
+        pref_entity = prefecture_data['entity'].iloc[0]
+        pref_first_doc_year = pref_first_doc.get(pref_entity, 2015)
+
         # For each term the prefecture has adopted
         for term in prefecture_data['term'].unique():
             pref_term = prefecture_data[prefecture_data['term'] == term]
@@ -550,10 +626,15 @@ def compute_within_lan_lag(first_appearances: pd.DataFrame) -> pd.DataFrame:
 
             pref_year = pref_term['first_year'].iloc[0]
 
-            if len(muni_term) > 0:
-                muni_median = muni_term['first_year'].median()
-                muni_mean = muni_term['first_year'].mean()
-                n_muni = len(muni_term)
+            # Only include municipality adoptions >= prefecture's first doc year
+            # This avoids counting municipalities as "earlier" when we simply
+            # don't have prefecture data for those years
+            muni_term_filtered = muni_term[muni_term['first_year'] >= pref_first_doc_year]
+
+            if len(muni_term_filtered) > 0:
+                muni_median = muni_term_filtered['first_year'].median()
+                muni_mean = muni_term_filtered['first_year'].mean()
+                n_muni = len(muni_term_filtered)
                 lag = muni_median - pref_year
             else:
                 muni_median = np.nan
@@ -566,6 +647,7 @@ def compute_within_lan_lag(first_appearances: pd.DataFrame) -> pd.DataFrame:
                 'lan_name': lan_name,
                 'term': term,
                 'prefecture_year': pref_year,
+                'prefecture_first_doc_year': pref_first_doc_year,
                 'municipality_median_year': muni_median,
                 'municipality_mean_year': muni_mean,
                 'n_municipalities': n_muni,
@@ -579,47 +661,16 @@ def compute_within_lan_lag(first_appearances: pd.DataFrame) -> pd.DataFrame:
 # VISUALISATIONS
 # =============================================================================
 
-def _get_category_for_term(term: str) -> str:
-    """Look up which category a term belongs to."""
-    for category, terms in RISK_DICTIONARY.items():
-        if term in terms:
-            return category
-    return 'unknown'
+def _get_canonical_risk(term: str) -> str | None:
+    """Look up canonical risk name for a term from the individual dictionary."""
+    for canonical, variants in RISK_DICTIONARY_INDIVIDUAL.items():
+        if term in variants or term == canonical:
+            return canonical
+    return None
 
 
-def plot_adoption_curves(
-    adoption_curves: pd.DataFrame,
-    output_dir: Path,
-    min_entities: int = 10,
-) -> None:
-    """
-    Multi-panel adoption curves, one panel per risk category.
-    Separate lines per actor type.
-    """
-    # Get category for each term
-    all_terms = adoption_curves['term'].unique()
-    term_to_cat = {t: _get_category_for_term(t) for t in all_terms}
-
-    # Filter to terms adopted by enough entities
-    all_actor_curves = adoption_curves[adoption_curves['actor'] == 'all']
-    max_fractions = all_actor_curves.groupby('term')['cumulative_fraction'].max()
-    relevant_terms = max_fractions[max_fractions > 0].index
-
-    # Only actor-specific curves (not 'all'), filter to 2015 onwards
-    actor_curves = adoption_curves[adoption_curves['actor'] != 'all']
-    actor_curves = actor_curves[actor_curves['term'].isin(relevant_terms)]
-    actor_curves = actor_curves[actor_curves['year'] >= 2015]
-
-    categories = sorted(set(term_to_cat.values()) - {'unknown'})
-    n_cats = len(categories)
-    if n_cats == 0:
-        return
-
-    n_cols = 2
-    n_rows = (n_cats + n_cols - 1) // n_cols
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(14, 4 * n_rows), squeeze=False)
-
-    # Map both spellings to same style/color
+def _get_actor_style() -> tuple[dict, dict]:
+    """Return consistent actor styles and colors."""
     actor_styles = {
         'kommun': ('-', 'o'),
         'lansstyrelse': ('--', 's'),
@@ -632,43 +683,214 @@ def plot_adoption_curves(
         'länsstyrelse': '#377eb8',
         'MCF': '#4daf4a',
     }
+    return actor_styles, actor_colors
 
-    # Normalize actor names in data
-    actor_curves = actor_curves.copy()
+
+def plot_aggregate_adoption_curves(
+    adoption_curves: pd.DataFrame,
+    output_dir: Path,
+) -> None:
+    """
+    Aggregate adoption curves: one line per actor type showing mean adoption
+    across all risk terms over time.
+
+    Note: MCF is excluded because n=1 entity makes adoption fraction meaningless
+    (always 0% or 100% per term).
+    """
+    from matplotlib.lines import Line2D
+
+    # Filter to actor-specific curves and 2015+
+    # Exclude MCF (n=1 entity, adoption fraction not meaningful)
+    actor_curves = adoption_curves[adoption_curves['actor'] != 'all'].copy()
+    actor_curves = actor_curves[~actor_curves['actor'].isin(['MCF'])]
+    actor_curves = actor_curves[actor_curves['year'] >= 2015]
     actor_curves['actor'] = actor_curves['actor'].replace('länsstyrelse', 'lansstyrelse')
 
-    for idx, category in enumerate(categories):
+    if len(actor_curves) == 0:
+        return
+
+    actor_styles, actor_colors = _get_actor_style()
+
+    # Compute mean and std adoption fraction per actor per year
+    agg = actor_curves.groupby(['actor', 'year'])['cumulative_fraction'].agg(['mean', 'std']).reset_index()
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    for actor in ['kommun', 'lansstyrelse']:
+        data = agg[agg['actor'] == actor].sort_values('year')
+        if len(data) == 0:
+            continue
+
+        ls, marker = actor_styles[actor]
+        color = actor_colors[actor]
+
+        ax.plot(
+            data['year'], data['mean'],
+            linestyle=ls, marker=marker, markersize=5,
+            color=color, linewidth=2, label=translate_actor(actor),
+        )
+        # Add confidence band (±1 std)
+        ax.fill_between(
+            data['year'],
+            data['mean'] - data['std'],
+            data['mean'] + data['std'],
+            color=color, alpha=0.15,
+        )
+
+    # Event annotations
+    for year, label in EXTERNAL_EVENTS.items():
+        ax.axvline(x=year, color='gray', linestyle=':', alpha=0.5, linewidth=0.8)
+        ax.text(year + 0.1, 0.02, label, fontsize=8, rotation=90, va='bottom', color='gray')
+
+    ax.set_xlabel('Year', fontsize=12)
+    ax.set_ylabel('Mean cumulative adoption fraction', fontsize=12)
+    ax.set_ylim(-0.05, 1.05)
+    ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+    ax.legend(title='Actor type', loc='lower right')
+    ax.set_title('Aggregate risk term adoption by actor type', fontsize=14, fontweight='bold')
+
+    plt.tight_layout()
+    plt.savefig(output_dir / 'adoption_curves_aggregate.png', dpi=150, bbox_inches='tight')
+    plt.savefig(output_dir / 'adoption_curves_aggregate.pdf', bbox_inches='tight')
+    plt.close()
+    print(f"  Saved: adoption_curves_aggregate.png/pdf")
+
+
+def plot_individual_adoption_curves(
+    adoption_curves: pd.DataFrame,
+    output_dir: Path,
+    gini_df: pd.DataFrame = None,
+    first_appearances: pd.DataFrame = None,
+    selection: str = 'mixed',
+) -> None:
+    """
+    Small multiples: one panel per selected individual risk terms,
+    showing adoption curves by actor type.
+
+    Parameters
+    ----------
+    selection : str
+        'top_adopted' - top 9 by max adoption (original)
+        'mixed' - top 3 synchronous + top 3 gradual + top 3 recent
+    """
+    from matplotlib.lines import Line2D
+
+    # Filter to actor-specific curves and 2015+
+    actor_curves = adoption_curves[adoption_curves['actor'] != 'all'].copy()
+    actor_curves = actor_curves[actor_curves['year'] >= 2015]
+    actor_curves['actor'] = actor_curves['actor'].replace('länsstyrelse', 'lansstyrelse')
+
+    # Map terms to canonical risk names
+    actor_curves['canonical'] = actor_curves['term'].apply(_get_canonical_risk)
+    actor_curves = actor_curves[actor_curves['canonical'].notna()]
+
+    if len(actor_curves) == 0:
+        print("  Warning: No terms matched to individual risk dictionary")
+        return
+
+    # Aggregate by canonical risk (in case multiple variants exist)
+    agg = actor_curves.groupby(['canonical', 'actor', 'year'])['cumulative_fraction'].mean().reset_index()
+
+    # Select risks based on selection mode
+    if selection == 'theoretical':
+        # Theoretically motivated selection
+        # Legitimacy/blame (orange)
+        legitimacy = ['social oro', 'pågående dödligt våld']
+        # Top-down diffusion (blue)
+        top_down = ['desinformation', 'flyktingström', 'väpnat angrepp']
+        # Bottom-up diffusion (green)
+        bottom_up = ['ekonomisk kris', 'försvunnen person']
+        # Post-2022 security event (red)
+        security = ['strid på svenskt territorium', 'cyberattack', 'ransomware']
+
+        top_risks = legitimacy + top_down + bottom_up + security
+        subtitle = 'Legitimacy (orange) | Top-down (blue) | Bottom-up (green) | Post-2022 security (red)'
+        risk_colors = {r: '#ff7f00' for r in legitimacy}  # orange
+        risk_colors.update({r: '#377eb8' for r in top_down})  # blue
+        risk_colors.update({r: '#4daf4a' for r in bottom_up})  # green
+        risk_colors.update({r: '#e41a1c' for r in security})  # red
+
+    elif selection == 'mixed' and gini_df is not None and first_appearances is not None:
+        # Map gini terms to canonical
+        gini = gini_df.copy()
+        gini['canonical'] = gini['term'].apply(_get_canonical_risk)
+        gini = gini[gini['canonical'].notna()]
+        gini = gini.groupby('canonical').agg({'gini': 'mean', 'n_entities': 'sum'}).reset_index()
+        gini = gini[gini['n_entities'] >= 10]  # Minimum entities for meaningful Gini
+
+        # Top 3 synchronous (lowest Gini)
+        synchronous = gini.nsmallest(3, 'gini')['canonical'].tolist()
+
+        # Top 3 gradual (highest Gini)
+        gradual = gini.nlargest(3, 'gini')['canonical'].tolist()
+
+        # Top 3 largest actor gap (municipality vs prefecture timing difference)
+        fa = first_appearances.copy()
+        fa['canonical'] = fa['term'].apply(_get_canonical_risk)
+        fa = fa[fa['canonical'].notna()]
+        # Compute median first_year per actor per canonical risk
+        actor_timing = fa.groupby(['canonical', 'actor'])['first_year'].median().unstack(fill_value=np.nan)
+        # Normalize actor names
+        if 'länsstyrelse' in actor_timing.columns and 'lansstyrelse' not in actor_timing.columns:
+            actor_timing = actor_timing.rename(columns={'länsstyrelse': 'lansstyrelse'})
+        # Compute gap: municipality - prefecture (positive = municipalities lag)
+        if 'kommun' in actor_timing.columns and 'lansstyrelse' in actor_timing.columns:
+            actor_timing['gap'] = abs(actor_timing['kommun'] - actor_timing['lansstyrelse'])
+            actor_timing = actor_timing.dropna(subset=['gap'])
+            # Exclude those already selected
+            already_selected = set(synchronous + gradual)
+            gap_candidates = actor_timing[~actor_timing.index.isin(already_selected)]
+            actor_gap = gap_candidates.nlargest(3, 'gap').index.tolist()
+        else:
+            actor_gap = []
+
+        top_risks = synchronous + gradual + actor_gap
+        subtitle = 'Top 3 synchronous (blue) + Top 3 gradual (red) + Top 3 actor gap (green)'
+        # Color-code titles
+        risk_colors = {r: '#377eb8' for r in synchronous}
+        risk_colors.update({r: '#e41a1c' for r in gradual})
+        risk_colors.update({r: '#4daf4a' for r in actor_gap})
+    else:
+        # Fallback: top N by max adoption
+        all_curves = adoption_curves[adoption_curves['actor'] == 'all'].copy()
+        all_curves['canonical'] = all_curves['term'].apply(_get_canonical_risk)
+        all_curves = all_curves[all_curves['canonical'].notna()]
+        max_adoption = all_curves.groupby('canonical')['cumulative_fraction'].max().sort_values(ascending=False)
+        top_risks = max_adoption.head(9).index.tolist()
+        subtitle = 'Top 9 by maximum adoption'
+        risk_colors = {}
+
+    if len(top_risks) == 0:
+        return
+
+    actor_styles, actor_colors = _get_actor_style()
+
+    n_cols = 3
+    n_rows = (len(top_risks) + n_cols - 1) // n_cols
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(14, 4 * n_rows), squeeze=False)
+
+    for idx, risk in enumerate(top_risks):
         ax = axes[idx // n_cols][idx % n_cols]
-        cat_terms = [t for t, c in term_to_cat.items() if c == category and t in relevant_terms]
 
-        # Pick top 5 most widely adopted terms in this category
-        term_reach = {}
-        for t in cat_terms:
-            t_data = all_actor_curves[all_actor_curves['term'] == t]
-            term_reach[t] = t_data['cumulative_fraction'].max()
-        top_terms = sorted(term_reach, key=term_reach.get, reverse=True)[:5]
+        for actor in ['kommun', 'lansstyrelse', 'MCF']:
+            data = agg[(agg['canonical'] == risk) & (agg['actor'] == actor)].sort_values('year')
+            if len(data) == 0:
+                continue
 
-        for term in top_terms:
-            for actor in ['kommun', 'lansstyrelse', 'MCF']:
-                data = actor_curves[
-                    (actor_curves['term'] == term) & (actor_curves['actor'] == actor)
-                ]
-                if len(data) == 0:
-                    continue
-
-                ls, marker = actor_styles[actor]
-                ax.plot(
-                    data['year'], data['cumulative_fraction'],
-                    linestyle=ls, marker=marker, markersize=3,
-                    color=actor_colors[actor], alpha=0.7,
-                    label=f"{term[:20]} ({translate_actor(actor)})",
-                )
+            ls, marker = actor_styles[actor]
+            ax.plot(
+                data['year'], data['cumulative_fraction'],
+                linestyle=ls, marker=marker, markersize=4,
+                color=actor_colors[actor], linewidth=1.5,
+            )
 
         # Event annotations
         for year, label in EXTERNAL_EVENTS.items():
-            ax.axvline(x=year, color='gray', linestyle=':', alpha=0.5, linewidth=0.8)
+            ax.axvline(x=year, color='gray', linestyle=':', alpha=0.4, linewidth=0.8)
 
-        ax.set_title(category, fontsize=11, fontweight='bold')
+        # Color-code title based on selection category
+        title_color = risk_colors.get(risk, 'black')
+        ax.set_title(risk, fontsize=11, fontweight='bold', color=title_color)
         ax.set_ylim(-0.05, 1.05)
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
 
@@ -678,33 +900,34 @@ def plot_adoption_curves(
             ax.set_ylabel('Cumulative fraction', fontsize=10)
 
     # Hide unused subplots
-    for idx in range(n_cats, n_rows * n_cols):
+    for idx in range(len(top_risks), n_rows * n_cols):
         axes[idx // n_cols][idx % n_cols].set_visible(False)
 
-    # Add a shared legend for actor types (line styles)
-    from matplotlib.lines import Line2D
+    # Shared legend
     legend_elements = [
         Line2D([0], [0], color='#e41a1c', linestyle='-', marker='o', markersize=4, label='Municipality'),
         Line2D([0], [0], color='#377eb8', linestyle='--', marker='s', markersize=4, label='Prefecture'),
-        Line2D([0], [0], color='#4daf4a', linestyle=':', marker='^', markersize=4, label='MCF'),
+        Line2D([0], [0], color='#4daf4a', linestyle=':', marker='^', markersize=4, label='MSB'),
     ]
     fig.legend(handles=legend_elements, loc='upper right', fontsize=10,
-               bbox_to_anchor=(0.98, 1.06), title='Actor type')
+               bbox_to_anchor=(0.98, 1.02), title='Actor type')
 
     plt.suptitle(
-        'Risk term adoption curves by actor type',
-        fontsize=14, fontweight='bold', y=1.02
+        f'Individual risk adoption curves\n({subtitle})',
+        fontsize=13, fontweight='bold', y=1.02
     )
     plt.tight_layout()
-    plt.savefig(output_dir / 'adoption_curves.png', dpi=150, bbox_inches='tight')
-    plt.savefig(output_dir / 'adoption_curves.pdf', bbox_inches='tight')
+    plt.savefig(output_dir / 'adoption_curves_individual.png', dpi=150, bbox_inches='tight')
+    plt.savefig(output_dir / 'adoption_curves_individual.pdf', bbox_inches='tight')
     plt.close()
-    print(f"  Saved: adoption_curves.png/pdf")
+    print(f"  Saved: adoption_curves_individual.png/pdf")
 
 
-def plot_gini_chart(gini_df: pd.DataFrame, output_dir: Path) -> None:
+def plot_gini_chart(gini_df: pd.DataFrame, output_dir: Path, top_n: int = 20) -> None:
     """
-    Two-panel strip plot: Gini coefficients and IQR by risk category.
+    Two-panel chart showing Gini coefficients and IQR for top individual risks.
+    Left: bar chart of top N risks by Gini (most synchronous to most gradual)
+    Right: scatter of Gini vs IQR with risk labels
     """
     if len(gini_df) == 0:
         return
@@ -715,50 +938,52 @@ def plot_gini_chart(gini_df: pd.DataFrame, output_dir: Path) -> None:
     if len(df) == 0:
         return
 
-    # Add category
-    df['category'] = df['term'].apply(_get_category_for_term)
-    df = df[df['category'] != 'unknown']
+    # Map to canonical risk names
+    df['canonical'] = df['term'].apply(_get_canonical_risk)
+    df = df[df['canonical'].notna()]
 
-    # Order categories by median Gini
-    cat_order = df.groupby('category')['gini'].median().sort_values().index.tolist()
+    if len(df) == 0:
+        print("  Warning: No terms matched to individual risk dictionary for Gini chart")
+        return
 
-    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+    # Aggregate by canonical risk (take mean if multiple variants)
+    agg = df.groupby('canonical').agg({
+        'gini': 'mean',
+        'iqr_years': 'mean',
+        'n_entities': 'sum',
+    }).reset_index()
 
-    # Left panel: Gini
+    fig, axes = plt.subplots(1, 2, figsize=(14, 7))
+
+    # Left panel: Top N risks by Gini (bar chart)
     ax1 = axes[0]
-    sns.stripplot(
-        data=df, x='category', y='gini', order=cat_order,
-        hue='category', palette='Set1', alpha=0.7, size=6,
-        jitter=0.2, ax=ax1, legend=False,
-    )
-    medians_gini = df.groupby('category')['gini'].median()
-    for i, cat in enumerate(cat_order):
-        ax1.hlines(medians_gini[cat], i - 0.3, i + 0.3, colors='black', linewidth=2)
-    ax1.set_xlabel('Risk category', fontsize=12)
-    ax1.set_ylabel('Gini coefficient', fontsize=12)
-    ax1.set_title('Gini coefficient\n(low = synchronous, high = gradual)', fontsize=12, fontweight='bold')
-    ax1.tick_params(axis='x', rotation=45)
-    for label in ax1.get_xticklabels():
-        label.set_ha('right')
+    top_gini = agg.nlargest(top_n, 'n_entities').sort_values('gini')
+    colors = plt.cm.RdYlGn_r(np.linspace(0.2, 0.8, len(top_gini)))
+    ax1.barh(top_gini['canonical'], top_gini['gini'], color=colors)
+    ax1.set_xlabel('Gini coefficient', fontsize=12)
+    ax1.set_title('Adoption synchronicity\n(low = synchronous, high = gradual)', fontsize=12, fontweight='bold')
+    ax1.axvline(x=agg['gini'].median(), color='black', linestyle='--', linewidth=1, alpha=0.7)
+    ax1.text(agg['gini'].median() + 0.01, 0.5, 'median', fontsize=9, va='bottom', color='gray')
 
-    # Right panel: IQR
+    # Right panel: Gini vs IQR scatter
     ax2 = axes[1]
-    sns.stripplot(
-        data=df, x='category', y='iqr_years', order=cat_order,
-        hue='category', palette='Set1', alpha=0.7, size=6,
-        jitter=0.2, ax=ax2, legend=False,
+    scatter = ax2.scatter(
+        agg['gini'], agg['iqr_years'],
+        s=agg['n_entities'] * 2, alpha=0.6, c=agg['gini'],
+        cmap='RdYlGn_r', edgecolors='black', linewidth=0.5
     )
-    medians_iqr = df.groupby('category')['iqr_years'].median()
-    for i, cat in enumerate(cat_order):
-        ax2.hlines(medians_iqr[cat], i - 0.3, i + 0.3, colors='black', linewidth=2)
-    ax2.set_xlabel('Risk category', fontsize=12)
+    # Label top risks by n_entities
+    for _, row in agg.nlargest(10, 'n_entities').iterrows():
+        ax2.annotate(
+            row['canonical'], (row['gini'], row['iqr_years']),
+            fontsize=8, alpha=0.8,
+            xytext=(5, 5), textcoords='offset points',
+        )
+    ax2.set_xlabel('Gini coefficient', fontsize=12)
     ax2.set_ylabel('IQR (years)', fontsize=12)
-    ax2.set_title('Interquartile range\n(years spanned by middle 50% of adopters)', fontsize=12, fontweight='bold')
-    ax2.tick_params(axis='x', rotation=45)
-    for label in ax2.get_xticklabels():
-        label.set_ha('right')
+    ax2.set_title('Gini vs. adoption timespan\n(size = entity count)', fontsize=12, fontweight='bold')
 
-    plt.suptitle('Adoption synchronicity by risk category', fontsize=14, fontweight='bold', y=1.02)
+    plt.suptitle('Adoption synchronicity by individual risk', fontsize=14, fontweight='bold', y=1.02)
     plt.tight_layout()
     plt.savefig(output_dir / 'gini_coefficients.png', dpi=150, bbox_inches='tight')
     plt.savefig(output_dir / 'gini_coefficients.pdf', bbox_inches='tight')
@@ -781,27 +1006,14 @@ def plot_lead_lag(lead_lag_df: pd.DataFrame, output_dir: Path) -> None:
 
         fig, ax = plt.subplots(figsize=(12, 12))
 
-        # Color by category if available, otherwise by lag magnitude
+        # Map to canonical risk names and color by lag magnitude
         df = df.copy()
-        df['category'] = df['term'].apply(_get_category_for_term)
+        df['canonical'] = df['term'].apply(_get_canonical_risk)
         df['lag'] = df[col_y] - df[col_x]
 
-        # Check if categories are meaningful (not all "unknown")
-        known_categories = df[df['category'] != 'unknown']['category'].nunique()
-        if known_categories >= 2:
-            cat_colors = dict(zip(
-                sorted(df['category'].unique()),
-                sns.color_palette("Set1", df['category'].nunique())
-            ))
-            colors = [cat_colors.get(c, 'gray') for c in df['category']]
-            use_category_legend = True
-        else:
-            # Color by lag magnitude (blue = leads, red = lags)
-            colors = df['lag'].values
-            use_category_legend = False
-
-        scatter = ax.scatter(df[col_x], df[col_y], c=colors, alpha=0.7, s=40,
-                             cmap='RdYlBu_r' if not use_category_legend else None)
+        # Color by lag magnitude (blue = leads, red = lags)
+        scatter = ax.scatter(df[col_x], df[col_y], c=df['lag'], alpha=0.7, s=40,
+                             cmap='RdYlBu_r')
 
         # Diagonal line (= simultaneous adoption)
         lim_min = min(df[col_x].min(), df[col_y].min()) - 1
@@ -842,10 +1054,12 @@ def plot_lead_lag(lead_lag_df: pd.DataFrame, output_dir: Path) -> None:
             from adjustText import adjust_text
             texts = []
             for i, (_, row) in enumerate(df_to_label.iterrows()):
+                # Use canonical name if available, otherwise original term
+                label = row['canonical'] if pd.notna(row.get('canonical')) else row['term']
                 texts.append(ax.text(
                     row[col_x] + jitter_x[i],
                     row[col_y] + jitter_y[i],
-                    row['term'][:15],
+                    label[:15],
                     fontsize=7, alpha=0.85,
                 ))
             adjust_text(
@@ -858,8 +1072,9 @@ def plot_lead_lag(lead_lag_df: pd.DataFrame, output_dir: Path) -> None:
         except ImportError:
             # Fallback: simple jittered labels
             for i, (_, row) in enumerate(df_to_label.iterrows()):
+                label = row['canonical'] if pd.notna(row.get('canonical')) else row['term']
                 ax.annotate(
-                    row['term'][:15],
+                    label[:15],
                     (row[col_x], row[col_y]),
                     fontsize=7, alpha=0.85,
                     xytext=(5 + jitter_x[i]*10, 5 + jitter_y[i]*10),
@@ -876,19 +1091,9 @@ def plot_lead_lag(lead_lag_df: pd.DataFrame, output_dir: Path) -> None:
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
         ax.yaxis.set_major_locator(MaxNLocator(integer=True))
 
-        # Legend
-        from matplotlib.patches import Patch
-        if use_category_legend:
-            legend_elements = [
-                Patch(facecolor=cat_colors[c], label=c) for c in sorted(cat_colors.keys())
-            ]
-        else:
-            # Add colorbar for lag magnitude
-            cbar = plt.colorbar(scatter, ax=ax, shrink=0.6)
-            cbar.set_label('Lag (years)', fontsize=10)
-            legend_elements = []
-        if legend_elements:
-            ax.legend(handles=legend_elements, loc='lower right', fontsize=8)
+        # Add colorbar for lag magnitude
+        cbar = plt.colorbar(scatter, ax=ax, shrink=0.6)
+        cbar.set_label('Lag (years)', fontsize=10)
 
         plt.tight_layout()
         fname = f'lead_lag_{ref_actor}'
@@ -1099,6 +1304,13 @@ def main():
     )
 
     parser.add_argument(
+        '--min-year',
+        type=int,
+        default=2015,
+        help='Minimum year to include in analysis (default: 2015)'
+    )
+
+    parser.add_argument(
         '--verbose',
         action='store_true',
         help='Print progress messages'
@@ -1113,41 +1325,64 @@ def main():
 
     # Load data
     print(f"\nLoading: {args.input}")
-    df, term_cols = load_and_prepare(args.input)
+    df_full, term_cols = load_and_prepare(args.input, min_year=args.min_year)
 
-    # First appearances
+    # Identify balanced panel municipalities (docs in all 3 waves)
+    print("\nIdentifying balanced panel...")
+    balanced_entities = get_balanced_panel_entities(df_full)
+    n_total_entities = df_full['entity'].nunique()
+
+    # For most analyses: use balanced panel municipalities + all prefectures + MCF
+    # This avoids bias in municipality timing while keeping all prefecture data
+    balanced_munis = df_full[(df_full['actor'] == 'kommun') &
+                             (df_full['entity'].isin(balanced_entities))]['entity'].unique()
+    all_prefectures = df_full[df_full['actor'] == 'lansstyrelse']['entity'].unique()
+    all_mcf = df_full[df_full['actor'] == 'MCF']['entity'].unique()
+
+    analysis_entities = set(balanced_munis) | set(all_prefectures) | set(all_mcf)
+    df = df_full[df_full['entity'].isin(analysis_entities)]
+
+    print(f"  Balanced panel municipalities: {len(balanced_munis)}/{df_full[df_full['actor']=='kommun']['entity'].nunique()}")
+    print(f"  All prefectures: {len(all_prefectures)}")
+    print(f"  Analysis entities: {len(analysis_entities)}")
+    print(f"  {len(df)} documents")
+
+    # First appearances (all analysis entities)
     print("\nComputing first appearances...")
     first_appearances = compute_first_appearances(df, term_cols)
     print(f"  {len(first_appearances)} (entity, term) first appearances")
     n_censored = first_appearances['is_left_censored'].sum()
     print(f"  Left-censored: {n_censored} ({n_censored / len(first_appearances) * 100:.1f}%)")
 
-    # Adoption curves
-    print("\nComputing adoption curves...")
-    adoption_curves = compute_adoption_curves(first_appearances, df, term_cols)
+    # For adoption curves: only balanced panel (municipalities + MCF that have all 3 waves)
+    # Prefectures excluded from aggregate curve since most don't have balanced coverage
+    print("\nComputing adoption curves (balanced panel only)...")
+    df_balanced = df_full[df_full['entity'].isin(balanced_entities)]
+    fa_balanced = first_appearances[first_appearances['entity'].isin(balanced_entities)]
+    adoption_curves = compute_adoption_curves(fa_balanced, df_balanced, term_cols)
     print(f"  {len(adoption_curves)} curve data points")
 
-    # Spikes
+    # Spikes (balanced panel)
     print(f"\nDetecting adoption spikes (threshold={args.spike_threshold:.0%})...")
-    spikes_df = detect_adoption_spikes(
-        first_appearances, df, threshold=args.spike_threshold
-    )
+    spikes_df = detect_adoption_spikes(fa_balanced, df_balanced, threshold=args.spike_threshold)
     n_spikes = spikes_df['is_spike'].sum()
     print(f"  {n_spikes} spikes detected")
 
-    # Gini
-    print("\nComputing Gini coefficients...")
-    gini_df = compute_gini_coefficients(first_appearances)
+    # Gini (balanced panel)
+    print("\nComputing Gini coefficients (balanced panel)...")
+    gini_df = compute_gini_coefficients(fa_balanced)
     print(f"  {len(gini_df)} terms with Gini scores")
 
-    # Lead-lag
-    print("\nComputing lead-lag analysis...")
-    lead_lag_df = compute_lead_lag(first_appearances)
+    # Lead-lag (balanced panel)
+    print("\nComputing lead-lag analysis (balanced panel)...")
+    lead_lag_df = compute_lead_lag(fa_balanced)
     print(f"  {len(lead_lag_df)} terms analyzed")
 
-    # Within-prefecture analysis
+    # Within-prefecture analysis (all prefectures, balanced municipalities)
+    # Only count municipality adoptions >= prefecture's first doc year
     print("\nComputing within-prefecture analysis...")
-    within_lan_df = compute_within_lan_lag(first_appearances)
+    print("  (all prefectures, balanced-panel municipalities, aligned by prefecture coverage)")
+    within_lan_df = compute_within_lan_lag(first_appearances, df=df_full)
     n_matched = first_appearances['lan'].notna().sum()
     print(f"  {n_matched} first appearances matched to prefecture")
     print(f"  {len(within_lan_df)} (prefecture, term) pairs analyzed")
@@ -1181,7 +1416,12 @@ def main():
 
     # Visualisations
     print("\nGenerating visualisations...")
-    plot_adoption_curves(adoption_curves, args.output)
+    plot_aggregate_adoption_curves(adoption_curves, args.output)
+    plot_individual_adoption_curves(
+        adoption_curves, args.output,
+        gini_df=gini_df, first_appearances=first_appearances,
+        selection='top_adopted'
+    )
     plot_gini_chart(gini_df, args.output)
     plot_lead_lag(lead_lag_df, args.output)
     plot_within_lan(within_lan_df, args.output)

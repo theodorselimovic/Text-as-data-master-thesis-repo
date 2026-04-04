@@ -34,12 +34,12 @@ Output:
 
 Usage:
     python risk_distinctiveness_analysis.py \\
-        --corpus data/processed/bow_corpus_stemmed.parquet \\
+        --input results/01_bow_analysis/term_matrices/term_document_matrix.csv \\
         --output results/01_bow_analysis/distinctiveness/
 
     # By wave (temporal breakdown)
     python risk_distinctiveness_analysis.py \\
-        --corpus data/processed/bow_corpus_stemmed.parquet \\
+        --input results/01_bow_analysis/term_matrices/term_document_matrix.csv \\
         --output results/01_bow_analysis/distinctiveness/ \\
         --by-wave
 
@@ -50,7 +50,7 @@ Date: 2026-03-19
 import argparse
 import logging
 import sys
-from collections import Counter, defaultdict
+from collections import Counter
 from itertools import combinations
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -58,14 +58,6 @@ from typing import Dict, List, Optional, Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from nltk.stem.snowball import SnowballStemmer
-
-# Import dictionaries and stopwords
-sys.path.insert(0, str(Path(__file__).parent))
-from risk_dictionary_individual import RISK_DICTIONARY_INDIVIDUAL
-
-sys.path.insert(0, str(Path(__file__).parent.parent / '02_preprocessing'))
-from preprocessing_bow import SWEDISH_STOPWORDS
 
 
 # =============================================================================
@@ -117,150 +109,92 @@ def map_year_to_wave(year) -> Optional[int]:
 
 
 # =============================================================================
-# Dictionary Preparation
+# Data Loading from Matrix
 # =============================================================================
 
-def build_stemmed_dictionary() -> Dict[str, dict]:
+METADATA_COLS = ['file', 'actor', 'entity', 'year', 'wave']
+
+
+def load_matrix(input_path: Path) -> Tuple[pd.DataFrame, List[str]]:
     """
-    Build stemmed dictionary mapping stemmed terms to canonical risks.
+    Load term-document matrix.
 
     Returns
     -------
-    dict
-        {stemmed_term: {'original': original_term, 'canonical': canonical_risk}}
+    tuple
+        (df, risk_cols) where risk_cols are the canonical risk column names
     """
-    stemmer = SnowballStemmer('swedish')
-    stemmed_stopwords = {stemmer.stem(sw) for sw in SWEDISH_STOPWORDS}
-
-    term_info = {}
-
-    for canonical, variants in RISK_DICTIONARY_INDIVIDUAL.items():
-        for term in variants:
-            words = term.lower().split()
-
-            # Stem words, filtering stopwords
-            stemmed_words = []
-            for w in words:
-                stem = stemmer.stem(w)
-                if w not in SWEDISH_STOPWORDS and stem not in stemmed_stopwords:
-                    stemmed_words.append(stem)
-
-            if not stemmed_words:
-                continue
-
-            if len(stemmed_words) == 1:
-                stemmed_form = stemmed_words[0]
-            else:
-                stemmed_form = '_'.join(stemmed_words)
-
-            # Map all variants to their canonical form
-            if stemmed_form not in term_info:
-                term_info[stemmed_form] = {
-                    'original': term,
-                    'canonical': canonical,
-                }
-
-    return term_info
+    df = pd.read_csv(input_path)
+    risk_cols = [c for c in df.columns if c not in METADATA_COLS]
+    return df, risk_cols
 
 
-# =============================================================================
-# Count Aggregation
-# =============================================================================
-
-def aggregate_counts_by_actor(
+def aggregate_counts_from_matrix(
     df: pd.DataFrame,
-    term_info: Dict[str, dict],
-    verbose: bool = False,
+    risk_cols: List[str],
 ) -> Tuple[Dict[str, Counter], Dict[str, int]]:
     """
-    Count risk term occurrences by actor type, collapsed to canonical risks.
+    Aggregate risk counts by actor from the term-document matrix.
 
     Parameters
     ----------
     df : pd.DataFrame
-        Corpus with 'tokens' and 'actor_type' columns
-    term_info : dict
-        Stemmed term -> {original, canonical} mapping
-    verbose : bool
-        Print progress
+        Term-document matrix with 'actor' column and risk count columns
+    risk_cols : list
+        Names of risk count columns
 
     Returns
     -------
     tuple
         (actor_counts, actor_totals)
         - actor_counts: {actor: Counter({canonical_risk: count})}
-        - actor_totals: {actor: total_dictionary_term_count}
+        - actor_totals: {actor: total_risk_mentions}
     """
-    logger.info("Aggregating term counts by actor...")
+    logger.info("Aggregating counts by actor from matrix...")
 
-    # Reverse mapping: stemmed_term -> canonical
-    stem_to_canonical = {
-        stem: info['canonical']
-        for stem, info in term_info.items()
-    }
-    stemmed_terms = set(stem_to_canonical.keys())
+    actor_counts = {}
+    actor_totals = {}
 
-    actor_counts = defaultdict(Counter)
-    actor_totals = defaultdict(int)
+    for actor in df['actor'].unique():
+        actor_df = df[df['actor'] == actor]
 
-    total_rows = len(df)
+        # Sum counts for each risk across all documents for this actor
+        counts = Counter()
+        for risk in risk_cols:
+            total = actor_df[risk].sum()
+            if total > 0:
+                counts[risk] = int(total)
 
-    for idx, row in df.iterrows():
-        if verbose and idx % 50000 == 0:
-            logger.info(f"  Processing row {idx:,}/{total_rows:,}")
+        actor_counts[actor] = counts
+        actor_totals[actor] = sum(counts.values())
 
-        actor = row.get('actor_type', 'unknown')
-        tokens = row.get('tokens', [])
+        n_risks = len([c for c in counts.values() if c > 0])
+        logger.info(f"  {actor}: {actor_totals[actor]:,} mentions, {n_risks} unique risks")
 
-        if tokens is None or (hasattr(tokens, '__len__') and len(tokens) == 0) or actor == 'unknown':
-            continue
-
-        # Count dictionary terms in this row
-        token_counter = Counter(tokens)
-
-        for token, count in token_counter.items():
-            if token in stemmed_terms:
-                canonical = stem_to_canonical[token]
-                actor_counts[actor][canonical] += count
-                actor_totals[actor] += count
-
-    logger.info(f"  Found {len(actor_counts)} actor types")
-    for actor in sorted(actor_counts.keys()):
-        n_terms = len([c for c in actor_counts[actor].values() if c > 0])
-        logger.info(f"    {actor}: {actor_totals[actor]:,} mentions, {n_terms} unique risks")
-
-    return dict(actor_counts), dict(actor_totals)
+    return actor_counts, actor_totals
 
 
-def aggregate_counts_by_actor_and_wave(
+def aggregate_counts_by_wave_from_matrix(
     df: pd.DataFrame,
-    term_info: Dict[str, dict],
-    verbose: bool = False,
+    risk_cols: List[str],
 ) -> Dict[int, Tuple[Dict[str, Counter], Dict[str, int]]]:
     """
-    Count risk term occurrences by actor type, grouped by wave.
+    Aggregate risk counts by actor, grouped by wave.
 
     Returns
     -------
     dict
         {wave: (actor_counts, actor_totals)}
     """
-    logger.info("Aggregating term counts by actor and wave...")
-
-    # Add wave column if not present
-    if 'wave' not in df.columns:
-        df = df.copy()
-        df['wave'] = df['year'].apply(map_year_to_wave)
+    logger.info("Aggregating counts by actor and wave from matrix...")
 
     results = {}
 
     for wave in sorted(df['wave'].dropna().unique()):
         wave_df = df[df['wave'] == wave]
-        logger.info(f"\nWave {wave} ({WAVE_LABELS.get(wave, '?')}): {len(wave_df):,} rows")
+        logger.info(f"\nWave {int(wave)} ({WAVE_LABELS.get(int(wave), '?')}): {len(wave_df)} documents")
 
-        actor_counts, actor_totals = aggregate_counts_by_actor(
-            wave_df, term_info, verbose=False
-        )
+        actor_counts, actor_totals = aggregate_counts_from_matrix(wave_df, risk_cols)
         results[int(wave)] = (actor_counts, actor_totals)
 
     return results
@@ -749,10 +683,10 @@ def main():
     )
 
     parser.add_argument(
-        '--corpus', '-c',
+        '--input', '-i',
         type=Path,
         required=True,
-        help='Path to stemmed corpus parquet',
+        help='Path to term-document matrix CSV',
     )
 
     parser.add_argument(
@@ -796,31 +730,26 @@ def main():
 
     args = parser.parse_args()
 
-    if not args.corpus.exists():
-        logger.error(f"Corpus not found: {args.corpus}")
+    if not args.input.exists():
+        logger.error(f"Input matrix not found: {args.input}")
         return 1
 
     print("=" * 70)
     print("RISK DISTINCTIVENESS ANALYSIS")
     print("Monroe et al. (2008) 'Fightin' Words' Method")
     print("=" * 70)
-    print(f"Corpus: {args.corpus}")
+    print(f"Input: {args.input}")
     print(f"Output: {args.output}")
     print(f"Prior strength: {args.prior_strength}")
 
-    # Load data
-    logger.info("\nLoading corpus...")
-    df = pd.read_parquet(args.corpus)
-    n_docs = df['doc_id'].nunique()
-    logger.info(f"  Loaded {len(df):,} rows from {n_docs} documents")
-
-    # Build stemmed dictionary
-    logger.info("\nBuilding stemmed dictionary...")
-    term_info = build_stemmed_dictionary()
-    logger.info(f"  {len(term_info)} stemmed terms -> {len(RISK_DICTIONARY_INDIVIDUAL)} canonical risks")
+    # Load term-document matrix
+    logger.info("\nLoading term-document matrix...")
+    df, risk_cols = load_matrix(args.input)
+    n_docs = len(df)
+    logger.info(f"  Loaded {n_docs} documents with {len(risk_cols)} risk terms")
 
     # Aggregate counts by actor
-    actor_counts, actor_totals = aggregate_counts_by_actor(df, term_info, args.verbose)
+    actor_counts, actor_totals = aggregate_counts_from_matrix(df, risk_cols)
 
     # Create output directory
     args.output.mkdir(parents=True, exist_ok=True)
@@ -886,7 +815,7 @@ def main():
         logger.info("TEMPORAL BREAKDOWN (by wave)")
         logger.info("=" * 70)
 
-        wave_data = aggregate_counts_by_actor_and_wave(df, term_info, args.verbose)
+        wave_data = aggregate_counts_by_wave_from_matrix(df, risk_cols)
 
         wave_output = args.output / 'by_wave'
         wave_output.mkdir(parents=True, exist_ok=True)
@@ -917,11 +846,11 @@ def main():
     print("\n" + "=" * 70)
     print("SUMMARY")
     print("=" * 70)
-    print(f"\nCorpus: {n_docs} documents")
-    print(f"Dictionary: {len(RISK_DICTIONARY_INDIVIDUAL)} canonical risks")
+    print(f"\nDocuments: {n_docs}")
+    print(f"Risk terms: {len(risk_cols)}")
     print(f"\nActor totals (dictionary term mentions):")
     for actor in sorted(actor_totals.keys()):
-        docs = df[df['actor_type'] == actor]['doc_id'].nunique()
+        docs = len(df[df['actor'] == actor])
         total = actor_totals[actor]
         per_doc = total / docs if docs > 0 else 0
         print(f"  {ACTOR_DISPLAY_NAMES.get(actor, actor):<20} {total:>8,} mentions ({docs} docs, {per_doc:.1f}/doc)")
