@@ -1064,7 +1064,45 @@ def create_visualizations(results_df: pd.DataFrame, output_dir: Path):
     plt.savefig(output_dir / "similarity_distributions.png", dpi=300, bbox_inches="tight")
     plt.close()
 
-    # 2b. Bar chart: target vs baseline means (keep for reference)
+    # 2b. Violin plot: EMD distributions (inverted so higher = more similar)
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    emd_data = []
+    for _, row in results_df.iterrows():
+        if pd.notna(row.get("msb_emd")):
+            # Invert: 1 - EMD so higher = more similar
+            emd_data.append({"Comparison": "→ MSB", "EMD Similarity (1 - EMD)": 1 - row["msb_emd"]})
+        if pd.notna(row.get("prefecture_emd")):
+            emd_data.append({"Comparison": "→ Prefecture", "EMD Similarity (1 - EMD)": 1 - row["prefecture_emd"]})
+        if pd.notna(row.get("within_doc_emd")):
+            emd_data.append({"Comparison": "Within-doc\n(baseline)", "EMD Similarity (1 - EMD)": 1 - row["within_doc_emd"]})
+
+    if emd_data:
+        emd_df = pd.DataFrame(emd_data)
+        order = ["→ MSB", "→ Prefecture", "Within-doc\n(baseline)"]
+        palette = {"→ MSB": "#4daf4a", "→ Prefecture": "#377eb8", "Within-doc\n(baseline)": "#999999"}
+
+        sns.violinplot(
+            data=emd_df,
+            x="Comparison",
+            y="EMD Similarity (1 - EMD)",
+            hue="Comparison",
+            ax=ax,
+            order=order,
+            hue_order=order,
+            palette=palette,
+            inner="quartile",
+            cut=0,
+            legend=False,
+        )
+        ax.set_title("EMD Similarity Distributions (Higher = More Similar)")
+        ax.set_xlabel("")
+
+    plt.tight_layout()
+    plt.savefig(output_dir / "emd_distributions.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+    # 2c. Bar chart: target vs baseline means (keep for reference)
     fig, ax = plt.subplots(figsize=(10, 6))
 
     metrics = ["msb_max_match", "prefecture_max_match", "within_doc_max_match", "cross_muni_max_match"]
