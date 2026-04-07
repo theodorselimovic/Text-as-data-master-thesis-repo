@@ -211,6 +211,72 @@ python ner_extraction.py \
 - `entities_by_document.csv` — entity counts per document with actor/wave metadata
 - `ner_report.json` — summary statistics, top entities by type
 
+### Risk Dictionaries (`dictionaries/`)
+
+Centralized three-tier dictionary structure for all risk term detection and categorization.
+
+#### Tier 1: Individual Risk Terms (`risk_terms.py`)
+
+**Purpose:** Base dictionary mapping 100 canonical risk names to their variants (inflections, synonyms). Foundation for all risk detection.
+
+**Structure:**
+```python
+RISK_TERMS = {
+    'oversvamning': ['översvämning', 'översvämningar', 'skyfall', ...],
+    'cyberattack': ['cyberattack', 'cyberattacker', 'nätattack', ...],
+    ...
+}
+```
+
+- Keys: ASCII for programmatic access
+- Values: Swedish characters for text matching
+- 100 canonical risks, 355 total variants
+
+**Sources:** MSB Riskkatalog, MSB NRSB 2025, EU Civil Protection Knowledge Network
+
+#### Tier 2: Risk Categories (`risk_categories.py`)
+
+**Purpose:** Maps individual risks to MSB's official three-part taxonomy:
+
+| Category | Swedish | Description | Count |
+|----------|---------|-------------|-------|
+| `nature` | Naturhändelser | Weather, geological, biological, climate | 32 |
+| `technical` | Tekniska störningar | Infrastructure failures, accidents | 34 |
+| `antagonistic` | Antagonistiska händelser | Cyber, terrorism, military, crime | 25 |
+| `other` | Övriga | Economic, social, pollution | 9 |
+
+**Legacy support:** `get_legacy_risk_dictionary()` generates the old 12-category format (naturhot, biologiska_hot, olyckor, etc.) for backward compatibility with existing scripts.
+
+#### Tier 3: Extended Dictionary (`risk_extended.py`)
+
+**Purpose:** Adds terms for BERT sampling beyond specific risks:
+
+| Category | Count | Description |
+|----------|-------|-------------|
+| Riskfamilj | 68 | Risk-related vocabulary (Boholm 2018): säkerhet, sårbarhet, kris... |
+| Probability | 29 | 5-level scale: osannolik → mycket sannolik |
+| Consequence | 38 | 5-level scale: försumbar → katastrofal |
+| Legitimacy | 24 | Trust, democracy, social values |
+
+**Total:** 502 unique terms for paragraph filtering
+
+**Usage:**
+```python
+# Import from centralized location
+from scripts.dictionaries import RISK_TERMS, get_legacy_risk_dictionary
+
+# Tier 1: Individual risks
+from scripts.dictionaries import RISK_TERMS, get_canonical_mapping
+
+# Tier 2: Categories  
+from scripts.dictionaries import RISK_CATEGORIES, get_category_for_risk
+
+# Tier 3: Extended for BERT sampling
+from scripts.dictionaries import get_all_sampling_terms, RISKFAMILJ
+```
+
+---
+
 ### 6. BERT Mechanism Classification (`06_bert_classification/`)
 
 **Main script:** `mechanism_classifier.py`
@@ -276,6 +342,70 @@ python mechanism_classifier.py --mode predict \
 | gradient_accumulation | 2 | Effective batch = 16-32 |
 | warmup_ratio | 0.1 | ~10% of steps |
 | threshold | 0.5 | Calibrated per mechanism |
+
+---
+
+### 7. Isomorphism Analysis (`02_bert_analysis/security_similarity/`)
+
+**Main script:** `isomorphism_analysis.py`
+
+**Purpose:** Measures institutional isomorphism between municipal RSA documents and reference documents (MSB, prefectures) for security risk framing. Tests whether municipalities copy central government framing or adapt discourse to local circumstances.
+
+**Theoretical motivation:** Security risks (cyber, disinformation, military) may show higher isomorphism than other risks because:
+- Less local expertise on novel security threats
+- More standardized MSB guidance
+- Higher perceived uncertainty
+
+**Method:**
+1. **Paragraph tagging** — Assigns each paragraph to dominant risk category using `get_legacy_risk_dictionary()` from centralized dictionaries
+2. **Sentence embedding** — Extracts embeddings using Swedish Sentence-BERT (`KBLab/sentence-bert-swedish-cased`)
+3. **Similarity measures:**
+   - **Max-match averaging** — For each municipality sentence, find best match in reference; average maxima. Captures "borrowing" of specific phrases.
+   - **Earth Mover's Distance (EMD)** — Optimal transport cost between embedding distributions. Captures distributional similarity.
+4. **Baselines:**
+   - **Within-document:** Random other-risk paragraph from same RSA (controls for document style)
+   - **Cross-municipality:** Same-risk paragraph from different municipality (measures peer similarity)
+
+**Risk categories analyzed:**
+- **Security risks:** `cyber_hot`, `antagonistiska_hot` (cyberattacks, terrorism, military threats, disinformation)
+- **Comparison risks:** `naturhot`, `teknisk_infrastruktur`, `biologiska_hot`
+
+**Methodology documentation:** See `METHODOLOGY.md` in same folder for detailed thesis-ready explanation.
+
+**Usage:**
+```bash
+python isomorphism_analysis.py \
+    --input data/processed/bert_corpus.parquet \
+    --output results/02_bert_analysis/security_similarity/ \
+    --min-year 2015 \
+    --verbose
+```
+
+**Output files:**
+- `isomorphism_scores.csv` — Per-municipality similarity scores (1,747 comparisons)
+- `example_sentence_pairs.csv` — High/medium/low similarity pairs for verification
+- `similarity_distributions.png` — Violin plot: MSB, Prefecture, Within-doc baseline
+- `similarity_by_category.png` — Box plots by risk category
+- `target_vs_baseline.png` — Bar chart with error bars
+- `security_vs_other.png` — Security vs other risk comparison
+- `temporal_trends.png` — Trends by wave (2015-18, 2019-22, 2023+)
+
+**Key columns in output:**
+| Column | Description |
+|--------|-------------|
+| `msb_max_match` | Max-match similarity to MSB |
+| `msb_emd` | EMD distance to MSB (lower = more similar) |
+| `prefecture_max_match` | Max-match similarity to prefecture |
+| `prefecture_emd` | EMD distance to prefecture |
+| `within_doc_max_match` | Baseline: different risk in same doc |
+| `cross_muni_max_match` | Baseline: same risk in other municipality |
+
+**Key findings (preliminary):**
+- MSB similarity: mean=0.59, Prefecture: mean=0.60
+- Within-doc baseline: mean=0.39
+- Gap of ~0.2 confirms municipalities are more similar to MSB/prefecture than to unrelated text in their own documents
+
+**Dependencies:** `sentence-transformers`, `POT` (Python Optimal Transport), `torch`
 
 ---
 

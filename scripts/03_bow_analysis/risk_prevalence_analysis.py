@@ -43,9 +43,9 @@ from scipy import stats
 from scipy.optimize import curve_fit
 from nltk.stem.snowball import SnowballStemmer
 
-# Import dictionary and stopwords
-sys.path.insert(0, str(Path(__file__).parent))
-from risk_dictionary_individual import RISK_DICTIONARY_INDIVIDUAL
+# Import centralized dictionary from scripts/dictionaries/
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from dictionaries import RISK_TERMS as RISK_DICTIONARY_INDIVIDUAL
 
 sys.path.insert(0, str(Path(__file__).parent.parent / '02_preprocessing'))
 from preprocessing_bow import SWEDISH_STOPWORDS

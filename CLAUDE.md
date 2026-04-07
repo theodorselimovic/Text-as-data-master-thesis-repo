@@ -69,6 +69,14 @@ scripts/
     ner_extraction.py            # Swedish BERT NER extraction (KBLab model)
   06_bert_classification/  # BERT mechanism classification
     mechanism_classifier.py      # Fine-tune Swedish BERT for mechanism detection
+  02_bert_analysis/        # BERT-based semantic analysis
+    security_similarity/         # Isomorphism analysis for security risk framing
+      isomorphism_analysis.py    # Sentence-BERT similarity to MSB/prefectures
+      METHODOLOGY.md             # Thesis-ready methodology documentation
+  dictionaries/            # Risk term dictionaries (3-tier structure)
+    risk_terms.py                # Tier 1: Individual risks with variants
+    risk_categories.py           # Tier 2: MSB taxonomy (nature/technical/antagonistic)
+    risk_extended.py             # Tier 3: Extended terms for BERT sampling
 data/                      # Gitignored: raw PDFs, parquet files, vectors
 models/                    # Gitignored: trained model checkpoints
 results/                   # Gitignored: analysis outputs, visualisations
@@ -79,6 +87,8 @@ results/                   # Gitignored: analysis outputs, visualisations
   ner/                     # NER extraction outputs
   quality_audit/           # Quality audit outputs
   bert_classification/     # BERT classification outputs (predictions, metrics)
+  02_bert_analysis/        # BERT semantic analysis outputs
+    security_similarity/   # Isomorphism scores, visualizations
 docs/                      # Guides and documentation
 archive/                   # Legacy notebooks and R scripts
 logs/                      # Processing logs

@@ -38,8 +38,9 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from nltk.stem.snowball import SnowballStemmer
 
-# Import risk dictionary
-from risk_dictionary_individual import RISK_DICTIONARY_INDIVIDUAL
+# Import centralized dictionary from scripts/dictionaries/
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from dictionaries import RISK_TERMS as RISK_DICTIONARY_INDIVIDUAL
 
 # Import stopwords from preprocessing
 sys.path.insert(0, str(Path(__file__).parent.parent / '02_preprocessing'))

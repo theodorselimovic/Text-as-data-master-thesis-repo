@@ -203,9 +203,9 @@ def get_lan_for_entity(entity: str, actor: str) -> int | None:
     return None
 
 
-# Import individual risk dictionary
-sys.path.insert(0, str(Path(__file__).parent))
-from risk_dictionary_individual import RISK_DICTIONARY_INDIVIDUAL
+# Import centralized dictionary from scripts/dictionaries/
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from dictionaries import RISK_TERMS as RISK_DICTIONARY_INDIVIDUAL
 
 
 def translate_actor(actor: str) -> str:

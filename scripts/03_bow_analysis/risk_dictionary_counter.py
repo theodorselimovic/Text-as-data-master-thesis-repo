@@ -58,17 +58,14 @@ from pathlib import Path
 
 import pandas as pd
 
-# Import the risk dictionaries from the analysis script
+# Import centralized dictionaries from scripts/dictionaries/
 import sys
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from dictionaries import RISK_TERMS, get_legacy_risk_dictionary
 
-# Categories dictionary is optional (may not exist if only using --individual)
-try:
-    from risk_dictionary_categories import RISK_DICTIONARY_CATEGORIES as RISK_DICTIONARY_ORIGINAL
-except ImportError:
-    RISK_DICTIONARY_ORIGINAL = None
-
-from risk_dictionary_individual import RISK_DICTIONARY_INDIVIDUAL
+# Backward compatibility aliases
+RISK_DICTIONARY_INDIVIDUAL = RISK_TERMS
+RISK_DICTIONARY_ORIGINAL = get_legacy_risk_dictionary(include_extended=False)
 
 # Import stemmer for --use-stems mode
 from nltk.stem.snowball import SnowballStemmer
