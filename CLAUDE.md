@@ -10,11 +10,16 @@ Sciences Po master thesis by Theodor Selimovic. Text-as-data analysis of Swedish
 1. What explains the increasing rate of de facto adoption of risk analyses as an instrument of civil defence by different actors in the Swedish multi-level polity?
 2. What are the structural effects of the adoption on politics within and without the administration?
 
-**Subquestions:**
-1. How have municipal, prefectural, and central government risk analyses in Sweden changed between 2015 and 2024?
-2. How does the framing and/or understanding of risk change depending on the actor?
-3. What other effects do the instruments produce?
-4. How do risk analyses as a particular form of analysing the future change how we see the future?
+**Empirical questions (text-as-data):**
+
+- **Q1: Why have municipal risk analyses increased in length?** (main empirical question)
+
+Subquestions enabling Q1:
+- **Q2:** What risks matter? What risks are only mentioned, and what risks are analysed?
+- **Q3:** How are probability, consequence, and risk linked in the analyses?
+- **Q4:** How have risk analyses changed over time? Do risks persist? Have the analyses diverged or converged?
+- **Q5:** Who leads? Are risks diffused bottom-up (municipalities lead) or top-down (prefectures and central government agency lead)?
+- **Q6:** How do security threats become riskified? How do they interact with previous risk clusters?
 
 ## Theoretical Framework
 
@@ -37,12 +42,12 @@ Three categories of documents:
 ## Methodology
 
 Text-as-data methods in two stages:
-1. **Bag-of-words analysis** — descriptive, exploratory analysis of term frequencies and patterns.
-2. **Fine-tuned BERT model** — a Swedish BERT model (from Hugging Face, trained by the Royal Library of Sweden) fine-tuned on a hand-coded sample to classify the presence of theoretical mechanisms, analysed over time and between actors. Currently classifying 2 mechanisms (legitimacy, complexity); plan is to extend to all 4.
+1. **Bag-of-words analysis** — descriptive, exploratory analysis of term frequencies and patterns using the risk dictionary.
+2. **Sentence-BERT similarity** — Swedish BERT (KBLab) used for semantic similarity analysis, measuring how municipal risk framing converges toward MSB/prefecture language over time (isomorphism analysis).
 
 Combined with qualitative reading of related documents (e.g. crisis preparedness plans).
 
-**Important:** The project has moved away from static word embeddings (FastText). The old pipeline stages for seed term expansion and sentence filtering/vectorisation are deprecated. The current approach is bag-of-words + BERT.
+**Important:** The project has moved away from static word embeddings (FastText) and fine-tuned BERT classification. The current approach is bag-of-words + BERT similarity.
 
 ## Repository Structure
 
@@ -62,33 +67,34 @@ scripts/
     risk_clustering_analysis.py    # Clusters entities by risk profile
     visualize_rsa_results.py       # Generates visualizations
     generate_analysis_pdf.py       # Combines all outputs into single PDF report
-  04_sampling/             # Sampling for hand-coding
-    risk_term_filter.py          # Filters corpus to paragraphs containing risk terms
-    stratified_sample.py         # Stratified sampling by actor/wave with train/test split
+  04_sampling/             # (deprecated) Sampling for hand-coding
   05_ner/                  # Named Entity Recognition
     ner_extraction.py            # Swedish BERT NER extraction (KBLab model)
-  06_bert_classification/  # BERT mechanism classification
-    mechanism_classifier.py      # Fine-tune Swedish BERT for mechanism detection
-  02_bert_analysis/        # BERT-based semantic analysis
+  06_bert_classification/  # (deprecated) BERT mechanism classification
+  07_bert_analysis/        # BERT-based semantic analysis
     security_similarity/         # Isomorphism analysis for security risk framing
       isomorphism_analysis.py    # Sentence-BERT similarity to MSB/prefectures
-      METHODOLOGY.md             # Thesis-ready methodology documentation
   dictionaries/            # Risk term dictionaries (3-tier structure)
     risk_terms.py                # Tier 1: Individual risks with variants
     risk_categories.py           # Tier 2: MSB taxonomy (nature/technical/antagonistic)
-    risk_extended.py             # Tier 3: Extended terms for BERT sampling
+    risk_extended.py             # Tier 3: Extended terms for filtering
 data/                      # Gitignored: raw PDFs, parquet files, vectors
 models/                    # Gitignored: trained model checkpoints
 results/                   # Gitignored: analysis outputs, visualisations
-  persistence/             # Persistence analysis outputs
-  clustering/              # Clustering analysis outputs
-  term_document_matrix/    # Term-document matrices
-  sampling/                # Sampling outputs (train/test CSVs for hand-coding)
-  ner/                     # NER extraction outputs
-  quality_audit/           # Quality audit outputs
-  bert_classification/     # BERT classification outputs (predictions, metrics)
+  00_data_preparation/     # Data preparation outputs
+  01_bow_analysis/         # Bag-of-words analysis outputs
+    actor_similarity/      # Actor similarity matrices, PERMANOVA
+    clustering/            # Risk profile clustering
+    convergence/           # Eta² convergence drivers
+    diffusion/             # Lead-lag adoption analysis
+    distinctiveness/       # Actor distinctiveness metrics
+    persistence/           # Term persistence/dropout analysis
+    prevalence/            # Risk prevalence distributions
+    term_matrices/         # Term-document matrices
   02_bert_analysis/        # BERT semantic analysis outputs
+    ner/                   # NER extraction outputs
     security_similarity/   # Isomorphism scores, visualizations
+  archive/                 # Old/deprecated outputs
 docs/                      # Guides and documentation
 archive/                   # Legacy notebooks and R scripts
 logs/                      # Processing logs
