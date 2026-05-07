@@ -67,10 +67,8 @@ scripts/
     risk_clustering_analysis.py    # Clusters entities by risk profile
     visualize_rsa_results.py       # Generates visualizations
     generate_analysis_pdf.py       # Combines all outputs into single PDF report
-  04_sampling/             # (deprecated) Sampling for hand-coding
   05_ner/                  # Named Entity Recognition
     ner_extraction.py            # Swedish BERT NER extraction (KBLab model)
-  06_bert_classification/  # (deprecated) BERT mechanism classification
   07_bert_analysis/        # BERT-based semantic analysis
     security_similarity/         # Isomorphism analysis for security risk framing
       isomorphism_analysis.py    # Sentence-BERT similarity to MSB/prefectures
