@@ -59,6 +59,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+# Import translations
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from dictionaries.risk_translations import translate_term
+
 
 # =============================================================================
 # Configuration
@@ -391,7 +395,7 @@ def plot_distinctive_terms(
             linewidth=0.5,
         )
         ax1.set_yticks(range(len(top_actor1_sig)))
-        ax1.set_yticklabels(top_actor1_sig['term'], fontsize=10)
+        ax1.set_yticklabels([translate_term(t) for t in top_actor1_sig['term']], fontsize=10)
         ax1.invert_yaxis()
         ax1.axvline(x=1.96, color='black', linestyle='--', alpha=0.5, label='p<0.05')
     ax1.set_xlabel('Z-score (log-odds ratio)', fontsize=11)
@@ -411,7 +415,7 @@ def plot_distinctive_terms(
             linewidth=0.5,
         )
         ax2.set_yticks(range(len(top_actor2_sig)))
-        ax2.set_yticklabels(top_actor2_sig['term'], fontsize=10)
+        ax2.set_yticklabels([translate_term(t) for t in top_actor2_sig['term']], fontsize=10)
         ax2.invert_yaxis()
         ax2.axvline(x=1.96, color='black', linestyle='--', alpha=0.5, label='p<0.05')
     ax2.set_xlabel('Z-score (log-odds ratio)', fontsize=11)
@@ -573,7 +577,7 @@ def plot_all_actors_distinctiveness(
             linewidth=0.5,
         )
         ax.set_yticks(range(len(actor_df)))
-        ax.set_yticklabels(actor_df['term'], fontsize=10)
+        ax.set_yticklabels([translate_term(t) for t in actor_df['term']], fontsize=10)
         ax.invert_yaxis()
         ax.axvline(x=1.96, color='red', linestyle='--', alpha=0.5, label='p<0.05')
         ax.set_xlabel('Z-score (vs all others)', fontsize=11)

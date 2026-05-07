@@ -28,25 +28,25 @@ Usage:
     # Basic usage (auto-detect device)
     python ner_extraction.py \\
         --input data/processed/bert_corpus_filtered.parquet \\
-        --output results/02_bert_analysis/ner/
+        --output results/05_ner/
 
     # Specify device and batch size
     python ner_extraction.py \\
         --input data/processed/bert_corpus_filtered.parquet \\
-        --output results/02_bert_analysis/ner/ \\
+        --output results/05_ner/ \\
         --device mps \\
         --batch-size 16
 
     # Filter to specific entity types
     python ner_extraction.py \\
         --input data/processed/bert_corpus_filtered.parquet \\
-        --output results/02_bert_analysis/ner/ \\
+        --output results/05_ner/ \\
         --entity-types LOC ORG
 
     # Test on small sample
     python ner_extraction.py \\
         --input data/processed/bert_corpus_filtered.parquet \\
-        --output results/02_bert_analysis/ner/ \\
+        --output results/05_ner/ \\
         --max-sentences 1000 \\
         --verbose
 
@@ -1033,25 +1033,25 @@ Examples:
     # Basic usage (auto-detect device)
     python ner_extraction.py \\
         --input data/processed/bert_corpus_filtered.parquet \\
-        --output results/02_bert_analysis/ner/
+        --output results/05_ner/
 
     # Run on M1 Mac with MPS
     python ner_extraction.py \\
         --input data/processed/bert_corpus_filtered.parquet \\
-        --output results/02_bert_analysis/ner/ \\
+        --output results/05_ner/ \\
         --device mps \\
         --batch-size 16
 
     # Extract only locations and organizations
     python ner_extraction.py \\
         --input data/processed/bert_corpus_filtered.parquet \\
-        --output results/02_bert_analysis/ner/ \\
+        --output results/05_ner/ \\
         --entity-types LOC ORG
 
     # Test on small sample
     python ner_extraction.py \\
         --input data/processed/bert_corpus_filtered.parquet \\
-        --output results/02_bert_analysis/ner/ \\
+        --output results/05_ner/ \\
         --max-sentences 1000 \\
         --verbose
 
@@ -1070,8 +1070,8 @@ Model:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("results/02_bert_analysis/ner"),
-        help="Output directory (default: results/02_bert_analysis/ner/)",
+        default=Path("results/05_ner"),
+        help="Output directory (default: results/05_ner/)",
     )
     parser.add_argument(
         "--device",

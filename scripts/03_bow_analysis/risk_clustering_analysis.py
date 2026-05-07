@@ -49,6 +49,10 @@ from sklearn.metrics import silhouette_score, calinski_harabasz_score
 from sklearn.preprocessing import StandardScaler
 from scipy.cluster.hierarchy import linkage, dendrogram, fcluster
 
+# Import translations
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from dictionaries.risk_translations import translate_term, translate_category
+
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
@@ -446,9 +450,10 @@ def plot_centroid_heatmap(
     """Heatmap of cluster centroids (risk profile per cluster)."""
     centroid_cols = [c for c in cluster_info.columns if c.startswith('centroid_')]
     cats = [c.replace('centroid_', '') for c in centroid_cols]
+    cats_en = [translate_term(c) for c in cats]
 
     heatmap_data = cluster_info[centroid_cols].copy()
-    heatmap_data.columns = cats
+    heatmap_data.columns = cats_en
     heatmap_data.index = [
         f"Cluster {int(row['cluster'])} (n={int(row['size'])})"
         for _, row in cluster_info.iterrows()

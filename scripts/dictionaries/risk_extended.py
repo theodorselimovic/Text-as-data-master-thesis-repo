@@ -89,7 +89,7 @@ PROBABILITY_TERMS: Dict[str, List[str]] = {
     ],
     'low': [
         'låg sannolikhet', 'liten sannolikhet',
-        'mindre sannolik', 'mindre sannolikt',
+        'mindre sannolik', 'mindre sannolikt', 'tvivelaktig',
     ],
     'medium': [
         'medelhög sannolikhet', 'mellan sannolikhet',

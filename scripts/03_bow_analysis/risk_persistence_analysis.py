@@ -42,6 +42,13 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+# Import translations
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from dictionaries.risk_translations import (
+    translate_term,
+    translate_actor as _translate_actor,
+)
+
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
@@ -60,7 +67,7 @@ ACTOR_TRANSLATIONS = {
 
 def translate_actor(actor: str) -> str:
     """Translate actor names from Swedish to English."""
-    return ACTOR_TRANSLATIONS.get(actor, actor)
+    return ACTOR_TRANSLATIONS.get(actor, _translate_actor(actor))
 
 
 # =============================================================================
@@ -567,6 +574,9 @@ def plot_persistence_heatmap(
         heatmap_data.mean(axis=1).sort_values(ascending=False).index
     ]
 
+    # Translate index to English
+    heatmap_data.index = [translate_term(t) for t in heatmap_data.index]
+
     # Plot
     fig_height = max(6, len(heatmap_data) * 0.3)
     fig, ax = plt.subplots(figsize=(10, fig_height))
@@ -666,6 +676,9 @@ def plot_year_persistence_heatmap(
         heatmap_data.mean(axis=1).sort_values(ascending=False).index
     ]
 
+    # Translate index to English
+    heatmap_data.index = [translate_term(t) for t in heatmap_data.index]
+
     # Plot
     fig_width = max(10, len(heatmap_data.columns) * 0.8)
     fig_height = max(6, len(heatmap_data) * 0.3)
@@ -735,6 +748,8 @@ def plot_direct_wave_heatmap(
     # Create single-column heatmap data
     heatmap_data = pivot_df.set_index('term')[['persistence_rate']]
     heatmap_data.columns = [wave_pair_label]
+    # Translate index to English
+    heatmap_data.index = [translate_term(t) for t in heatmap_data.index]
 
     # Plot
     fig_height = max(6, len(heatmap_data) * 0.3)
@@ -790,6 +805,8 @@ def plot_dropout_adoption_ranking(
         )
         pivot = pivot.loc[top_terms]  # Maintain sort order
         pivot.columns = [translate_actor(c) for c in pivot.columns]
+        # Translate index to English
+        pivot.index = [translate_term(t) for t in pivot.index]
 
         fig, ax = plt.subplots(figsize=(10, 8))
         pivot.plot(kind='barh', stacked=True, ax=ax, alpha=0.8)

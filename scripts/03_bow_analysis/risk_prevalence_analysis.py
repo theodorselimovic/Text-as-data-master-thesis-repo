@@ -46,6 +46,7 @@ from nltk.stem.snowball import SnowballStemmer
 # Import centralized dictionary from scripts/dictionaries/
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from dictionaries import RISK_TERMS as RISK_DICTIONARY_INDIVIDUAL
+from dictionaries.risk_translations import translate_term, translate_actor
 
 sys.path.insert(0, str(Path(__file__).parent.parent / '02_preprocessing'))
 from preprocessing_bow import SWEDISH_STOPWORDS
@@ -423,12 +424,13 @@ def plot_prevalence_comparison(
 
     # Get top N by mentions
     top_df = prevalence_df.nlargest(top_n, 'mentions').copy()
+    top_df['risk_en'] = top_df['risk'].apply(translate_term)
 
     fig, axes = plt.subplots(1, 2, figsize=(14, 10))
 
     # Left: mentions
     ax1 = axes[0]
-    ax1.barh(top_df['risk'], top_df['mentions'], color='#377eb8')
+    ax1.barh(top_df['risk_en'], top_df['mentions'], color='#377eb8')
     ax1.set_xlabel('Total mentions')
     ax1.set_title('By Mention Count', fontweight='bold')
     ax1.invert_yaxis()
@@ -437,7 +439,8 @@ def plot_prevalence_comparison(
     ax2 = axes[1]
     # Sort by characters for this panel
     top_by_chars = prevalence_df.nlargest(top_n, 'characters').copy()
-    ax2.barh(top_by_chars['risk'], top_by_chars['characters'] / 1000, color='#4daf4a')
+    top_by_chars['risk_en'] = top_by_chars['risk'].apply(translate_term)
+    ax2.barh(top_by_chars['risk_en'], top_by_chars['characters'] / 1000, color='#4daf4a')
     ax2.set_xlabel('Characters (thousands)')
     ax2.set_title('By Text Devoted', fontweight='bold')
     ax2.invert_yaxis()
@@ -465,8 +468,9 @@ def plot_prevalence_by_actor(
     fig, axes = plt.subplots(1, 3, figsize=(15, 6))
 
     for ax, actor in zip(axes, actors):
-        subset = by_actor_df[by_actor_df['actor_type'] == actor].nlargest(top_n, 'mentions_per_doc')
-        ax.barh(subset['risk'], subset['mentions_per_doc'], color=ACTOR_COLORS[actor])
+        subset = by_actor_df[by_actor_df['actor_type'] == actor].nlargest(top_n, 'mentions_per_doc').copy()
+        subset['risk_en'] = subset['risk'].apply(translate_term)
+        ax.barh(subset['risk_en'], subset['mentions_per_doc'], color=ACTOR_COLORS[actor])
         ax.set_xlabel('Mentions per document')
         ax.set_title(f'{ACTOR_LABELS[actor]}', fontweight='bold')
         ax.invert_yaxis()
@@ -693,7 +697,7 @@ def plot_rank_correlation(prevalence_df: pd.DataFrame, output_dir: Path) -> dict
     df['rank_diff'] = abs(df['mention_rank'] - df['char_rank'])
     outliers = df.nlargest(5, 'rank_diff')
     for _, row in outliers.iterrows():
-        ax1.annotate(row['risk'], xy=(row['mention_rank'], row['char_rank']),
+        ax1.annotate(translate_term(row['risk']), xy=(row['mention_rank'], row['char_rank']),
                      xytext=(-5, -5), textcoords='offset points', fontsize=9, alpha=0.8)
 
     ax1.set_xlabel('Rank by Mentions', fontsize=14, fontweight='bold')
@@ -725,7 +729,7 @@ def plot_rank_correlation(prevalence_df: pd.DataFrame, output_dir: Path) -> dict
     top3 = df.nlargest(3, 'chars_per_mention')
     bottom3 = df.nsmallest(3, 'chars_per_mention')
     for _, row in pd.concat([top3, bottom3]).iterrows():
-        ax2.annotate(row['risk'], xy=(row['mentions'], row['chars_per_mention']),
+        ax2.annotate(translate_term(row['risk']), xy=(row['mentions'], row['chars_per_mention']),
                      xytext=(5, 5), textcoords='offset points', fontsize=9, alpha=0.8)
 
     ax2.set_xlabel('Mentions', fontsize=14, fontweight='bold')

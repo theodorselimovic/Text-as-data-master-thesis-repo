@@ -35,6 +35,9 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from matplotlib.ticker import MaxNLocator
 
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from dictionaries.risk_translations import translate_term
+
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
@@ -206,11 +209,15 @@ def get_lan_for_entity(entity: str, actor: str) -> int | None:
 # Import centralized dictionary from scripts/dictionaries/
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from dictionaries import RISK_TERMS as RISK_DICTIONARY_INDIVIDUAL
+from dictionaries.risk_translations import (
+    translate_term,
+    translate_actor as _translate_actor,
+)
 
 
 def translate_actor(actor: str) -> str:
     """Translate actor names from Swedish to English."""
-    return ACTOR_TRANSLATIONS.get(actor, actor)
+    return ACTOR_TRANSLATIONS.get(actor, _translate_actor(actor))
 
 
 # =============================================================================
@@ -890,7 +897,7 @@ def plot_individual_adoption_curves(
 
         # Color-code title based on selection category
         title_color = risk_colors.get(risk, 'black')
-        ax.set_title(risk, fontsize=11, fontweight='bold', color=title_color)
+        ax.set_title(translate_term(risk), fontsize=11, fontweight='bold', color=title_color)
         ax.set_ylim(-0.05, 1.05)
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
 
@@ -1006,9 +1013,21 @@ def plot_lead_lag(lead_lag_df: pd.DataFrame, output_dir: Path) -> None:
 
         fig, ax = plt.subplots(figsize=(12, 12))
 
-        # Map to canonical risk names and color by lag magnitude
+        # Map to canonical risk names and aggregate variants
         df = df.copy()
         df['canonical'] = df['term'].apply(_get_canonical_risk)
+        df = df[df['canonical'].notna()]  # Filter to known risks
+
+        # Aggregate by canonical risk (mean of medians across variants)
+        # This prevents duplicate labels for the same risk concept
+        agg_cols = [col_x, col_y]
+        n_cols = [c for c in df.columns if c.startswith('n_')]
+        df = df.groupby('canonical', as_index=False).agg({
+            col_x: 'mean',
+            col_y: 'mean',
+            **{c: 'sum' for c in n_cols},
+            'term': 'first',  # Keep one term for reference
+        })
         df['lag'] = df[col_y] - df[col_x]
 
         # Color by lag magnitude (blue = leads, red = lags)
@@ -1055,11 +1074,12 @@ def plot_lead_lag(lead_lag_df: pd.DataFrame, output_dir: Path) -> None:
             texts = []
             for i, (_, row) in enumerate(df_to_label.iterrows()):
                 # Use canonical name if available, otherwise original term
-                label = row['canonical'] if pd.notna(row.get('canonical')) else row['term']
+                raw_label = row['canonical'] if pd.notna(row.get('canonical')) else row['term']
+                label = translate_term(raw_label)
                 texts.append(ax.text(
                     row[col_x] + jitter_x[i],
                     row[col_y] + jitter_y[i],
-                    label[:15],
+                    label[:20],
                     fontsize=7, alpha=0.85,
                 ))
             adjust_text(
@@ -1072,9 +1092,10 @@ def plot_lead_lag(lead_lag_df: pd.DataFrame, output_dir: Path) -> None:
         except ImportError:
             # Fallback: simple jittered labels
             for i, (_, row) in enumerate(df_to_label.iterrows()):
-                label = row['canonical'] if pd.notna(row.get('canonical')) else row['term']
+                raw_label = row['canonical'] if pd.notna(row.get('canonical')) else row['term']
+                label = translate_term(raw_label)
                 ax.annotate(
-                    label[:15],
+                    label[:20],
                     (row[col_x], row[col_y]),
                     fontsize=7, alpha=0.85,
                     xytext=(5 + jitter_x[i]*10, 5 + jitter_y[i]*10),

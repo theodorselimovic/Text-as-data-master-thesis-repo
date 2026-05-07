@@ -65,8 +65,8 @@ RISK_TERMS: Dict[str, List[str]] = {
         'ras och skred', 'ras eller skred',
     ],
     'erosion': ['erosion'],
-    'jordbaevning': ['jordbävning', 'jordbävningar', 'jordskalv'],
-    'tsunami': ['tsunami', 'tsunamier', 'flodvåg', 'flodvågor'],
+    'jordbavning': ['jordbävning', 'jordbävningar', 'jordskalv'],
+    'tsunami': ['tsunami', 'tsunamier', 'tsunamis', 'flodvåg', 'flodvågor'],
     'vulkanutbrott': ['vulkanutbrott', 'vulkanisk aktivitet', 'vulkanaska'],
 
     # =========================================================================
@@ -142,10 +142,17 @@ RISK_TERMS: Dict[str, List[str]] = {
     'tunnelolycka': ['tunnelolycka'],
 
     # =========================================================================
+    # OTHER ACCIDENTS
+    # =========================================================================
+    'fallolycka': ['fallolycka', 'fallolyckor', 'fallolycker'],
+    'drunkning': ['drunkning', 'drunkningar', 'drunkna'],
+    'forgiftning': ['förgiftning', 'förgiftningar', 'förgiftningsolycka'],
+
+    # =========================================================================
     # INDUSTRIAL ACCIDENTS
     # =========================================================================
     'industriolycka': ['industriolycka', 'industriolyckor', 'kemikalieolycka'],
-    'olycka_farlig_verksamhet': ['olycka vid farlig verksamhet', 'farlig verksamhet'],
+    'olycka_farlig_verksamhet': ['olycka vid farlig verksamhet'],
     'dammbrott': ['dammbrott'],
     'byggnadskollaps': ['byggnadsras', 'byggnadskollaps', 'brokollaps'],
     'karnteknisk_olycka': [
@@ -187,6 +194,7 @@ RISK_TERMS: Dict[str, List[str]] = {
         'vattenläcka', 'vattenläckor',
     ],
     'avloppsbrott': ['avloppsbrott', 'avloppssystem', 'avloppshaveri'],
+    'avfallshantering': ['avfallshantering', 'avfall', 'sophantering', 'avfallsbortfall'],
     'it_teleavbrott': [
         'IT-bortfall', 'it-bortfall', 'IT-avbrott', 'it-avbrott',
         'dataförlust', 'systemfel', 'nätverksavbrott',
@@ -195,6 +203,7 @@ RISK_TERMS: Dict[str, List[str]] = {
         'it- och teleavbrott', 'IT- och teleavbrott',
         'it/teleavbrott', 'IT/teleavbrott',
         'elektroniska kommunikationer', 'elektronisk kommunikation',
+        'telefoni', 'telefoniavbrott', 'it-drift', 'IT-drift',
     ],
     'transportavbrott': [
         'transportavbrott', 'transportstörning', 'transportstörningar',
@@ -243,8 +252,11 @@ RISK_TERMS: Dict[str, List[str]] = {
     # =========================================================================
     # CYBER THREATS
     # =========================================================================
-    'cyberattack': ['cyberattack', 'cyberattacker', 'nätattack', 'nätattacker'],
-    'dataintrang': ['dataintrång', 'hackerattack', 'hackerattacker'],
+    'cyberattack': [
+        'cyberattack', 'cyberattacker', 'nätattack', 'nätattacker',
+        'it-attack', 'it-attacker', 'IT-attack', 'IT-attacker',
+        'dataintrång', 'hackerattack', 'hackerattacker'
+    ],
     'ddos_attack': ['DDoS-attack', 'ddos-attack', 'ddos'],
     'ransomware': ['ransomware', 'utpressningsvirus'],
     'it_sabotage': ['IT-sabotage', 'it-sabotage'],
@@ -254,6 +266,7 @@ RISK_TERMS: Dict[str, List[str]] = {
     # =========================================================================
     'terrorism': [
         'terror', 'terrorism', 'terrorhot', 'terrorattentat', 'terrorhandling',
+        'terrorattack', 'terrorattacker',
     ],
     'hot_och_vald': ['hot och våld', 'våldsbrott'],
     'pagaende_dodligt_vald': ['pågående dödligt våld', 'pdv'],
@@ -285,20 +298,18 @@ RISK_TERMS: Dict[str, List[str]] = {
     # =========================================================================
     # MILITARY / ARMED CONFLICT
     # =========================================================================
-    'vapnat_angrepp': ['väpnat angrepp'],
-    'vapnat_angrepp_naromradet': ['väpnat angrepp i närområdet'],
     'fjarrangrepp': [
         'fjärrangrepp', 'fjärrvapen', 'robotangrepp',
         'missilangrepp', 'drönarangrepp',
     ],
-    'strid_svenskt_territorium': [
+    'vapnat_angrepp': [
         'strid på svenskt territorium', 'markstrid',
-        'invasion', 'ockupation',
+        'invasion', 'ockupation', 'väpnat angrepp', 'krig',
     ],
-    'blockad': ['blockad', 'sjöblockad', 'handelsblockad'],
+    'blockad': ['sjöblockad', 'handelsblockad', 'ekonomisk blockad'],
     'militar_konflikt_naromradet': [
         'militär konflikt i närområdet', 'krig i närområdet',
-        'regional konflikt', 'konflikt i östersjöområdet',
+        'regional konflikt', 'konflikt i östersjöområdet','väpnat angrepp i närområdet',
     ],
 
     # =========================================================================
@@ -315,6 +326,16 @@ RISK_TERMS: Dict[str, List[str]] = {
         'gängkriminalitet', 'gängvåld', 'gängkonflikter',
         'skjutningar', 'sprängningar',
     ],
+    'sexualbrott': ['sexualbrott', 'sexuella övergrepp', 'våldtäkt'],
+    'stold_ran': [
+        'stöld', 'stölder', 'rån', 'rånbrott',
+        'inbrottsstöld', 'väpnat rån',
+    ],
+    'trafikbrott': ['trafikbrott', 'rattfylleri', 'fortkörning'],
+    'insiderhot': [
+        'insider', 'insiders', 'insiderhot',
+        'intern hotaktör', 'interna hot',
+    ],
 
     # =========================================================================
     # SOCIAL RISKS
@@ -327,10 +348,15 @@ RISK_TERMS: Dict[str, List[str]] = {
         'flyktingström', 'flyktingströmmar',
         'interna flyktingströmmar', 'intern flyktingström',
         'flyktingkris', 'migrationskris',
+        'flyktingvåg', 'flyktingvågor', 'flyktingimmigration',
     ],
     'forsvunnen_person': [
         'försvunnen person', 'försvunna personer', 'försvunnen brukare',
-        'försvinnande', 'saknad person',
+        'saknad person', 'saknade personer',
+    ],
+    'suicid': [
+        'suicid', 'självmord', 'självdestruktivt handlande',
+        'självskada', 'självskador',
     ],
 
     # =========================================================================
@@ -350,6 +376,11 @@ RISK_TERMS: Dict[str, List[str]] = {
     'ekonomisk_kris': ['ekonomisk kris', 'finanskris', 'recession', 'lågkonjuktur', 'ekonomisk nedgång'],
     'arbetsloshet': ['arbetslöshet'],
     'inflation': ['inflation'],
+
+    # =========================================================================
+    # DEMOGRAPHIC / LONG-TERM
+    # =========================================================================
+    'befolkningsokning': ['befolkningsökning', 'befolkningstillväxt', 'befolkningsutveckling'],
 }
 
 

@@ -41,6 +41,7 @@ from nltk.stem.snowball import SnowballStemmer
 # Import centralized dictionary from scripts/dictionaries/
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from dictionaries import RISK_TERMS as RISK_DICTIONARY_INDIVIDUAL
+from dictionaries.risk_translations import translate_term
 
 # Import stopwords from preprocessing
 sys.path.insert(0, str(Path(__file__).parent.parent / '02_preprocessing'))
@@ -376,11 +377,11 @@ def create_term_visualization(
 
     fig, ax = plt.subplots(figsize=(10, 10))
 
-    top_terms = terms_df.nlargest(top_n, 'mentions').iloc[::-1]
-    colors = sns.color_palette("Blues", n_colors=top_n)
+    top_terms = terms_df.nlargest(top_n, 'mentions').iloc[::-1].copy()
+    top_terms['term_en'] = top_terms['term'].apply(translate_term)
 
-    bars = ax.barh(top_terms['term'], top_terms['mentions'],
-                   color=colors, edgecolor='none')
+    bars = ax.barh(top_terms['term_en'], top_terms['mentions'],
+                   color='#377eb8', edgecolor='none')
 
     for bar, val in zip(bars, top_terms['mentions']):
         ax.text(val + 20, bar.get_y() + bar.get_height()/2, f'{val:,}',
@@ -414,10 +415,10 @@ def create_mentions_vs_text_visualization(
     fig, axes = plt.subplots(1, 2, figsize=(14, 10))
 
     # Left plot: Top N by mentions, ordered by mentions
-    top_by_mentions = terms_df.nlargest(top_n, 'mentions').sort_values('mentions', ascending=True)
-    colors_mentions = sns.color_palette("Blues", n_colors=top_n)
-    bars1 = axes[0].barh(top_by_mentions['term'], top_by_mentions['mentions'],
-                         color=colors_mentions, edgecolor='none')
+    top_by_mentions = terms_df.nlargest(top_n, 'mentions').sort_values('mentions', ascending=True).copy()
+    top_by_mentions['term_en'] = top_by_mentions['term'].apply(translate_term)
+    bars1 = axes[0].barh(top_by_mentions['term_en'], top_by_mentions['mentions'],
+                         color='#377eb8', edgecolor='none')
     for bar, val in zip(bars1, top_by_mentions['mentions']):
         axes[0].text(val + 20, bar.get_y() + bar.get_height()/2, f'{val:,}',
                      va='center', ha='left', fontsize=9)
@@ -428,10 +429,10 @@ def create_mentions_vs_text_visualization(
     axes[0].spines['right'].set_visible(False)
 
     # Right plot: Top N by characters, ordered by characters
-    top_by_chars = terms_df.nlargest(top_n, 'characters').sort_values('characters', ascending=True)
-    colors_chars = sns.color_palette("Oranges", n_colors=top_n)
-    bars2 = axes[1].barh(top_by_chars['term'], top_by_chars['characters'],
-                         color=colors_chars, edgecolor='none')
+    top_by_chars = terms_df.nlargest(top_n, 'characters').sort_values('characters', ascending=True).copy()
+    top_by_chars['term_en'] = top_by_chars['term'].apply(translate_term)
+    bars2 = axes[1].barh(top_by_chars['term_en'], top_by_chars['characters'],
+                         color='#e41a1c', edgecolor='none')
     for bar, val in zip(bars2, top_by_chars['characters']):
         axes[1].text(val + 5000, bar.get_y() + bar.get_height()/2, f'{val:,}',
                      va='center', ha='left', fontsize=9)
@@ -474,6 +475,9 @@ def create_terms_by_actor_visualization(
     pivot['total'] = pivot.sum(axis=1)
     pivot = pivot.sort_values('total', ascending=True).drop(columns='total')
 
+    # Translate index to English
+    pivot.index = [translate_term(t) for t in pivot.index]
+
     # Reorder columns
     col_order = ['Municipality', 'Prefecture', 'MSB']
     pivot = pivot[[c for c in col_order if c in pivot.columns]]
@@ -514,6 +518,8 @@ def create_terms_over_time_visualization(
     plot_data = terms_by_wave[terms_by_wave['term'].isin(top_terms)].copy()
     pivot = plot_data.pivot(index='wave', columns='term', values='mentions').fillna(0)
     pivot.index = [WAVE_LABELS.get(w, str(w)) for w in pivot.index]
+    # Translate column names to English
+    pivot.columns = [translate_term(t) for t in pivot.columns]
 
     fig, ax = plt.subplots(figsize=(12, 7))
 

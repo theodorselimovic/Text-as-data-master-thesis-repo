@@ -35,6 +35,10 @@ python pdf_reader_enhanced.py --input-dir ./pdfs --output-dir ./output --ocr --n
 
 **Output:** `pdf_texts.parquet` with columns `file`, `text`, and optionally `actor`.
 
+#### Document Preview Generator: `document_preview_generator.py`
+
+**Purpose:** Generates human-readable previews of extracted PDF texts for quality inspection. Produces truncated plaintext samples per document to help diagnose extraction failures before running the full preprocessing pipeline.
+
 ### 2. Preprocessing (`02_preprocessing/`)
 
 #### BERT Preprocessing: `preprocessing_bert.py`
@@ -118,12 +122,20 @@ python quality_audit.py \
 ### 3. Bag-of-Words Analysis (`03_bow_analysis/`)
 
 **Key scripts:**
+- `risk_dictionary_counter.py` — Counts risk term occurrences from the centralized dictionary in RSA documents; builds term-level and category-level document matrices from raw text or pre-processed (stemmed/lemmatized) input. Replaces the former `term_document_matrix.py`.
 - `risk_context_analysis.py` — Counts risk terms by category, analyzes qualifications (sannolikhet, konsekvens, risk). Includes lemmatization support.
-- `term_document_matrix.py` — Creates term-level and category-level document matrices. Creates both original and lemmatized versions.
 - `risk_persistence_analysis.py` — Tracks which risk terms persist/dropout over time for entities with multiple documents. Supports wave-based (municipalities) and year-based (prefectures, MCF) transitions.
+- `risk_prevalence_analysis.py` — Measures which individual risks are most common using mention count and text-devoted metrics, capturing both frequency and depth of discussion per actor/wave.
+- `risk_diffusion_analysis.py` — Tracks when risk terms first appear across entities and detects synchronous adoption patterns; tests top-down (MSB → municipalities) vs. bottom-up diffusion hypotheses.
+- `risk_convergence_analysis.py` — Identifies which individual risks drive actor convergence across waves using eta-squared variance decomposition.
+- `risk_distinctiveness_analysis.py` — Identifies statistically over- or under-represented risk terms per actor type using the Monroe et al. "Fightin' Words" method with informative Dirichlet priors.
+- `actor_similarity_analysis.py` — Measures within-group and between-group similarity across actor types using three-level variance decomposition and PERMANOVA testing.
+- `allvarliga_storningar_analysis.py` — Analyzes co-occurrence of individual risks with serious-disruption/consequence phrases to reveal how different actors frame risks in terms of operational impact.
+- `security_riskification_analysis.py` — Compares analytical language (probability/consequence/risk qualifications) between security risks and other risks to test whether security threats have been absorbed into the standard risk framework (Q6).
 - `risk_clustering_analysis.py` — Clusters entities by risk profile using hierarchical clustering per wave.
 - `visualize_rsa_results.py` — Generates visualizations for analysis results.
-- `generate_analysis_pdf.py` — Combines all persistence and clustering outputs into a single PDF report.
+- `dictionary_diagnostics.py` — Diagnostic tool: classifies each dictionary term's matching status in the stemmed corpus (stopword conflicts, n-gram length issues, non-appearance).
+- `bert_sample_dictionary.py` — Backward-compatibility shim re-exporting centralized dictionary modules; exists only for legacy imports.
 
 See [BOW Analysis Details](#bow-analysis-details) below for full documentation.
 
@@ -146,6 +158,10 @@ See [BOW Analysis Details](#bow-analysis-details) below for full documentation.
 **CLI options:**
 - `--categories` — filter by specific risk categories
 - `--min-terms` — require multiple risk terms per paragraph (default: 1)
+
+#### Corrupted Sample Recovery: `recover_corrupted_sample.py`
+
+**Purpose:** One-time utility that recovered a corrupted CSV by fixing garbled Swedish characters, stripping control characters, and rejoining to source data while preserving hand-coded annotations. Not part of the regular pipeline.
 
 #### Stratified Sampling: `stratified_sample.py`
 
@@ -210,6 +226,10 @@ python ner_extraction.py \
 - `entities_by_sentence.csv` — entity counts per sentence
 - `entities_by_document.csv` — entity counts per document with actor/wave metadata
 - `ner_report.json` — summary statistics, top entities by type
+
+#### NER Visualization: `plot_ner_over_time.py`
+
+**Purpose:** Creates time-series graphs of unique LOC, ORG, and EVN entity counts by actor type — municipalities grouped by wave, prefectures and MCF by year. Uses `results/ner/entities_by_document.csv` as input.
 
 ### Risk Dictionaries (`dictionaries/`)
 
@@ -345,7 +365,7 @@ python mechanism_classifier.py --mode predict \
 
 ---
 
-### 7. Isomorphism Analysis (`02_bert_analysis/security_similarity/`)
+### 7. Isomorphism Analysis (`07_bert_analysis/security_similarity/`)
 
 **Main script:** `isomorphism_analysis.py`
 
@@ -376,7 +396,7 @@ python mechanism_classifier.py --mode predict \
 ```bash
 python isomorphism_analysis.py \
     --input data/processed/bert_corpus.parquet \
-    --output results/02_bert_analysis/security_similarity/ \
+    --output results/07_bert_analysis/security_similarity/ \
     --min-year 2015 \
     --verbose
 ```
@@ -445,7 +465,7 @@ python isomorphism_analysis.py \
    - Optimal k determined via silhouette score
    - Tracks cluster transitions between waves
 
-**Output files:**
+**Output files (from `risk_dictionary_counter.py`):**
 - `term_document_matrix.csv` / `*_original.csv` — Term counts per document
 - `category_document_matrix.csv` / `*_original.csv` — Category counts per document
 - `term_metadata.csv` / `*_original.csv` — Term → category mapping

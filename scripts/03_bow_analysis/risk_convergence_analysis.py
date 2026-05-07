@@ -76,6 +76,14 @@ WAVE_RANGES = {
 }
 
 
+# Import translations
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from dictionaries.risk_translations import (
+    translate_term,
+    translate_actor as _translate_actor_base,
+)
+
+
 def translate_actor(actor: str) -> str:
     """Translate actor names from Swedish to English."""
     return ACTOR_TRANSLATIONS.get(actor, actor)
@@ -257,75 +265,6 @@ def compute_convergence_drivers(eta_df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-WAVE_TO_YEAR = {
-    1: 2015,  # Wave 1: 2015-2018 → map to start year
-    2: 2019,  # Wave 2: 2019-2022 → map to start year
-    3: 2023,  # Wave 3: 2023+ → map to start year
-}
-
-
-def compute_actor_profiles(
-    df: pd.DataFrame,
-    risk_cols: list[str],
-    top_risks: list[str],
-    waves: list[int],
-) -> pd.DataFrame:
-    """
-    Compute mean proportion per actor per time period for top risks.
-
-    Uses different temporal granularity by actor:
-    - Municipality: wave-based, mapped to start year (2015, 2019, 2023)
-    - Prefecture/MSB: year-on-year (individual years)
-
-    All actors use years on x-axis for consistent visualization.
-
-    Useful for understanding HOW actors converged.
-    """
-    records = []
-
-    for actor in df['actor'].unique():
-        actor_name = translate_actor(actor)
-        df_actor_full = df[df['actor'] == actor]
-
-        if actor_name == 'Municipality':
-            # Wave-based for municipalities, mapped to start year
-            for wave in waves:
-                df_slice = df_actor_full[df_actor_full['wave'] == wave]
-                if len(df_slice) == 0:
-                    continue
-                year = WAVE_TO_YEAR.get(wave, 2015 + (wave - 1) * 4)
-                for risk in top_risks:
-                    if risk in df_slice.columns:
-                        records.append({
-                            'time_period': f'W{wave} ({year})',
-                            'time_numeric': year,
-                            'time_type': 'wave',
-                            'actor': actor_name,
-                            'risk': risk,
-                            'mean_proportion': df_slice[risk].mean(),
-                            'n_docs': len(df_slice),
-                        })
-        else:
-            # Year-on-year for Prefecture and MSB
-            for year in sorted(df_actor_full['year'].unique()):
-                df_slice = df_actor_full[df_actor_full['year'] == year]
-                if len(df_slice) == 0:
-                    continue
-                for risk in top_risks:
-                    if risk in df_slice.columns:
-                        records.append({
-                            'time_period': str(int(year)),
-                            'time_numeric': year,
-                            'time_type': 'year',
-                            'actor': actor_name,
-                            'risk': risk,
-                            'mean_proportion': df_slice[risk].mean(),
-                            'n_docs': len(df_slice),
-                        })
-
-    return pd.DataFrame(records)
-
-
 # =============================================================================
 # VISUALIZATIONS
 # =============================================================================
@@ -333,13 +272,15 @@ def compute_actor_profiles(
 def plot_convergence_drivers_bar(
     drivers_df: pd.DataFrame,
     output_dir: Path,
-    top_n: int = 25,
+    top_n: int = 10,
 ) -> None:
     """
     Horizontal bar chart: eta² change from Wave 1 to Wave 3.
+    Shows top N risks by eta drop (largest convergence).
     """
-    # Filter to risks with data in both waves
-    plot_df = drivers_df.dropna(subset=['eta_w1', 'eta_w3']).head(top_n).copy()
+    # Filter to risks with data in both waves, sort by eta_drop
+    plot_df = drivers_df.dropna(subset=['eta_w1', 'eta_w3']).copy()
+    plot_df = plot_df.sort_values('eta_drop', ascending=False).head(top_n)
 
     if len(plot_df) == 0:
         print("  Skipping bar plot: no risks with W1 and W3 data")
@@ -357,15 +298,15 @@ def plot_convergence_drivers_bar(
             label='Wave 3 (2023+)', color='#66c2a5', alpha=0.8)
 
     ax.set_yticks(y_pos)
-    ax.set_yticklabels(plot_df['risk'], fontsize=9)
+    ax.set_yticklabels([translate_term(r) for r in plot_df['risk']], fontsize=9)
     ax.set_xlabel('Eta² (variance explained by actor type)', fontsize=11)
-    ax.set_title('Top Convergence Drivers: Actor distinctiveness decreased',
+    ax.set_title('Top Convergence Drivers: Risks where actors became most similar',
                  fontsize=12, fontweight='bold')
     ax.legend(loc='lower right')
     ax.set_xlim(0, 1)
 
-    # Add arrow annotations for top 5
-    for i, (_, row) in enumerate(plot_df.head(5).iterrows()):
+    # Add arrow annotations for all shown risks
+    for i, (_, row) in enumerate(plot_df.iterrows()):
         drop = row['eta_w1'] - row['eta_w3']
         ax.annotate(f'↓{drop:.0%}',
                     xy=(max(row['eta_w1'], row['eta_w3']) + 0.02, i),
@@ -376,179 +317,6 @@ def plot_convergence_drivers_bar(
     plt.savefig(output_dir / 'convergence_drivers_bar.pdf', bbox_inches='tight')
     plt.close()
     print(f"  Saved: convergence_drivers_bar.png/pdf")
-
-
-def plot_convergence_trends(
-    drivers_df: pd.DataFrame,
-    output_dir: Path,
-    top_n: int = 12,
-) -> None:
-    """
-    Line plot: eta² trend over waves for top convergence drivers.
-    """
-    top_drivers = drivers_df.head(top_n).copy()
-
-    fig, ax = plt.subplots(figsize=(10, 6))
-
-    waves = [1, 2, 3]
-    colors = plt.cm.viridis(np.linspace(0.1, 0.9, len(top_drivers)))
-
-    for idx, (_, row) in enumerate(top_drivers.iterrows()):
-        eta_values = [row['eta_w1'], row['eta_w2'], row['eta_w3']]
-        valid_waves = [w for w, e in zip(waves, eta_values) if not np.isnan(e)]
-        valid_eta = [e for e in eta_values if not np.isnan(e)]
-
-        ax.plot(valid_waves, valid_eta, 'o-',
-                label=row['risk'],
-                color=colors[idx], linewidth=2, markersize=8)
-
-    ax.set_xlabel('Wave', fontsize=11)
-    ax.set_ylabel('Eta² (variance explained by actor)', fontsize=11)
-    ax.set_title('Convergence Drivers: Decreasing actor distinctiveness over time',
-                 fontsize=12, fontweight='bold')
-    ax.set_xticks(waves)
-    ax.set_xticklabels([WAVE_LABELS[w] for w in waves])
-    ax.set_ylim(0, 1)
-    ax.legend(bbox_to_anchor=(1.02, 1), loc='upper left', fontsize=9)
-
-    # Add annotation
-    ax.annotate('↓ Lower eta² = actors more similar',
-                xy=(0.02, 0.02), xycoords='axes fraction',
-                fontsize=10, style='italic', color='gray')
-
-    plt.tight_layout()
-    plt.savefig(output_dir / 'convergence_trends.png', dpi=150, bbox_inches='tight')
-    plt.savefig(output_dir / 'convergence_trends.pdf', bbox_inches='tight')
-    plt.close()
-    print(f"  Saved: convergence_trends.png/pdf")
-
-
-def plot_convergence_heatmap(
-    drivers_df: pd.DataFrame,
-    output_dir: Path,
-    top_n: int = 25,
-) -> None:
-    """
-    Heatmap showing eta² per wave for top convergence drivers.
-    """
-    top_drivers = drivers_df.head(top_n).copy()
-
-    # Create matrix
-    matrix = top_drivers[['risk', 'eta_w1', 'eta_w2', 'eta_w3']].copy()
-    matrix = matrix.set_index('risk')
-    matrix.columns = ['Wave 1', 'Wave 2', 'Wave 3']
-
-    fig, ax = plt.subplots(figsize=(8, max(8, top_n * 0.35)))
-
-    sns.heatmap(matrix, annot=True, fmt='.2f', cmap='RdYlGn_r',
-                vmin=0, vmax=1, ax=ax,
-                cbar_kws={'label': 'Eta² (actor distinctiveness)'})
-
-    ax.set_title('Convergence Drivers: Eta² by wave (green = similar)',
-                 fontsize=12, fontweight='bold')
-    ax.set_xlabel('')
-    ax.set_ylabel('')
-
-    plt.tight_layout()
-    plt.savefig(output_dir / 'convergence_heatmap.png', dpi=150, bbox_inches='tight')
-    plt.savefig(output_dir / 'convergence_heatmap.pdf', bbox_inches='tight')
-    plt.close()
-    print(f"  Saved: convergence_heatmap.png/pdf")
-
-
-def plot_actor_convergence(
-    actor_profiles: pd.DataFrame,
-    risk: str,
-    output_dir: Path,
-) -> None:
-    """
-    Line plot showing how actors converged on a specific risk.
-
-    Municipality uses wave averages (mapped to 2015, 2019, 2023).
-    Prefecture/MSB use individual years.
-    """
-    risk_data = actor_profiles[actor_profiles['risk'] == risk]
-
-    if len(risk_data) == 0:
-        return
-
-    fig, ax = plt.subplots(figsize=(10, 5))
-
-    for actor in sorted(risk_data['actor'].unique()):
-        actor_data = risk_data[risk_data['actor'] == actor].sort_values('time_numeric')
-        color = ACTOR_COLORS.get(actor, 'gray')
-
-        # Use different markers for wave vs year data
-        marker = 'o' if actor == 'Municipality' else 's'
-        ax.plot(actor_data['time_numeric'], actor_data['mean_proportion'], f'{marker}-',
-                label=actor, color=color, linewidth=2, markersize=8)
-
-    ax.set_xlabel('Year', fontsize=11)
-    ax.set_ylabel('Mean proportion of risk mentions', fontsize=11)
-    ax.set_title(f'Actor Convergence: {risk}',
-                 fontsize=12, fontweight='bold')
-    ax.legend()
-    ax.set_ylim(bottom=0)
-
-    plt.tight_layout()
-    safe_name = risk.replace('/', '_').replace(' ', '_')
-    plt.savefig(output_dir / f'actor_convergence_{safe_name}.png', dpi=150, bbox_inches='tight')
-    plt.close()
-
-
-def plot_top_convergence_grid(
-    actor_profiles: pd.DataFrame,
-    top_risks: list[str],
-    output_dir: Path,
-) -> None:
-    """
-    Grid of small multiples showing convergence for top risks.
-
-    All actors plotted on year axis:
-    - Municipality: wave averages at 2015, 2019, 2023 (circles)
-    - Prefecture/MSB: individual years (squares)
-    """
-    n_risks = min(len(top_risks), 9)
-    n_cols = 3
-    n_rows = (n_risks + n_cols - 1) // n_cols
-
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(14, 4 * n_rows))
-    axes = axes.flatten() if n_risks > 1 else [axes]
-
-    for idx, risk in enumerate(top_risks[:n_risks]):
-        ax = axes[idx]
-        risk_data = actor_profiles[actor_profiles['risk'] == risk]
-
-        for actor in sorted(risk_data['actor'].unique()):
-            actor_data = risk_data[risk_data['actor'] == actor].sort_values('time_numeric')
-            color = ACTOR_COLORS.get(actor, 'gray')
-
-            # Different markers: circle for wave averages, square for yearly data
-            marker = 'o' if actor == 'Municipality' else 's'
-            ax.plot(actor_data['time_numeric'], actor_data['mean_proportion'], f'{marker}-',
-                    label=actor, color=color, linewidth=2, markersize=5)
-
-        ax.set_title(risk, fontsize=11, fontweight='bold')
-        ax.set_ylim(bottom=0)
-
-        if idx == 0:
-            ax.legend(fontsize=7, loc='upper left')
-
-    # Add shared axis labels
-    fig.supxlabel('Year', fontsize=12)
-    fig.supylabel('Mean proportion of risk mentions', fontsize=12)
-
-    # Hide unused subplots
-    for idx in range(n_risks, len(axes)):
-        axes[idx].set_visible(False)
-
-    fig.suptitle('How Actors Converged on Top Risks\n(Municipality: wave averages, Prefecture/MSB: yearly)',
-                 fontsize=13, fontweight='bold')
-    plt.tight_layout(rect=[0.03, 0.03, 1, 0.95])
-    plt.savefig(output_dir / 'convergence_grid.png', dpi=150, bbox_inches='tight')
-    plt.savefig(output_dir / 'convergence_grid.pdf', bbox_inches='tight')
-    plt.close()
-    print(f"  Saved: convergence_grid.png/pdf")
 
 
 # =============================================================================
@@ -705,20 +473,12 @@ def main():
     drivers_df.to_csv(args.output / 'convergence_drivers.csv', index=False)
     print(f"\n  Saved: eta_squared_by_wave.csv, convergence_drivers.csv")
 
-    # Compute actor profiles for top risks
-    top_risks = drivers_df.head(args.top_n)['risk'].tolist()
-    actor_profiles = compute_actor_profiles(df, risk_cols, top_risks, args.waves)
-    actor_profiles.to_csv(args.output / 'actor_profiles_top_risks.csv', index=False)
-
     # Visualizations
     print(f"\n{'=' * 40}")
     print("GENERATING VISUALIZATIONS")
     print(f"{'=' * 40}")
 
-    plot_convergence_drivers_bar(drivers_df, args.output, args.top_n)
-    plot_convergence_trends(drivers_df, args.output, min(args.top_n, 12))
-    plot_convergence_heatmap(drivers_df, args.output, args.top_n)
-    plot_top_convergence_grid(actor_profiles, top_risks[:9], args.output)
+    plot_convergence_drivers_bar(drivers_df, args.output, top_n=10)
 
     # Report
     print(f"\n{'=' * 40}")
