@@ -188,7 +188,7 @@ RISK_TERMS: Dict[str, List[str]] = {
         'effektbrist', 'elbrist',
         'elförsörjning', 'kraftförsörjning', 'energiförsörjning',
     ],
-    'fjarrvarmebrott': ['fjärrvärmebrott', 'fjärrvärmeavbrott'],
+    'fjarrvarmeavbrott': ['fjärrvärmebrott', 'fjärrvärmeavbrott'],
     'vattenforsorjning': [
         'vattenförsörjning', 'dricksvattenförsörjning', 'dricksvatten',
         'vattenläcka', 'vattenläckor',
@@ -288,7 +288,10 @@ RISK_TERMS: Dict[str, List[str]] = {
         'informationspåverkan', 'påverkansoperation', 'påverkansoperationer',
         'falsk information', 'vilseledande information',
     ],
-    'hybridhot': ['hybrid hot', 'hybridhot'],
+    'hybridhot': [
+        'hybrid hot', 'hybridhot', 'hybridhoten',
+        'hybridkrig', 'hybridkrigföring', 'hybridattack', 'hybridattacker',
+    ],
     'hot_mot_demokrati': [
         'hot mot demokrati', 'hot mot demokratin',
         'hot mot mänskliga fri- och rättigheter',
@@ -304,14 +307,11 @@ RISK_TERMS: Dict[str, List[str]] = {
     ],
     'vapnat_angrepp': [
         'strid på svenskt territorium', 'markstrid',
-        'invasion', 'ockupation', 'väpnat angrepp', 'krig',
+        'invasion', 'ockupation', 'väpnat angrepp', 'krig', 
+        'militär konflikt i närområdet', 'krig i närområdet', 'konflikt i östersjöområdet','väpnat angrepp i närområdet',
     ],
     'blockad': ['sjöblockad', 'handelsblockad', 'ekonomisk blockad'],
-    'militar_konflikt_naromradet': [
-        'militär konflikt i närområdet', 'krig i närområdet',
-        'regional konflikt', 'konflikt i östersjöområdet','väpnat angrepp i närområdet',
-    ],
-
+    
     # =========================================================================
     # ORGANIZED CRIME
     # =========================================================================

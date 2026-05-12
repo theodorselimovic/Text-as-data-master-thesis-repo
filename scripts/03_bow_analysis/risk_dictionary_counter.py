@@ -2,216 +2,94 @@
 """
 Risk Dictionary Counter
 
-Counts occurrences of risk terms from a predefined dictionary in RSA documents.
-Builds term-level and category-level document matrices.
+Counts occurrences of canonical risk terms in RSA documents using the
+RISK_TERMS dictionary. Variants are collapsed to canonical names.
 
-Supports three input modes:
-1. Raw text: Searches for terms using regex in raw text
-2. Pre-lemmatized: Counts lemmas in token lists (from preprocessing_bow.py with Stanza)
-3. Pre-stemmed: Counts stemmed tokens including n-grams (from preprocessing_bow.py with stemming)
-
-When using pre-processed input (--use-lemmas or --use-stems), the dictionary terms
-are also processed identically for consistent matching.
-
-Input formats:
-    - Document-level: parquet with 'file', 'text' (or 'tokens'), 'actor' columns
-    - Sentence-level: parquet from preprocessing_bow.py with 'doc_id', 'tokens' columns
-      (will be aggregated to document level)
+Input: Pre-stemmed corpus from preprocessing_bow.py (bow_corpus_stemmed.parquet)
 
 Outputs:
-    - term_document_matrix.csv: one column per risk term (~100 terms)
-    - category_document_matrix.csv: one column per risk category (8 categories)
-    - term_metadata.csv: term -> category lookup table
+    - term_document_matrix.csv: one column per canonical risk (~100 risks)
+    - category_document_matrix.csv: risks aggregated by MSB category
+    - term_metadata.csv: risk → category mapping
 
 Usage:
-    # From raw text (document-level)
-    python risk_dictionary_counter.py \\
-        --input data/raw/pdf_texts.parquet \\
-        --output ./results/01_bow_analysis/term_matrices/
-
-    # From pre-stemmed corpus (recommended for speed + n-gram matching)
     python risk_dictionary_counter.py \\
         --input data/processed/bow_corpus_stemmed.parquet \\
-        --output ./results/01_bow_analysis/term_matrices/ \\
-        --use-stems
+        --output results/01_bow_analysis/term_matrices/
 
-    # From pre-lemmatized corpus (legacy Stanza mode)
-    python risk_dictionary_counter.py \\
-        --input data/processed/bow_corpus.parquet \\
-        --output ./results/01_bow_analysis/term_matrices/ \\
-        --use-lemmas
-
-    # With verbose output
+    # Include pre-2015 documents
     python risk_dictionary_counter.py \\
         --input data/processed/bow_corpus_stemmed.parquet \\
-        --output ./results/01_bow_analysis/term_matrices/ \\
-        --use-stems --verbose
-
-Requirements:
-    pip install pandas pyarrow nltk
+        --output results/01_bow_analysis/term_matrices/ \\
+        --min-year 0
 """
 
-import re
 import argparse
 import logging
+import re
+import sys
+from collections import Counter
 from pathlib import Path
 
 import pandas as pd
-
-# Import centralized dictionaries from scripts/dictionaries/
-import sys
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from dictionaries import RISK_TERMS, get_legacy_risk_dictionary
-
-# Backward compatibility aliases
-RISK_DICTIONARY_INDIVIDUAL = RISK_TERMS
-RISK_DICTIONARY_ORIGINAL = get_legacy_risk_dictionary(include_extended=False)
-
-# Import stemmer for --use-stems mode
 from nltk.stem.snowball import SnowballStemmer
 
-# =============================================================================
-# CONFIGURATION
-# =============================================================================
+# Import dictionaries
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from dictionaries import RISK_TERMS, RISK_TO_CATEGORY, CATEGORY_NAMES
 
-# RSA filename parsing pattern (from preprocessing.py)
-RSA_FILENAME_PATTERN = re.compile(
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Filename patterns
+RSA_PATTERN = re.compile(
     r"^RSA\s+(?P<entity>.+?)\s+(?P<year>(?:19|20)\d{2})"
     r"(?:\s+(?P<maskad>[Mm]askad|[Mm]askerad))?\s*\.pdf$",
     re.IGNORECASE,
 )
-
-# Fallback pattern for non-RSA filenames (e.g., NRSB MCF 2021.pdf)
-NON_RSA_PATTERN = re.compile(
+NRSB_PATTERN = re.compile(
     r"^(?P<prefix>\w+)\s+(?P<entity>.+?)\s+(?P<year>(?:19|20)\d{2})"
     r"(?:\s+(?P<maskad>[Mm]askad))?\s*\.pdf$",
     re.IGNORECASE,
 )
-
-logger = logging.getLogger(__name__)
 
 
 # =============================================================================
 # DICTIONARY STEMMING
 # =============================================================================
 
-def stem_risk_dictionary(risk_dict: dict, stopwords: set = None) -> dict:
+def stem_dictionary() -> dict:
     """
-    Stem all terms in risk dictionary, removing stopwords to match corpus behavior.
-
-    Multi-word terms like "hot och våld" become "hot_våld" (stopword "och" removed)
-    to match the n-gram format from preprocessing_bow.py which filters stopwords
-    BEFORE n-gram generation.
-
-    Parameters
-    ----------
-    risk_dict : dict
-        The RISK_DICTIONARY mapping category -> list of terms.
-    stopwords : set, optional
-        Set of stopwords to remove. Uses SWEDISH_STOPWORDS from preprocessing_bow.py
-        if not provided.
+    Stem all variants in RISK_TERMS dictionary.
 
     Returns
     -------
     dict
-        Stemmed dictionary with same structure. Multi-word terms joined with underscore.
-        Stopwords are removed to match corpus preprocessing.
+        {canonical_risk: set of stemmed variants}
     """
-    # Import stopwords from preprocessing module
-    import sys
-    from pathlib import Path
     sys.path.insert(0, str(Path(__file__).parent.parent / '02_preprocessing'))
     from preprocessing_bow import SWEDISH_STOPWORDS
 
-    if stopwords is None:
-        stopwords = SWEDISH_STOPWORDS
-
     stemmer = SnowballStemmer('swedish')
-
-    # Pre-stem stopwords for consistent filtering
-    stemmed_stopwords = {stemmer.stem(sw) for sw in stopwords}
-
-    stemmed = {}
-
-    for category, terms in risk_dict.items():
-        stemmed_terms = set()
-        for term in terms:
-            words = term.lower().split()
-
-            # Stem words, filtering out stopwords (matching corpus behavior)
-            stemmed_words = []
-            for w in words:
-                stem = stemmer.stem(w)
-                # Skip if original word or stemmed form is a stopword
-                if w not in stopwords and stem not in stemmed_stopwords:
-                    stemmed_words.append(stem)
-
-            # Skip terms that become empty after stopword removal
-            if not stemmed_words:
-                continue
-
-            if len(stemmed_words) == 1:
-                stemmed_terms.add(stemmed_words[0])
-            else:
-                # Multi-word: add as joined n-gram
-                stemmed_terms.add('_'.join(stemmed_words))
-
-        stemmed[category] = list(stemmed_terms)
-
-    return stemmed
-
-
-def stem_individual_dictionary(stopwords: set = None) -> dict:
-    """
-    Stem the individual risk dictionary, mapping all stemmed variants to
-    their canonical risk name.
-
-    Returns a dict where keys are canonical risk names (e.g., 'översvämning')
-    and values are sets of stemmed forms to match in the corpus.
-
-    Parameters
-    ----------
-    stopwords : set, optional
-        Set of stopwords to remove. Uses SWEDISH_STOPWORDS if not provided.
-
-    Returns
-    -------
-    dict
-        {canonical_risk: set of stemmed forms}
-    """
-    import sys
-    from pathlib import Path
-    sys.path.insert(0, str(Path(__file__).parent.parent / '02_preprocessing'))
-    from preprocessing_bow import SWEDISH_STOPWORDS
-
-    if stopwords is None:
-        stopwords = SWEDISH_STOPWORDS
-
-    stemmer = SnowballStemmer('swedish')
-    stemmed_stopwords = {stemmer.stem(sw) for sw in stopwords}
+    stemmed_stopwords = {stemmer.stem(sw) for sw in SWEDISH_STOPWORDS}
 
     result = {}
-
-    for canonical, variants in RISK_DICTIONARY_INDIVIDUAL.items():
+    for canonical, variants in RISK_TERMS.items():
         stemmed_forms = set()
         for term in variants:
             words = term.lower().split()
-
-            # Stem words, filtering out stopwords
-            stemmed_words = []
-            for w in words:
-                stem = stemmer.stem(w)
-                if w not in stopwords and stem not in stemmed_stopwords:
-                    stemmed_words.append(stem)
-
-            if not stemmed_words:
-                continue
-
-            if len(stemmed_words) == 1:
-                stemmed_forms.add(stemmed_words[0])
-            else:
-                stemmed_forms.add('_'.join(stemmed_words))
-
+            stemmed_words = [
+                stemmer.stem(w) for w in words
+                if w not in SWEDISH_STOPWORDS and stemmer.stem(w) not in stemmed_stopwords
+            ]
+            if stemmed_words:
+                if len(stemmed_words) == 1:
+                    stemmed_forms.add(stemmed_words[0])
+                else:
+                    stemmed_forms.add('_'.join(stemmed_words))
         if stemmed_forms:
             result[canonical] = stemmed_forms
 
@@ -219,406 +97,293 @@ def stem_individual_dictionary(stopwords: set = None) -> dict:
 
 
 # =============================================================================
-# ENTITY EXTRACTION
+# HELPERS
 # =============================================================================
 
 def extract_entity(filename: str) -> str:
-    """
-    Extract entity name from RSA filename.
-
-    Handles:
-        'RSA Skellefteå 2015.pdf'       -> 'Skellefteå'
-        'RSA Kalmar Län 2022.pdf'        -> 'Kalmar Län'
-        'NRSB MCF 2021.pdf'              -> 'MCF'
-        'RSA Ale 2015 Maskad.pdf'        -> 'Ale'
-
-    Parameters
-    ----------
-    filename : str
-        The PDF filename.
-
-    Returns
-    -------
-    str
-        The entity name, or 'unknown' if parsing fails.
-    """
-    # Try RSA pattern first
-    match = RSA_FILENAME_PATTERN.match(filename)
-    if match:
-        return match.group('entity').strip()
-
-    # Try non-RSA pattern (e.g., NRSB MCF...)
-    match = NON_RSA_PATTERN.match(filename)
-    if match:
-        return match.group('entity').strip()
-
-    logger.warning(f"Could not parse entity from filename: {filename}")
+    """Extract entity name from RSA filename."""
+    for pattern in [RSA_PATTERN, NRSB_PATTERN]:
+        match = pattern.match(filename)
+        if match:
+            return match.group('entity').strip()
     return 'unknown'
 
 
 def map_year_to_wave(year: int) -> int:
-    """
-    Map publication year to wave number.
-
-    Wave mapping:
-        Wave 0: pre-2015
-        Wave 1: 2015-2018
-        Wave 2: 2019-2022
-        Wave 3: >= 2023
-
-    Parameters
-    ----------
-    year : int
-        Publication year
-
-    Returns
-    -------
-    int
-        Wave number (0, 1, 2, 3)
-    """
-    year = int(year)  # Handle string years
+    """Map year to wave: 0=pre-2015, 1=2015-18, 2=2019-22, 3=2023+."""
+    year = int(year)
     if year < 2015:
         return 0
-    elif 2015 <= year <= 2018:
+    elif year <= 2018:
         return 1
-    elif 2019 <= year <= 2022:
+    elif year <= 2022:
         return 2
-    else:  # year >= 2023
-        return 3
+    return 3
+
+
+def aggregate_sentences_to_documents(df: pd.DataFrame) -> pd.DataFrame:
+    """Aggregate sentence-level data to document-level."""
+    logger.info("Aggregating sentences to documents...")
+
+    rows = []
+    for doc_id, group in df.groupby('doc_id'):
+        all_tokens = []
+        for tokens in group['tokens']:
+            if hasattr(tokens, '__iter__') and not isinstance(tokens, str):
+                all_tokens.extend(list(tokens))
+
+        first = group.iloc[0]
+        rows.append({
+            'file': doc_id,
+            'tokens': all_tokens,
+            'actor': first.get('actor_type', 'unknown'),
+            'year': first.get('year', None),
+        })
+
+    result = pd.DataFrame(rows)
+    logger.info(f"  Aggregated to {len(result)} documents")
+    return result
+
+
+def aggregate_sentences_to_paragraphs(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Aggregate sentence-level data to paragraph-level for character counting.
+
+    Returns DataFrame with one row per paragraph containing tokens and char count.
+    """
+    logger.info("Aggregating sentences to paragraphs...")
+
+    rows = []
+    for (doc_id, para_id), group in df.groupby(['doc_id', 'paragraph_id']):
+        all_tokens = []
+        for tokens in group['tokens']:
+            if hasattr(tokens, '__iter__') and not isinstance(tokens, str):
+                all_tokens.extend(list(tokens))
+
+        para_text = ' '.join(group['sentence_text'].fillna(''))
+        char_count = len(para_text)
+
+        first = group.iloc[0]
+        rows.append({
+            'doc_id': doc_id,
+            'paragraph_id': para_id,
+            'tokens': all_tokens,
+            'char_count': char_count,
+            'actor': first.get('actor_type', 'unknown'),
+            'year': first.get('year', None),
+        })
+
+    result = pd.DataFrame(rows)
+    logger.info(f"  Aggregated to {len(result)} paragraphs")
+    return result
 
 
 # =============================================================================
-# TERM-LEVEL COUNTING
+# COUNTING
 # =============================================================================
 
-def count_terms_per_document(text: str, risk_dictionary: dict) -> dict:
+def count_risks_in_document(tokens: list, stemmed_dict: dict) -> dict:
     """
-    Count each individual risk term in a document (raw text mode).
-
-    Unlike count_risk_terms() in risk_context_analysis.py which returns
-    category-level sums, this returns a flat dict with one entry per term.
-
-    Parameters
-    ----------
-    text : str
-        The document text.
-    risk_dictionary : dict
-        The RISK_DICTIONARY mapping category -> list of terms.
-
-    Returns
-    -------
-    dict
-        {term: count} for every term in the dictionary.
-    """
-    text_lower = text.lower()
-    term_counts = {}
-
-    for category, terms in risk_dictionary.items():
-        for term in terms:
-            pattern = r'\b' + re.escape(term.lower()) + r'\b'
-            count = len(re.findall(pattern, text_lower))
-            # Use the original term as column name (not lowered)
-            term_counts[term] = count
-
-    return term_counts
-
-
-def count_terms_from_tokens(tokens: list, risk_dictionary: dict) -> dict:
-    """
-    Count each individual risk term from a list of lemmatized tokens.
-
-    For use with pre-lemmatized corpus from preprocessing_bow.py.
-    The dictionary terms should also be lemmatized for consistent matching.
+    Count canonical risks in a document's tokens.
 
     Parameters
     ----------
     tokens : list
-        List of lemmatized tokens (lowercase).
-    risk_dictionary : dict
-        The RISK_DICTIONARY mapping category -> list of (lemmatized) terms.
+        Stemmed tokens from the document
+    stemmed_dict : dict
+        {canonical_risk: set of stemmed variants}
 
     Returns
     -------
     dict
-        {term: count} for every term in the dictionary.
+        {canonical_risk: count}
     """
-    from collections import Counter
+    if not tokens:
+        return {risk: 0 for risk in stemmed_dict}
 
-    # Handle empty tokens or non-iterable
-    if tokens is None or (hasattr(tokens, '__len__') and len(tokens) == 0):
-        # Return zeros for all terms
-        term_counts = {}
-        for category, terms in risk_dictionary.items():
-            for term in terms:
-                term_counts[term] = 0
-        return term_counts
-
-    # Convert numpy arrays to list if needed
     if not isinstance(tokens, list):
         tokens = list(tokens)
 
-    # Count all tokens
     token_counts = Counter(tokens)
 
-    # Extract counts for dictionary terms
-    term_counts = {}
-    for category, terms in risk_dictionary.items():
-        for term in terms:
-            # Terms in dictionary should already be lemmatized and lowercase
-            term_counts[term] = token_counts.get(term.lower(), 0)
+    risk_counts = {}
+    for canonical, variants in stemmed_dict.items():
+        count = sum(token_counts.get(v, 0) for v in variants)
+        risk_counts[canonical] = count
 
-    return term_counts
+    return risk_counts
 
 
-def aggregate_sentences_to_documents(df: pd.DataFrame) -> pd.DataFrame:
+def count_risk_characters_in_document(
+    paragraphs: pd.DataFrame,
+    stemmed_dict: dict,
+) -> dict:
     """
-    Aggregate sentence-level data to document-level.
+    Count total characters in paragraphs mentioning each risk.
 
-    Combines tokens from all sentences in a document and extracts
-    metadata from the first occurrence.
+    For each risk, finds all paragraphs mentioning it and sums their character
+    counts. Paragraphs mentioning multiple variants of the same risk are counted
+    once.
+
+    Parameters
+    ----------
+    paragraphs : pd.DataFrame
+        Paragraph-level data for a single document with 'tokens' and 'char_count'
+    stemmed_dict : dict
+        {canonical_risk: set of stemmed variants}
+
+    Returns
+    -------
+    dict
+        {canonical_risk: total_characters}
+    """
+    from collections import defaultdict
+
+    risk_paragraphs = defaultdict(set)
+    para_chars = {}
+
+    for idx, row in paragraphs.iterrows():
+        tokens = row.get('tokens', [])
+        if not tokens:
+            continue
+
+        para_id = row['paragraph_id']
+        para_chars[para_id] = row['char_count']
+
+        token_set = set(tokens) if not isinstance(tokens, set) else tokens
+
+        for canonical, variants in stemmed_dict.items():
+            if token_set & variants:
+                risk_paragraphs[canonical].add(para_id)
+
+    char_counts = {}
+    for canonical in stemmed_dict:
+        paras = risk_paragraphs.get(canonical, set())
+        char_counts[canonical] = sum(para_chars.get(p, 0) for p in paras)
+
+    return char_counts
+
+
+def build_character_matrix(
+    paragraphs_df: pd.DataFrame,
+    stemmed_dict: dict,
+    verbose: bool = False,
+) -> pd.DataFrame:
+    """
+    Build character document matrix: characters devoted to each risk per document.
+
+    Parameters
+    ----------
+    paragraphs_df : pd.DataFrame
+        Paragraph-level data with 'doc_id', 'tokens', 'char_count', 'actor', 'year'
+    stemmed_dict : dict
+        {canonical_risk: set of stemmed variants}
+
+    Returns
+    -------
+    pd.DataFrame
+        Document × risk matrix with character counts
+    """
+    logger.info("Building character matrix...")
+
+    canonical_risks = sorted(stemmed_dict.keys())
+    rows = []
+
+    doc_ids = paragraphs_df['doc_id'].unique()
+    for i, doc_id in enumerate(doc_ids):
+        if verbose and i % 100 == 0:
+            logger.info(f"  Processing document {i}/{len(doc_ids)}...")
+
+        doc_paras = paragraphs_df[paragraphs_df['doc_id'] == doc_id]
+        first = doc_paras.iloc[0]
+
+        meta = {
+            'file': doc_id,
+            'actor': first.get('actor', 'unknown'),
+            'entity': extract_entity(str(doc_id)),
+            'year': first.get('year'),
+            'wave': map_year_to_wave(first['year']) if pd.notna(first.get('year')) else None,
+        }
+
+        char_counts = count_risk_characters_in_document(doc_paras, stemmed_dict)
+        rows.append({**meta, **char_counts})
+
+    result = pd.DataFrame(rows)
+    logger.info(f"  Built matrix: {len(result)} documents × {len(canonical_risks)} risks")
+    return result
+
+
+def build_matrices(df: pd.DataFrame, stemmed_dict: dict, verbose: bool = False):
+    """
+    Build term and category document matrices.
 
     Parameters
     ----------
     df : pd.DataFrame
-        Sentence-level DataFrame with 'doc_id' and 'tokens' columns.
-
-    Returns
-    -------
-    pd.DataFrame
-        Document-level DataFrame with combined tokens.
-    """
-    logger.info("Aggregating sentences to documents...")
-
-    # Group by document
-    doc_groups = df.groupby('doc_id')
-
-    rows = []
-    for doc_id, group in doc_groups:
-        # Combine all tokens from sentences
-        all_tokens = []
-        for tokens in group['tokens']:
-            # Handle both lists and numpy arrays
-            if hasattr(tokens, '__iter__') and not isinstance(tokens, str):
-                all_tokens.extend(list(tokens))
-
-        # Get metadata from first row
-        first_row = group.iloc[0]
-
-        row = {
-            'file': doc_id,
-            'tokens': all_tokens,
-            'actor': first_row.get('actor_type', 'unknown'),
-            'year': first_row.get('year', None),
-            'municipality': first_row.get('municipality', None),
-        }
-        rows.append(row)
-
-    result = pd.DataFrame(rows)
-    logger.info(f"  Aggregated {len(df)} sentences -> {len(result)} documents")
-
-    return result
-
-
-def aggregate_to_categories(
-    term_counts: dict, risk_dictionary: dict
-) -> dict:
-    """
-    Aggregate term-level counts to category-level.
-
-    Parameters
-    ----------
-    term_counts : dict
-        {term: count} from count_terms_per_document().
-    risk_dictionary : dict
-        The RISK_DICTIONARY.
-
-    Returns
-    -------
-    dict
-        {category: sum_of_term_counts}.
-    """
-    category_counts = {}
-    for category, terms in risk_dictionary.items():
-        category_counts[category] = sum(
-            term_counts.get(term, 0) for term in terms
-        )
-    return category_counts
-
-
-# =============================================================================
-# TERM METADATA
-# =============================================================================
-
-def build_term_metadata(risk_dictionary: dict) -> pd.DataFrame:
-    """
-    Build a term -> category lookup table.
-
-    Notes duplicate terms that appear in multiple categories.
-
-    Parameters
-    ----------
-    risk_dictionary : dict
-        The RISK_DICTIONARY.
-
-    Returns
-    -------
-    pd.DataFrame
-        Columns: term, category. May have multiple rows per term if
-        the term appears in multiple categories.
-    """
-    rows = []
-    for category, terms in risk_dictionary.items():
-        for term in terms:
-            rows.append({'term': term, 'category': category})
-    return pd.DataFrame(rows)
-
-
-# =============================================================================
-# MATRIX BUILDING
-# =============================================================================
-
-def build_matrices(
-    texts_df: pd.DataFrame,
-    risk_dictionary: dict,
-    text_column: str = 'text',
-    use_lemmas: bool = False,
-    verbose: bool = False,
-    collapse_variants: bool = False,
-) -> tuple:
-    """
-    Build term-level and category-level document matrices.
-
-    Parameters
-    ----------
-    texts_df : pd.DataFrame
-        The corpus with columns: file, text/tokens, actor, year.
-    risk_dictionary : dict
-        The RISK_DICTIONARY.
-    text_column : str
-        Column containing document text (ignored if use_lemmas=True).
-    use_lemmas : bool
-        If True, count from 'tokens' column instead of raw text.
+        Document-level data with 'file', 'tokens', 'actor', 'year' columns
+    stemmed_dict : dict
+        {canonical_risk: set of stemmed variants}
     verbose : bool
-        Whether to print progress.
-    collapse_variants : bool
-        If True (for --individual mode), term_matrix columns are canonical
-        risk names with summed variant counts. If False, each variant is
-        a separate column.
+        Print progress
 
     Returns
     -------
-    tuple of (pd.DataFrame, pd.DataFrame)
-        (term_matrix, category_matrix) with metadata columns.
+    tuple
+        (term_matrix, category_matrix) DataFrames
     """
-    # Collect all unique terms (preserving original casing)
-    all_terms = []
-    seen = set()
-    for category, terms in risk_dictionary.items():
-        for term in terms:
-            if term not in seen:
-                all_terms.append(term)
-                seen.add(term)
-
-    # For collapse_variants mode, use canonical names as columns
-    if collapse_variants:
-        canonical_names = list(risk_dictionary.keys())
+    canonical_risks = sorted(stemmed_dict.keys())
+    categories = sorted(set(RISK_TO_CATEGORY.values()))
 
     term_rows = []
-    category_rows = []
+    cat_rows = []
 
-    n_docs = len(texts_df)
-    for idx, row in texts_df.iterrows():
-        if verbose and idx % 50 == 0:
-            print(f"  Processing document {idx}/{n_docs}...")
+    for idx, row in df.iterrows():
+        if verbose and idx % 100 == 0:
+            logger.info(f"  Processing document {idx}/{len(df)}...")
 
-        filename = str(row.get('file', ''))
-        actor = str(row.get('actor', 'unknown'))
-        year = row.get('year', None)
-        entity = extract_entity(filename)
-
-        # Map year to wave
-        wave = map_year_to_wave(year) if year is not None else None
-
-        # Count terms - either from tokens or raw text
-        if use_lemmas:
-            tokens = row.get('tokens', [])
-            term_counts = count_terms_from_tokens(tokens, risk_dictionary)
-        else:
-            text = str(row.get(text_column, ''))
-            term_counts = count_terms_per_document(text, risk_dictionary)
-
-        category_counts = aggregate_to_categories(term_counts, risk_dictionary)
-
-        # Build metadata
-        metadata = {
-            'file': filename,
-            'actor': actor,
-            'entity': entity,
-            'year': year,
-            'wave': wave,
+        # Metadata
+        meta = {
+            'file': row.get('file', ''),
+            'actor': row.get('actor', 'unknown'),
+            'entity': extract_entity(str(row.get('file', ''))),
+            'year': row.get('year'),
+            'wave': map_year_to_wave(row['year']) if pd.notna(row.get('year')) else None,
         }
 
-        # Term-level row
-        term_row = {**metadata}
-        if collapse_variants:
-            # Sum counts for all variants under canonical name
-            for canonical, variants in risk_dictionary.items():
-                term_row[canonical] = sum(term_counts.get(v, 0) for v in variants)
-        else:
-            for term in all_terms:
-                term_row[term] = term_counts.get(term, 0)
+        # Count risks
+        risk_counts = count_risks_in_document(row.get('tokens', []), stemmed_dict)
+
+        # Term row
+        term_row = {**meta, **risk_counts}
         term_rows.append(term_row)
 
-        # Category-level row
-        cat_row = {**metadata}
-        for category in risk_dictionary.keys():
-            cat_row[f'risk_{category}'] = category_counts.get(category, 0)
-        cat_row['total_risk_mentions'] = sum(category_counts.values())
-        category_rows.append(cat_row)
+        # Category row
+        cat_counts = {cat: 0 for cat in categories}
+        for risk, count in risk_counts.items():
+            cat = RISK_TO_CATEGORY.get(risk)
+            if cat:
+                cat_counts[cat] += count
 
-    term_matrix = pd.DataFrame(term_rows)
-    category_matrix = pd.DataFrame(category_rows)
+        cat_row = {**meta}
+        for cat in categories:
+            cat_row[f'risk_{cat}'] = cat_counts[cat]
+        cat_row['total_risk_mentions'] = sum(cat_counts.values())
+        cat_rows.append(cat_row)
 
-    return term_matrix, category_matrix
+    return pd.DataFrame(term_rows), pd.DataFrame(cat_rows)
 
 
-# =============================================================================
-# OUTPUT
-# =============================================================================
-
-def save_outputs(
-    term_matrix: pd.DataFrame,
-    category_matrix: pd.DataFrame,
-    term_metadata: pd.DataFrame,
-    output_dir: Path,
-) -> None:
-    """
-    Save all outputs to the output directory.
-
-    Parameters
-    ----------
-    term_matrix : pd.DataFrame
-        Term-level document matrix.
-    category_matrix : pd.DataFrame
-        Category-level document matrix.
-    term_metadata : pd.DataFrame
-        Term -> category lookup.
-    output_dir : Path
-        Output directory.
-    """
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    term_path = output_dir / 'term_document_matrix.csv'
-    term_matrix.to_csv(term_path, index=False, encoding='utf-8')
-    print(f"  Saved: {term_path} ({term_matrix.shape[0]} docs × {term_matrix.shape[1]} cols)")
-
-    cat_path = output_dir / 'category_document_matrix.csv'
-    category_matrix.to_csv(cat_path, index=False, encoding='utf-8')
-    print(f"  Saved: {cat_path} ({category_matrix.shape[0]} docs × {category_matrix.shape[1]} cols)")
-
-    meta_path = output_dir / 'term_metadata.csv'
-    term_metadata.to_csv(meta_path, index=False, encoding='utf-8')
-    print(f"  Saved: {meta_path} ({len(term_metadata)} term-category mappings)")
+def build_term_metadata(stemmed_dict: dict) -> pd.DataFrame:
+    """Build term → category metadata table."""
+    rows = []
+    for canonical in sorted(stemmed_dict.keys()):
+        category = RISK_TO_CATEGORY.get(canonical, 'unknown')
+        rows.append({
+            'term': canonical,
+            'category': category,
+            'category_name': CATEGORY_NAMES.get(category, category),
+        })
+    return pd.DataFrame(rows)
 
 
 # =============================================================================
@@ -627,53 +392,25 @@ def save_outputs(
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Count risk dictionary terms and build document matrices',
-        formatter_class=argparse.RawDescriptionHelpFormatter
+        description='Count risk terms and build document matrices',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-
     parser.add_argument(
-        '--input', '-i',
-        type=Path,
-        required=True,
-        help='Path to input parquet file (raw texts or preprocessed bow_corpus)'
+        '--input', '-i', type=Path, required=True,
+        help='Path to bow_corpus_stemmed.parquet'
     )
-
     parser.add_argument(
-        '--text-column',
-        type=str,
-        default='text',
-        help='Column name containing text (default: text, ignored with --use-lemmas)'
-    )
-
-    parser.add_argument(
-        '--use-lemmas',
-        action='store_true',
-        help='Use pre-lemmatized tokens from preprocessing_bow.py with Stanza (reads "tokens" column)'
-    )
-
-    parser.add_argument(
-        '--use-stems',
-        action='store_true',
-        help='Use pre-stemmed tokens with n-grams from preprocessing_bow.py (reads "tokens" column, recommended)'
-    )
-
-    parser.add_argument(
-        '--output',
-        type=Path,
+        '--output', '-o', type=Path,
         default=Path('./results/01_bow_analysis/term_matrices'),
         help='Output directory'
     )
-
     parser.add_argument(
-        '--verbose',
-        action='store_true',
-        help='Print progress messages'
+        '--min-year', type=int, default=2015,
+        help='Minimum year to include (default: 2015). Use 0 for all.'
     )
-
     parser.add_argument(
-        '--individual',
-        action='store_true',
-        help='Use individual risk dictionary (85 canonical risks with collapsed variants) instead of category-based'
+        '--verbose', '-v', action='store_true',
+        help='Print progress'
     )
 
     args = parser.parse_args()
@@ -683,177 +420,104 @@ def main():
     print("=" * 60)
 
     # Load data
-    print(f"\nLoading data from: {args.input}")
+    print(f"\nLoading: {args.input}")
     df = pd.read_parquet(args.input)
     print(f"  Loaded {len(df)} rows")
-    print(f"  Columns: {list(df.columns)}")
 
-    # Detect input type and prepare data
-    is_sentence_level = 'doc_id' in df.columns and 'sentence_id' in df.columns
+    # Filter by year
+    if args.min_year > 0 and 'year' in df.columns:
+        df['year'] = pd.to_numeric(df['year'], errors='coerce')
+        n_before = len(df)
+        df = df[df['year'] >= args.min_year]
+        n_filtered = n_before - len(df)
+        if n_filtered > 0:
+            print(f"  Filtered {n_filtered} rows before {args.min_year} ({len(df)} remaining)")
 
-    # Validate mutually exclusive options
-    if args.use_lemmas and args.use_stems:
-        print("ERROR: --use-lemmas and --use-stems are mutually exclusive")
-        return 1
+    # Aggregate sentences to documents (for mention matrix)
+    # Also keep paragraph-level for character matrix
+    paragraphs_df = None
+    if 'doc_id' in df.columns and 'sentence_id' in df.columns:
+        paragraphs_df = aggregate_sentences_to_paragraphs(df)
+        df = aggregate_sentences_to_documents(df)
 
-    use_tokens = args.use_lemmas or args.use_stems
-
-    if use_tokens:
-        mode_name = "Pre-stemmed tokens (with n-grams)" if args.use_stems else "Pre-lemmatized tokens"
-        print(f"\nMode: {mode_name}")
-        if 'tokens' not in df.columns:
-            print("ERROR: --use-lemmas/--use-stems requires 'tokens' column (from preprocessing_bow.py)")
-            return 1
-
-        # Aggregate sentence-level to document-level if needed
-        if is_sentence_level:
-            df = aggregate_sentences_to_documents(df)
-    else:
-        print(f"\nMode: Raw text (regex matching)")
-        if is_sentence_level:
-            # For raw text mode with sentence-level input, concatenate sentences
-            print("  Aggregating sentences to documents...")
-            df = df.groupby('doc_id').agg({
-                'sentence_text': ' '.join,
-                'actor_type': 'first',
-                'year': 'first',
-                'municipality': 'first',
-            }).reset_index()
-            df = df.rename(columns={'doc_id': 'file', 'sentence_text': 'text', 'actor_type': 'actor'})
-            print(f"  Aggregated to {len(df)} documents")
-
-    # Show data summary
+    # Show summary
     actor_col = 'actor' if 'actor' in df.columns else 'actor_type'
     if actor_col in df.columns:
         print(f"  Actors: {df[actor_col].value_counts().to_dict()}")
-    if 'year' in df.columns:
-        years = df['year'].dropna().unique()
-        if len(years) > 0:
-            print(f"  Years: {sorted([int(y) for y in years if pd.notna(y)])}")
 
-    # Get risk dictionary (lemmatized if using pre-lemmatized corpus)
-    print(f"\n{'='*60}")
-    print("BUILDING RISK TERM MATRICES")
-    print(f"{'='*60}")
+    # Stem dictionary
+    print(f"\n{'=' * 60}")
+    print("BUILDING MATRICES")
+    print("=" * 60)
 
-    if args.individual:
-        if not args.use_stems:
-            print("ERROR: --individual requires --use-stems (individual dict works with stemmed corpus)")
-            return 1
-        # Use individual dictionary with collapsed variants
-        ind_dict = stem_individual_dictionary()
-        # Convert to format expected by build_matrices: {canonical: [list of stemmed forms]}
-        risk_dict = {canonical: list(forms) for canonical, forms in ind_dict.items()}
-        dict_type = "individual (85 canonical risks)"
-        print(f"\n  Individual dictionary: {len(risk_dict)} canonical risks")
-        print("  Sample risks and their stemmed forms:")
-        for canonical in list(risk_dict.keys())[:3]:
-            forms = risk_dict[canonical][:4]
-            print(f"    {canonical}: {forms}")
-    elif args.use_stems:
-        # Use stemmed dictionary to match stemmed tokens with n-grams
-        if RISK_DICTIONARY_ORIGINAL is None:
-            print("ERROR: Category dictionary not found. Use --individual for individual risk terms.")
-            sys.exit(1)
-        risk_dict = stem_risk_dictionary(RISK_DICTIONARY_ORIGINAL)
-        dict_type = "stemmed"
-        # Show some example transformations
-        print("\n  Sample stemmed terms:")
-        for cat, terms in list(risk_dict.items())[:2]:
-            orig_terms = RISK_DICTIONARY_ORIGINAL[cat][:3]
-            stem_terms = terms[:3]
-            print(f"    {cat}: {orig_terms} -> {stem_terms}")
-    elif args.use_lemmas:
-        # Legacy: use original dictionary (lemmatization mode deprecated)
-        if RISK_DICTIONARY_ORIGINAL is None:
-            print("ERROR: Category dictionary not found. Use --individual for individual risk terms.")
-            sys.exit(1)
-        print("  Warning: --use-lemmas is deprecated, using original dictionary")
-        risk_dict = RISK_DICTIONARY_ORIGINAL
-        dict_type = "original (lemmas deprecated)"
-    else:
-        # Use original dictionary for raw text matching
-        if RISK_DICTIONARY_ORIGINAL is None:
-            print("ERROR: Category dictionary not found. Use --individual for individual risk terms.")
-            sys.exit(1)
-        risk_dict = RISK_DICTIONARY_ORIGINAL
-        dict_type = "original"
+    print("\nStemming dictionary...")
+    stemmed_dict = stem_dictionary()
+    print(f"  {len(stemmed_dict)} canonical risks")
 
-    print(f"\nRisk dictionary ({dict_type}): {len(risk_dict)} {'risks' if args.individual else 'categories'}")
-    term_metadata = build_term_metadata(risk_dict)
-    n_unique_terms = term_metadata['term'].nunique()
-    n_total_mappings = len(term_metadata)
-    n_duplicates = n_total_mappings - n_unique_terms
-    print(f"  {n_unique_terms} unique terms, {n_duplicates} duplicates across categories")
+    # Sample
+    for risk in list(stemmed_dict.keys())[:3]:
+        variants = list(stemmed_dict[risk])[:3]
+        print(f"    {risk}: {variants}")
 
-    if n_duplicates > 0:
-        dup_terms = term_metadata[term_metadata.duplicated(subset='term', keep=False)]
-        for term in dup_terms['term'].unique():
-            cats = dup_terms[dup_terms['term'] == term]['category'].tolist()
-            print(f"    Duplicate: '{term}' in {cats}")
+    # Build matrices
+    print("\nCounting risks...")
+    term_matrix, cat_matrix = build_matrices(df, stemmed_dict, args.verbose)
 
-    print(f"\nBuilding matrices...")
-    term_matrix, category_matrix = build_matrices(
-        df, risk_dict,
-        text_column=args.text_column,
-        use_lemmas=use_tokens,  # True for both --use-lemmas and --use-stems
-        verbose=args.verbose,
-        collapse_variants=args.individual,  # Collapse variants to canonical names
-    )
+    # Build character matrix (if paragraph data available)
+    char_matrix = None
+    if paragraphs_df is not None:
+        print("\nCounting characters per risk...")
+        char_matrix = build_character_matrix(paragraphs_df, stemmed_dict, args.verbose)
 
-    # Summary statistics
-    metadata_cols = ['file', 'actor', 'entity', 'year', 'wave']
-    term_cols = [c for c in term_matrix.columns if c not in metadata_cols]
-    print(f"\nTerm matrix: {term_matrix.shape[0]} documents × {len(term_cols)} terms")
-    print(f"  Non-zero entries: {(term_matrix[term_cols] > 0).sum().sum()}")
-    print(f"  Sparsity: {1 - (term_matrix[term_cols] > 0).sum().sum() / (len(term_cols) * len(term_matrix)):.1%}")
+    # Stats
+    risk_cols = [c for c in term_matrix.columns if c not in ['file', 'actor', 'entity', 'year', 'wave']]
+    n_nonzero = (term_matrix[risk_cols] > 0).sum().sum()
+    total_cells = len(term_matrix) * len(risk_cols)
+    sparsity = 1 - (n_nonzero / total_cells) if total_cells > 0 else 0
+
+    print(f"\nTerm matrix: {len(term_matrix)} documents × {len(risk_cols)} risks")
+    print(f"  Non-zero: {n_nonzero}, Sparsity: {sparsity:.1%}")
 
     # Wave distribution
-    wave_ranges = {
-        0: 'pre-2015',
-        1: '2015-2018',
-        2: '2019-2022',
-        3: '≥ 2023',
-    }
-    print(f"\nWave distribution:")
-    wave_stats = term_matrix.groupby('wave').agg({'year': ['min', 'max', 'count']})
-    for wave in sorted(term_matrix['wave'].unique()):
-        wave_range = wave_ranges.get(wave, 'unknown')
-        count = len(term_matrix[term_matrix['wave'] == wave])
-        year_min = term_matrix[term_matrix['wave'] == wave]['year'].min()
-        year_max = term_matrix[term_matrix['wave'] == wave]['year'].max()
-        print(f"  Wave {wave} ({wave_range}): {count} documents (years {year_min}-{year_max})")
+    if 'wave' in term_matrix.columns:
+        print("\nWave distribution:")
+        wave_labels = {1: '2015-2018', 2: '2019-2022', 3: '2023+'}
+        for wave in sorted(term_matrix['wave'].dropna().unique()):
+            wave = int(wave)
+            if wave > 0:
+                n = len(term_matrix[term_matrix['wave'] == wave])
+                print(f"  Wave {wave} ({wave_labels.get(wave, '?')}): {n} documents")
 
-    # Entity extraction summary
-    entity_counts = term_matrix.groupby('actor')['entity'].nunique()
-    print(f"\nEntities extracted:")
-    for actor, count in entity_counts.items():
-        print(f"  {actor}: {count} unique entities")
+    # Build metadata
+    term_metadata = build_term_metadata(stemmed_dict)
 
-    unknowns = term_matrix[term_matrix['entity'] == 'unknown']
-    if len(unknowns) > 0:
-        print(f"\n  WARNING: {len(unknowns)} documents with unknown entity:")
-        for _, row in unknowns.iterrows():
-            print(f"    {row['file']}")
+    # Save
+    print(f"\n{'=' * 60}")
+    print("SAVING")
+    print("=" * 60)
 
-    # Save outputs
-    print(f"\n{'='*60}")
-    print("SAVING OUTPUTS")
-    print(f"{'='*60}")
-    print(f"\nOutput directory: {args.output}")
+    args.output.mkdir(parents=True, exist_ok=True)
 
-    save_outputs(term_matrix, category_matrix, term_metadata, args.output)
+    term_path = args.output / 'term_document_matrix.csv'
+    term_matrix.to_csv(term_path, index=False)
+    print(f"  {term_path} ({len(term_matrix)} × {len(term_matrix.columns)})")
+
+    cat_path = args.output / 'category_document_matrix.csv'
+    cat_matrix.to_csv(cat_path, index=False)
+    print(f"  {cat_path} ({len(cat_matrix)} × {len(cat_matrix.columns)})")
+
+    meta_path = args.output / 'term_metadata.csv'
+    term_metadata.to_csv(meta_path, index=False)
+    print(f"  {meta_path} ({len(term_metadata)} terms)")
+
+    if char_matrix is not None:
+        char_path = args.output / 'character_document_matrix.csv'
+        char_matrix.to_csv(char_path, index=False)
+        print(f"  {char_path} ({len(char_matrix)} × {len(char_matrix.columns)})")
 
     print(f"\n{'=' * 60}")
     print("DONE")
-    print(f"{'=' * 60}")
-    print(f"\nOutput files:")
-    print(f"  term_document_matrix.csv - per-term counts")
-    print(f"  category_document_matrix.csv - per-category counts")
-    print(f"  term_metadata.csv - term to category mapping")
-    print(f"\nThese can be used by:")
-    print(f"  - risk_persistence_analysis.py (term_document_matrix.csv)")
-    print(f"  - risk_clustering_analysis.py (category_document_matrix.csv)\n")
+    print("=" * 60)
 
     return 0
 

@@ -508,6 +508,578 @@ def aggregate_by_actor_and_wave_pair(
 
 
 # =============================================================================
+# CHARACTER PERSISTENCE
+# =============================================================================
+
+def load_character_matrix(input_path: Path) -> tuple:
+    """
+    Load character document matrix (parallel to term_document_matrix).
+
+    Returns (DataFrame, list of term columns).
+    """
+    char_path = input_path.parent / 'character_document_matrix.csv'
+    if not char_path.exists():
+        print(f"  Character matrix not found: {char_path}")
+        return None, []
+
+    df = pd.read_csv(char_path)
+    term_cols = [c for c in df.columns if c not in METADATA_COLS]
+    print(f"  Loaded character matrix: {len(df)} documents, {len(term_cols)} terms")
+    return df, term_cols
+
+
+def compute_character_by_wave(
+    char_df: pd.DataFrame,
+    term_cols: list,
+) -> pd.DataFrame:
+    """
+    Compute average characters per document per risk per wave.
+
+    Only counts documents that actually mention the risk (chars > 0).
+    This measures depth of coverage when discussed, not diluted by non-mentions.
+
+    Returns long-format DataFrame: wave, actor, term, mean_chars, n_docs_with_risk.
+    """
+    records = []
+
+    for (wave, actor), group in char_df.groupby(['wave', 'actor']):
+        n_docs_total = len(group)
+
+        for term in term_cols:
+            term_chars = group[term]
+            docs_with_risk = term_chars > 0
+            n_docs_with_risk = docs_with_risk.sum()
+            total_chars = term_chars.sum()
+
+            mean_chars = total_chars / n_docs_with_risk if n_docs_with_risk > 0 else 0
+
+            records.append({
+                'wave': int(wave),
+                'actor': actor,
+                'term': term,
+                'total_chars': total_chars,
+                'n_docs_with_risk': n_docs_with_risk,
+                'n_docs_total': n_docs_total,
+                'mean_chars_per_doc': mean_chars,
+            })
+
+    return pd.DataFrame(records)
+
+
+def compute_character_deltas(char_by_wave: pd.DataFrame) -> pd.DataFrame:
+    """
+    Compute wave-to-wave change in character coverage per risk.
+
+    Returns DataFrame with delta and percent change between waves.
+    """
+    records = []
+
+    for (actor, term), group in char_by_wave.groupby(['actor', 'term']):
+        group = group.sort_values('wave')
+        rows = list(group.iterrows())
+
+        for i in range(len(rows) - 1):
+            _, row_from = rows[i]
+            _, row_to = rows[i + 1]
+
+            w_from, w_to = row_from['wave'], row_to['wave']
+            c_from, c_to = row_from['mean_chars_per_doc'], row_to['mean_chars_per_doc']
+            n_from, n_to = row_from['n_docs_with_risk'], row_to['n_docs_with_risk']
+
+            delta = c_to - c_from
+            pct_change = (delta / c_from * 100) if c_from > 0 else (100 if c_to > 0 else 0)
+
+            records.append({
+                'actor': actor,
+                'term': term,
+                'wave_from': w_from,
+                'wave_to': w_to,
+                'wave_pair': f"W{w_from}→W{w_to}",
+                'n_docs_from': n_from,
+                'n_docs_to': n_to,
+                'chars_from': c_from,
+                'chars_to': c_to,
+                'delta_chars': delta,
+                'pct_change': pct_change,
+            })
+
+    return pd.DataFrame(records)
+
+
+def plot_character_trends(
+    char_by_wave: pd.DataFrame,
+    output_dir: Path,
+    top_n: int = 15,
+) -> None:
+    """
+    Line plot showing character coverage trends per risk across waves.
+    Only shows Municipality and Prefecture (MCF excluded due to small N).
+    """
+    WAVE_LABELS = {1: '2015-18', 2: '2019-22', 3: '2023+'}
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 8), sharey=True)
+    actors = ['kommun', 'lansstyrelse']
+
+    for ax, actor in zip(axes, actors):
+        actor_data = char_by_wave[char_by_wave['actor'] == actor]
+        if len(actor_data) == 0:
+            ax.set_title(f'{translate_actor(actor)} (no data)')
+            continue
+
+        # Get top N risks by average character coverage
+        top_risks = (
+            actor_data.groupby('term')['mean_chars_per_doc']
+            .mean()
+            .nlargest(top_n)
+            .index.tolist()
+        )
+
+        for term in top_risks:
+            term_data = actor_data[actor_data['term'] == term].sort_values('wave')
+            ax.plot(
+                term_data['wave'],
+                term_data['mean_chars_per_doc'],
+                marker='o',
+                label=translate_term(term),
+                linewidth=2,
+                markersize=6,
+            )
+
+        ax.set_xticks([1, 2, 3])
+        ax.set_xticklabels([WAVE_LABELS.get(w, str(w)) for w in [1, 2, 3]])
+        ax.set_xlabel('Wave', fontsize=12)
+        ax.set_title(translate_actor(actor), fontsize=14, fontweight='bold')
+
+        if actor == 'kommun':
+            ax.set_ylabel('Avg characters per document', fontsize=12)
+        ax.legend(loc='upper left', fontsize=8, ncol=2)
+        ax.grid(True, alpha=0.3)
+
+    plt.suptitle('Character coverage per risk by wave', fontsize=14, fontweight='bold', y=1.02)
+    plt.tight_layout()
+    plt.savefig(output_dir / 'character_trends.png', dpi=150, bbox_inches='tight')
+    plt.savefig(output_dir / 'character_trends.pdf', bbox_inches='tight')
+    plt.close()
+    print(f"  Saved: character_trends.png/pdf")
+
+
+def plot_character_heatmap(
+    char_deltas: pd.DataFrame,
+    output_dir: Path,
+    actor: str = 'kommun',
+) -> None:
+    """
+    Heatmap showing percent change in character coverage between waves.
+    Shows ALL risks, not just top N.
+    """
+    actor_data = char_deltas[char_deltas['actor'] == actor].copy()
+    if len(actor_data) == 0:
+        print(f"  No character delta data for {actor}")
+        return
+
+    # Filter to risks with any coverage (exclude always-zero risks)
+    risks_with_coverage = actor_data.groupby('term').apply(
+        lambda g: (g['chars_from'].sum() + g['chars_to'].sum()) > 0
+    )
+    active_risks = risks_with_coverage[risks_with_coverage].index.tolist()
+    actor_data = actor_data[actor_data['term'].isin(active_risks)]
+
+    pivot = actor_data.pivot_table(
+        index='term', columns='wave_pair', values='pct_change'
+    )
+
+    pivot.index = [translate_term(t) for t in pivot.index]
+    pivot = pivot.loc[pivot.mean(axis=1).sort_values(ascending=False).index]
+
+    fig, ax = plt.subplots(figsize=(12, max(10, len(pivot) * 0.3)))
+    sns.heatmap(
+        pivot, annot=True, fmt='.0f', cmap='RdYlGn', center=0,
+        linewidths=0.5, ax=ax,
+        cbar_kws={'label': 'Percent change (%)'}
+    )
+
+    ax.set_title(f'Character coverage change by wave ({translate_actor(actor)}) - {len(pivot)} risks',
+                 fontsize=14, fontweight='bold')
+    ax.set_xlabel('Wave transition', fontsize=12)
+    ax.set_ylabel('Risk term', fontsize=12)
+
+    plt.tight_layout()
+    fname = f'character_change_heatmap_{actor}'
+    plt.savefig(output_dir / f'{fname}.png', dpi=150, bbox_inches='tight')
+    plt.savefig(output_dir / f'{fname}.pdf', bbox_inches='tight')
+    plt.close()
+    print(f"  Saved: {fname}.png/pdf ({len(pivot)} risks)")
+
+
+def plot_character_change_histogram(
+    char_deltas: pd.DataFrame,
+    output_dir: Path,
+    min_docs: int = 5,
+    entity_persistence: pd.DataFrame = None,
+) -> None:
+    """
+    Histogram showing the distribution of absolute character changes.
+    Top row: Municipality wave-on-wave changes.
+    Bottom row: Prefecture year-on-year changes (from entity-level data).
+    """
+    # Municipality data (wave-on-wave aggregated)
+    kommun_deltas = char_deltas[char_deltas['actor'] == 'kommun'].copy()
+    kommun_deltas['abs_change'] = kommun_deltas['chars_to'] - kommun_deltas['chars_from']
+    wave_pairs = sorted(kommun_deltas['wave_pair'].unique())
+
+    # Prefecture data (year-on-year from entity persistence)
+    has_prefecture = (entity_persistence is not None and
+                      'lansstyrelse' in entity_persistence['actor'].values)
+
+    if has_prefecture:
+        pref_data = entity_persistence[
+            (entity_persistence['actor'] == 'lansstyrelse') &
+            (entity_persistence['chars_from'] > 0)
+        ].copy()
+        pref_data['abs_change'] = pref_data['chars_to'] - pref_data['chars_from']
+        fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+    else:
+        fig, axes = plt.subplots(1, len(wave_pairs), figsize=(6 * len(wave_pairs), 5))
+        if len(wave_pairs) == 1:
+            axes = [axes]
+        axes = [axes] if len(wave_pairs) == 1 else axes
+
+    # Top row: Municipality wave-on-wave
+    for col, wave_pair in enumerate(wave_pairs):
+        ax = axes[0, col] if has_prefecture else axes[col]
+        subset = kommun_deltas[
+            (kommun_deltas['wave_pair'] == wave_pair) &
+            (kommun_deltas['n_docs_from'] >= min_docs)
+        ]
+
+        if len(subset) == 0:
+            ax.set_title(f'Municipality {wave_pair} (no data)')
+            ax.set_visible(False)
+            continue
+
+        abs_changes = subset['abs_change']
+        ax.hist(abs_changes, bins=15, color='#e41a1c', alpha=0.7, edgecolor='black')
+        ax.axvline(0, color='black', linestyle='--', linewidth=2, label='No change')
+        ax.axvline(abs_changes.mean(), color='green', linestyle='-', linewidth=2,
+                  label=f'Mean: {abs_changes.mean():,.0f}')
+        ax.set_xlabel('Character change')
+        ax.set_ylabel('Number of risks')
+        ax.set_title(f'Municipality {wave_pair} (n={len(subset)})')
+        ax.legend(fontsize=8)
+
+    # Bottom row: Prefecture year-on-year
+    if has_prefecture:
+        # Aggregate by term to get mean change per risk
+        pref_by_term = pref_data.groupby('term').agg(
+            mean_abs_change=('abs_change', 'mean'),
+            n_transitions=('abs_change', 'count'),
+        ).reset_index()
+
+        ax = axes[1, 0]
+        abs_changes = pref_by_term['mean_abs_change']
+        ax.hist(abs_changes, bins=15, color='#377eb8', alpha=0.7, edgecolor='black')
+        ax.axvline(0, color='black', linestyle='--', linewidth=2, label='No change')
+        ax.axvline(abs_changes.mean(), color='green', linestyle='-', linewidth=2,
+                  label=f'Mean: {abs_changes.mean():,.0f}')
+        ax.set_xlabel('Mean character change per risk')
+        ax.set_ylabel('Number of risks')
+        ax.set_title(f'Prefecture year-on-year (n={len(pref_by_term)} risks)')
+        ax.legend(fontsize=8)
+
+        # Hide unused subplot
+        axes[1, 1].set_visible(False)
+
+    plt.suptitle(f'Distribution of character coverage changes\n(Municipality: ≥{min_docs} docs; Prefecture: year-on-year)',
+                 fontsize=14, fontweight='bold')
+    plt.tight_layout()
+    plt.savefig(output_dir / 'character_change_histogram.png', dpi=150, bbox_inches='tight')
+    plt.savefig(output_dir / 'character_change_histogram.pdf', bbox_inches='tight')
+    plt.close()
+    print(f"  Saved: character_change_histogram.png/pdf")
+
+
+def compute_entity_character_persistence(
+    char_df: pd.DataFrame,
+    term_cols: list,
+) -> pd.DataFrame:
+    """
+    Compute character persistence at the entity level.
+
+    For municipalities: compares across waves (latest doc per wave).
+    For prefectures: compares across years (latest doc per year).
+
+    Returns DataFrame with one row per (entity, term, transition).
+    """
+    records = []
+
+    for (entity, actor), group in char_df.groupby(['entity', 'actor']):
+        if actor == 'kommun':
+            # For municipalities: keep latest doc per wave, compare across waves
+            group = group.sort_values(['wave', 'year'])
+            group = group.drop_duplicates(subset='wave', keep='last')
+            if len(group) < 2:
+                continue
+            group = group.sort_values('wave')
+            period_col = 'wave'
+        else:
+            # For prefectures/MCF: compare across years
+            group = group.sort_values('year')
+            group = group.drop_duplicates(subset='year', keep='last')
+            if len(group) < 2:
+                continue
+            period_col = 'year'
+
+        docs = list(group.iterrows())
+
+        for i in range(len(docs) - 1):
+            _, doc_from = docs[i]
+            _, doc_to = docs[i + 1]
+
+            period_from = int(doc_from[period_col])
+            period_to = int(doc_to[period_col])
+
+            # Skip if same period (shouldn't happen after dedup, but safety check)
+            if period_from == period_to:
+                continue
+
+            if actor == 'kommun':
+                period_pair = f"W{period_from}→W{period_to}"
+            else:
+                period_pair = f"{period_from}→{period_to}"
+
+            for term in term_cols:
+                chars_from = doc_from[term]
+                chars_to = doc_to[term]
+
+                # Only include if risk was mentioned in at least one doc
+                if chars_from == 0 and chars_to == 0:
+                    continue
+
+                if chars_from > 0:
+                    pct_change = (chars_to - chars_from) / chars_from * 100
+                else:
+                    pct_change = 100.0  # New adoption
+
+                records.append({
+                    'entity': entity,
+                    'actor': actor,
+                    'period_from': period_from,
+                    'period_to': period_to,
+                    'period_pair': period_pair,
+                    'term': term,
+                    'chars_from': chars_from,
+                    'chars_to': chars_to,
+                    'pct_change': pct_change,
+                })
+
+    return pd.DataFrame(records)
+
+
+def aggregate_entity_character_persistence(
+    entity_persistence: pd.DataFrame,
+    min_entities: int = 5,
+) -> pd.DataFrame:
+    """
+    Aggregate entity-level character persistence to risk level.
+
+    Computes both percent change and absolute character change.
+    """
+    records = []
+
+    for (actor, term), group in entity_persistence.groupby(['actor', 'term']):
+        # Filter to entities where risk was present in the "from" doc
+        present_from = group[group['chars_from'] > 0]
+
+        if len(present_from) < min_entities:
+            continue
+
+        # Absolute change = chars_to - chars_from
+        abs_change = present_from['chars_to'] - present_from['chars_from']
+
+        records.append({
+            'actor': actor,
+            'term': term,
+            'n_entities': len(present_from),
+            'mean_pct_change': present_from['pct_change'].mean(),
+            'median_pct_change': present_from['pct_change'].median(),
+            'mean_abs_change': abs_change.mean(),
+            'median_abs_change': abs_change.median(),
+            'std_abs_change': abs_change.std(),
+        })
+
+    result = pd.DataFrame(records)
+    if len(result) > 0:
+        result = result.sort_values(['actor', 'mean_abs_change'], ascending=[True, False])
+    return result
+
+
+def plot_entity_character_persistence(
+    agg_persistence: pd.DataFrame,
+    output_dir: Path,
+    top_n: int = 25,
+) -> None:
+    """
+    Bar chart showing mean absolute character change per risk across entities.
+    """
+    actors = ['kommun', 'lansstyrelse']
+    fig, axes = plt.subplots(1, 2, figsize=(14, 10))
+
+    for ax, actor in zip(axes, actors):
+        subset = agg_persistence[agg_persistence['actor'] == actor].copy()
+        if len(subset) == 0:
+            ax.set_visible(False)
+            continue
+
+        # Get top growing and shrinking by mean absolute change
+        top = subset.nlargest(top_n, 'mean_abs_change')
+        bottom = subset.nsmallest(top_n, 'mean_abs_change')
+        combined = pd.concat([top, bottom]).drop_duplicates()
+        combined = combined.sort_values('mean_abs_change', ascending=True)
+        combined['term_en'] = combined['term'].apply(translate_term)
+
+        colors = ['#e41a1c' if x < 0 else '#4daf4a' for x in combined['mean_abs_change']]
+
+        ax.barh(combined['term_en'], combined['mean_abs_change'], color=colors)
+        ax.axvline(0, color='black', linewidth=1)
+        ax.set_xlabel('Mean character change')
+        ax.set_title(f'{translate_actor(actor)}', fontsize=12, fontweight='bold')
+
+        # Annotate with n
+        for i, (_, row) in enumerate(combined.iterrows()):
+            ax.annotate(f"n={int(row['n_entities'])}",
+                       xy=(row['mean_abs_change'], i),
+                       xytext=(5, 0), textcoords='offset points',
+                       fontsize=8, va='center')
+
+    plt.suptitle('Character change by risk\n(mean across entities)', fontsize=14, fontweight='bold')
+    plt.tight_layout()
+    plt.savefig(output_dir / 'character_entity_ranking.png', dpi=150, bbox_inches='tight')
+    plt.savefig(output_dir / 'character_entity_ranking.pdf', bbox_inches='tight')
+    plt.close()
+    print(f"  Saved: character_entity_ranking.png/pdf")
+
+
+def plot_entity_character_histogram(
+    entity_persistence: pd.DataFrame,
+    output_dir: Path,
+) -> None:
+    """
+    Histogram showing distribution of entity-level absolute character changes.
+    Municipalities (wave-on-wave) and Prefectures (year-on-year).
+    """
+    # Filter to transitions where risk was present in "from" doc
+    present_from = entity_persistence[entity_persistence['chars_from'] > 0].copy()
+    present_from['abs_change'] = present_from['chars_to'] - present_from['chars_from']
+
+    actors = ['kommun', 'lansstyrelse']
+    actor_labels = {
+        'kommun': 'Municipality (wave-on-wave)',
+        'lansstyrelse': 'Prefecture (year-on-year)',
+    }
+    actor_colors = {'kommun': '#e41a1c', 'lansstyrelse': '#377eb8'}
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+    for ax, actor in zip(axes, actors):
+        subset = present_from[present_from['actor'] == actor]
+        if len(subset) == 0:
+            ax.set_visible(False)
+            continue
+
+        abs_changes = subset['abs_change']
+
+        ax.hist(abs_changes, bins=30, color=actor_colors[actor], alpha=0.7, edgecolor='black')
+        ax.axvline(0, color='black', linestyle='--', linewidth=2, label='No change')
+        ax.axvline(abs_changes.mean(), color='green', linestyle='-', linewidth=2,
+                  label=f'Mean: {abs_changes.mean():,.0f}')
+
+        ax.set_xlabel('Character change')
+        ax.set_ylabel('Count (entity-risk transitions)')
+        ax.set_title(f'{actor_labels[actor]} (n={len(subset):,})')
+        ax.legend(fontsize=9)
+
+    plt.suptitle('Distribution of entity-level character changes', fontsize=14, fontweight='bold')
+    plt.tight_layout()
+    plt.savefig(output_dir / 'character_entity_histogram.png', dpi=150, bbox_inches='tight')
+    plt.savefig(output_dir / 'character_entity_histogram.pdf', bbox_inches='tight')
+    plt.close()
+    print(f"  Saved: character_entity_histogram.png/pdf")
+
+
+def plot_top_growing_risks(
+    char_deltas: pd.DataFrame,
+    output_dir: Path,
+    min_docs: int = 5,
+    top_n: int = 20,
+) -> None:
+    """
+    Bar chart showing top growing and shrinking risks by absolute character change.
+    """
+    # Filter to kommun and risks with sufficient baseline
+    kommun = char_deltas[
+        (char_deltas['actor'] == 'kommun') &
+        (char_deltas['n_docs_from'] >= min_docs)
+    ].copy()
+    kommun['abs_change'] = kommun['chars_to'] - kommun['chars_from']
+
+    if len(kommun) == 0:
+        print("  No data for top growing risks")
+        return
+
+    # Create figure with two rows (one per wave transition)
+    wave_pairs = sorted(kommun['wave_pair'].unique())
+    fig, axes = plt.subplots(len(wave_pairs), 1, figsize=(12, 6 * len(wave_pairs)))
+    if len(wave_pairs) == 1:
+        axes = [axes]
+
+    for ax, wave_pair in zip(axes, wave_pairs):
+        subset = kommun[kommun['wave_pair'] == wave_pair].copy()
+        subset['term_en'] = subset['term'].apply(translate_term)
+
+        # Get top growing and top shrinking by absolute change
+        top_growing = subset.nlargest(top_n, 'abs_change')
+        top_shrinking = subset.nsmallest(top_n, 'abs_change')
+
+        # Combine and sort
+        combined = pd.concat([top_growing, top_shrinking]).drop_duplicates()
+        combined = combined.sort_values('abs_change', ascending=True)
+
+        # Color by direction
+        colors = ['#e41a1c' if x < 0 else '#4daf4a' for x in combined['abs_change']]
+
+        ax.barh(combined['term_en'], combined['abs_change'], color=colors)
+        ax.axvline(0, color='black', linewidth=1)
+        ax.set_xlabel('Character change')
+        ax.set_ylabel('Risk')
+        ax.set_title(f'{wave_pair}: Top growing (green) and shrinking (red) risks',
+                     fontsize=12, fontweight='bold')
+
+        # Add doc counts as annotations
+        for i, (_, row) in enumerate(combined.iterrows()):
+            ax.annotate(f"n={int(row['n_docs_from'])}→{int(row['n_docs_to'])}",
+                       xy=(row['abs_change'], i),
+                       xytext=(5, 0), textcoords='offset points',
+                       fontsize=8, va='center')
+
+    plt.tight_layout()
+    plt.savefig(output_dir / 'character_top_changes.png', dpi=150, bbox_inches='tight')
+    plt.savefig(output_dir / 'character_top_changes.pdf', bbox_inches='tight')
+    plt.close()
+    print(f"  Saved: character_top_changes.png/pdf")
+
+    # Also save ranked CSV with absolute change
+    for wave_pair in wave_pairs:
+        subset = kommun[kommun['wave_pair'] == wave_pair].copy()
+        subset = subset.sort_values('abs_change', ascending=False)
+        subset['term_en'] = subset['term'].apply(translate_term)
+        subset = subset[['term', 'term_en', 'n_docs_from', 'n_docs_to',
+                        'chars_from', 'chars_to', 'abs_change', 'pct_change']]
+        subset.to_csv(output_dir / f'character_ranking_{wave_pair.replace("→", "_to_")}.csv',
+                     index=False)
+    print(f"  Saved: character_ranking_*.csv")
+
+
+# =============================================================================
 # VISUALISATIONS
 # =============================================================================
 
@@ -1068,7 +1640,12 @@ def main():
     )
 
     args = parser.parse_args()
-    args.output.mkdir(parents=True, exist_ok=True)
+
+    # Create subfolders for mention and character persistence
+    mention_output = args.output / 'mention_persistence'
+    char_output = args.output / 'character_persistence'
+    mention_output.mkdir(parents=True, exist_ok=True)
+    char_output.mkdir(parents=True, exist_ok=True)
 
     print("=" * 60)
     print("RISK PERSISTENCE ANALYSIS")
@@ -1130,32 +1707,32 @@ def main():
     # Save data
     print("\nSaving data...")
     transitions.to_csv(
-        args.output / 'persistence_transitions.csv', index=False, encoding='utf-8'
+        mention_output / 'persistence_transitions.csv', index=False, encoding='utf-8'
     )
-    print(f"  Saved: persistence_transitions.csv")
+    print(f"  Saved: mention_persistence/persistence_transitions.csv")
 
     persistence_by_term.to_csv(
-        args.output / 'persistence_by_term.csv', encoding='utf-8'
+        mention_output / 'persistence_by_term.csv', encoding='utf-8'
     )
-    print(f"  Saved: persistence_by_term.csv")
+    print(f"  Saved: mention_persistence/persistence_by_term.csv")
 
     jaccard_df.to_csv(
-        args.output / 'jaccard_scores.csv', index=False, encoding='utf-8'
+        mention_output / 'jaccard_scores.csv', index=False, encoding='utf-8'
     )
-    print(f"  Saved: jaccard_scores.csv")
+    print(f"  Saved: mention_persistence/jaccard_scores.csv")
 
     # Visualisations
     print("\nGenerating visualisations...")
 
     # Combined heatmap (all actors, wave-based)
     plot_persistence_heatmap(
-        transitions, args.output, min_entities=args.min_entities
+        transitions, mention_output, min_entities=args.min_entities
     )
 
     # Municipality wave-based heatmap (W0→W1, W1→W2, W2→W3)
     kommun_transitions = transitions[transitions['actor'] == 'kommun']
     plot_persistence_heatmap(
-        kommun_transitions, args.output,
+        kommun_transitions, mention_output,
         min_entities=max(3, args.min_entities // 3),
         suffix='_kommun',
     )
@@ -1170,17 +1747,17 @@ def main():
         n_entities = w1_w3_transitions['entity'].nunique()
         print(f"  {n_entities} municipalities with both W1 and W3 documents")
         plot_direct_wave_heatmap(
-            w1_w3_transitions, args.output,
+            w1_w3_transitions, mention_output,
             wave_pair_label='W1→W3',
             min_entities=3,
             suffix='_kommun_w1_w3',
         )
         # Save W1→W3 transitions
         w1_w3_transitions.to_csv(
-            args.output / 'persistence_transitions_kommun_w1_w3.csv',
+            mention_output / 'persistence_transitions_kommun_w1_w3.csv',
             index=False, encoding='utf-8'
         )
-        print(f"  Saved: persistence_transitions_kommun_w1_w3.csv")
+        print(f"  Saved: mention_persistence/persistence_transitions_kommun_w1_w3.csv")
     else:
         print("  No municipalities with both W1 and W3 documents")
 
@@ -1204,14 +1781,14 @@ def main():
         print(f"  {translate_actor(actor)}: {n_entities} entities, {n_pairs} year-pairs")
 
         plot_year_persistence_heatmap(
-            year_trans, args.output,
+            year_trans, mention_output,
             min_entities=1,
             suffix=f'_{actor}',
         )
 
         # Save year transitions
         year_trans.to_csv(
-            args.output / f'persistence_transitions_year_{actor}.csv',
+            mention_output / f'persistence_transitions_year_{actor}.csv',
             index=False, encoding='utf-8'
         )
 
@@ -1219,23 +1796,78 @@ def main():
     yearly_transitions = pd.concat(yearly_transitions_list, ignore_index=True) if yearly_transitions_list else pd.DataFrame()
 
     # Dropout and adoption rankings
-    plot_dropout_adoption_ranking(transitions, args.output)
+    plot_dropout_adoption_ranking(transitions, mention_output)
 
     # Jaccard by actor
-    plot_jaccard_by_actor(jaccard_df, args.output)
+    plot_jaccard_by_actor(jaccard_df, mention_output)
 
     # Actor persistence comparison (municipalities wave-based, others year-based)
     kommun_transitions = transitions[transitions['actor'] == 'kommun']
-    plot_actor_persistence_comparison(kommun_transitions, yearly_transitions, args.output)
+    plot_actor_persistence_comparison(kommun_transitions, yearly_transitions, mention_output)
+
+    # Character persistence analysis
+    print("\n" + "=" * 60)
+    print("CHARACTER PERSISTENCE ANALYSIS")
+    print("=" * 60)
+
+    char_df, char_term_cols = load_character_matrix(args.input)
+    if char_df is not None and len(char_df) > 0:
+        # Create subfolders
+        wave_output = char_output / 'wave_comparison'
+        entity_output = char_output / 'entity_comparison'
+        wave_output.mkdir(parents=True, exist_ok=True)
+        entity_output.mkdir(parents=True, exist_ok=True)
+
+        # Filter to 2015+
+        char_df = char_df[char_df['wave'] >= 1].copy()
+
+        # === WAVE COMPARISON ===
+        print("\nComputing wave-level character coverage...")
+        char_by_wave = compute_character_by_wave(char_df, char_term_cols)
+        print(f"  {len(char_by_wave)} (wave, actor, term) combinations")
+
+        char_deltas = compute_character_deltas(char_by_wave)
+        print(f"  {len(char_deltas)} delta records")
+
+        char_by_wave.to_csv(wave_output / 'character_by_wave.csv', index=False, encoding='utf-8')
+        char_deltas.to_csv(wave_output / 'character_deltas.csv', index=False, encoding='utf-8')
+        print(f"  Saved to wave_comparison/")
+
+        # === ENTITY COMPARISON (compute first for histogram) ===
+        print("\nComputing entity-level character persistence...")
+        entity_char_persistence = compute_entity_character_persistence(char_df, char_term_cols)
+        print(f"  {len(entity_char_persistence)} entity-term transitions")
+
+        agg_char_persistence = aggregate_entity_character_persistence(entity_char_persistence, min_entities=5)
+        print(f"  {len(agg_char_persistence)} risks with ≥5 entities")
+
+        entity_char_persistence.to_csv(entity_output / 'character_entity_transitions.csv', index=False, encoding='utf-8')
+        agg_char_persistence.to_csv(entity_output / 'character_entity_aggregated.csv', index=False, encoding='utf-8')
+        print(f"  Saved to entity_comparison/")
+
+        # === WAVE COMPARISON VISUALIZATIONS ===
+        print("\nGenerating wave comparison visualizations...")
+        plot_character_trends(char_by_wave, wave_output, top_n=15)
+        plot_character_heatmap(char_deltas, wave_output, actor='kommun')
+        plot_character_change_histogram(char_deltas, wave_output, entity_persistence=entity_char_persistence)
+        plot_top_growing_risks(char_deltas, wave_output)
+
+        # === ENTITY COMPARISON VISUALIZATIONS ===
+        print("\nGenerating entity comparison visualizations...")
+        plot_entity_character_persistence(agg_char_persistence, entity_output)
+        plot_entity_character_histogram(entity_char_persistence, entity_output)
+    else:
+        print("  Skipping character analysis: no character matrix found")
 
     # Report
     print("\nGenerating report...")
     generate_report(
-        panel, transitions, jaccard_df, persistence_by_term, args.output
+        panel, transitions, jaccard_df, persistence_by_term, mention_output
     )
 
     print(f"\n{'=' * 60}")
-    print(f"All outputs saved to: {args.output}")
+    print(f"Mention persistence saved to: {mention_output}")
+    print(f"Character persistence saved to: {char_output}")
     print(f"{'=' * 60}\n")
 
     return 0

@@ -8,20 +8,20 @@ method with informative Dirichlet priors.
 
 The method computes log-odds ratios with shrinkage:
 - Handles different corpus sizes gracefully
-- Shrinks estimates for rare words toward overall frequency
-- Produces z-scores interpretable as statistical significance
+- Shrinks estimates for rare words toward pooled background frequency
+- Produces z-scores used as a ranking heuristic (not formal statistical inference)
 
 Formula:
-    log-odds = log((y1 + α_i) / (n1 - y1 + α_0 - α_i))
-             - log((y2 + α_i) / (n2 - y2 + α_0 - α_i))
+    log-odds = log((y1 + α_i) / (n1 + α_0 - y1 - α_i))
+             - log((y2 + α_i) / (n2 + α_0 - y2 - α_i))
 
     z-score = log-odds / sqrt(1/(y1 + α_i) + 1/(y2 + α_i))
 
 where:
     y1, y2 = word count in corpus 1 and 2
     n1, n2 = total words in corpus 1 and 2
-    α_0 = prior strength (typically 1.0)
-    α_i = pooled_frequency(word i) × α_0
+    α_i = (y1 + y2) × prior_weight  (pooled COUNT, not frequency)
+    α_0 = (n1 + n2) × prior_weight  (total prior strength)
 
 Reference:
     Monroe, B. L., Colaresi, M. P., & Quinn, K. M. (2008). Fightin' words:
@@ -94,6 +94,9 @@ ACTOR_COLORS = {
     'lansstyrelse': '#377eb8',  # Blue
     'MCF': '#4daf4a',           # Green
 }
+
+# Display order: MSB (left), Prefecture (middle), Municipality (right)
+ACTOR_ORDER = ['MCF', 'lansstyrelse', 'kommun']
 
 
 def map_year_to_wave(year) -> Optional[int]:
@@ -213,13 +216,14 @@ def compute_log_odds_ratio(
     counts2: Counter,
     total1: int,
     total2: int,
-    prior_strength: float = 1.0,
+    prior_weight: float = 0.01,
 ) -> pd.DataFrame:
     """
     Compute log-odds ratios with informative Dirichlet prior (Monroe et al. 2008).
 
-    The prior for each word is proportional to its pooled frequency, which
-    provides appropriate shrinkage for rare words.
+    The prior for each word is proportional to its pooled COUNT (not frequency),
+    scaled by prior_weight. This provides meaningful shrinkage: rare words are
+    pulled toward the pooled background, while common words retain their signal.
 
     Parameters
     ----------
@@ -227,14 +231,26 @@ def compute_log_odds_ratio(
         Word counts for corpus 1 and 2
     total1, total2 : int
         Total word counts for corpus 1 and 2
-    prior_strength : float
-        Overall prior strength α_0 (default: 1.0)
+    prior_weight : float
+        Controls shrinkage strength (default: 0.01). Acts as if we've observed
+        an additional pseudo-corpus of size (total1 + total2) * prior_weight
+        with the pooled distribution. Higher = more shrinkage toward background.
 
     Returns
     -------
     pd.DataFrame
         DataFrame with columns: term, count1, count2, log_odds, z_score
         Positive z_score means term is distinctive of corpus 1.
+
+    Notes
+    -----
+    The key insight from Monroe et al. is that α_i (the prior for word i) should
+    be proportional to the pooled COUNT, not frequency. With prior_weight=0.01:
+    - A word appearing 100 times total gets α_i = 1.0
+    - A word appearing 10 times total gets α_i = 0.1
+
+    This ensures rare words shrink toward background while common words retain
+    their discriminative signal.
     """
     # Get all terms from both corpora
     all_terms = set(counts1.keys()) | set(counts2.keys())
@@ -242,26 +258,28 @@ def compute_log_odds_ratio(
     if not all_terms:
         return pd.DataFrame(columns=['term', 'count1', 'count2', 'log_odds', 'z_score'])
 
+    # Total prior strength = pooled corpus size × prior_weight
+    alpha_0 = (total1 + total2) * prior_weight
+
     rows = []
 
     for term in all_terms:
         y1 = counts1.get(term, 0)
         y2 = counts2.get(term, 0)
 
-        # Pooled frequency determines the prior for this term
-        # α_i = (pooled frequency) × α_0
-        pooled_freq = (y1 + y2) / (total1 + total2) if (total1 + total2) > 0 else 0
-        alpha_i = pooled_freq * prior_strength
+        # Prior for this term = pooled COUNT × prior_weight
+        # This is the key fix: use counts, not frequencies
+        alpha_i = (y1 + y2) * prior_weight
 
         # Ensure minimum prior to avoid numerical issues
         alpha_i = max(alpha_i, 1e-10)
 
-        # Log-odds ratio with prior
-        # log((y1 + α_i) / (n1 - y1 + α_0 - α_i)) - log((y2 + α_i) / (n2 - y2 + α_0 - α_i))
+        # Log-odds ratio with prior (Monroe et al. Equation 16)
+        # log((y1 + α_i) / (n1 + α_0 - y1 - α_i)) - log((y2 + α_i) / (n2 + α_0 - y2 - α_i))
         numerator1 = y1 + alpha_i
-        denominator1 = total1 - y1 + prior_strength - alpha_i
+        denominator1 = total1 + alpha_0 - y1 - alpha_i
         numerator2 = y2 + alpha_i
-        denominator2 = total2 - y2 + prior_strength - alpha_i
+        denominator2 = total2 + alpha_0 - y2 - alpha_i
 
         # Ensure positive denominators
         denominator1 = max(denominator1, 1e-10)
@@ -269,7 +287,7 @@ def compute_log_odds_ratio(
 
         log_odds = np.log(numerator1 / denominator1) - np.log(numerator2 / denominator2)
 
-        # Variance approximation (from Monroe et al. Equation 22)
+        # Variance approximation (Monroe et al. Equation 22)
         variance = 1 / (y1 + alpha_i) + 1 / (y2 + alpha_i)
         z_score = log_odds / np.sqrt(variance)
 
@@ -292,7 +310,7 @@ def compare_actors(
     actor_totals: Dict[str, int],
     actor1: str,
     actor2: str,
-    prior_strength: float = 1.0,
+    prior_weight: float = 0.01,
 ) -> pd.DataFrame:
     """
     Compare two actors using Fightin' Words method.
@@ -305,8 +323,8 @@ def compare_actors(
         {actor: total_count}
     actor1, actor2 : str
         Actor names to compare
-    prior_strength : float
-        Prior strength for Dirichlet prior
+    prior_weight : float
+        Controls shrinkage strength (default: 0.01)
 
     Returns
     -------
@@ -322,7 +340,7 @@ def compare_actors(
         logger.warning(f"Empty corpus for comparison: {actor1}={total1}, {actor2}={total2}")
         return pd.DataFrame()
 
-    result = compute_log_odds_ratio(counts1, counts2, total1, total2, prior_strength)
+    result = compute_log_odds_ratio(counts1, counts2, total1, total2, prior_weight)
 
     # Add metadata columns
     result['actor1'] = actor1
@@ -397,10 +415,8 @@ def plot_distinctive_terms(
         ax1.set_yticks(range(len(top_actor1_sig)))
         ax1.set_yticklabels([translate_term(t) for t in top_actor1_sig['term']], fontsize=10)
         ax1.invert_yaxis()
-        ax1.axvline(x=1.96, color='black', linestyle='--', alpha=0.5, label='p<0.05')
     ax1.set_xlabel('Z-score (log-odds ratio)', fontsize=11)
     ax1.set_title(f'Distinctive of {name1}', fontsize=12, fontweight='bold')
-    ax1.legend(loc='lower right')
 
     # Right panel: Actor 2 distinctive terms (flip sign for display)
     if len(top_actor2_sig) > 0:
@@ -417,10 +433,8 @@ def plot_distinctive_terms(
         ax2.set_yticks(range(len(top_actor2_sig)))
         ax2.set_yticklabels([translate_term(t) for t in top_actor2_sig['term']], fontsize=10)
         ax2.invert_yaxis()
-        ax2.axvline(x=1.96, color='black', linestyle='--', alpha=0.5, label='p<0.05')
     ax2.set_xlabel('Z-score (log-odds ratio)', fontsize=11)
     ax2.set_title(f'Distinctive of {name2}', fontsize=12, fontweight='bold')
-    ax2.legend(loc='lower right')
 
     # Overall title
     total1 = comparison_df['actor1_total'].iloc[0] if len(comparison_df) > 0 else 0
@@ -448,7 +462,7 @@ def plot_distinctive_terms(
 def compare_one_vs_rest(
     actor_counts: Dict[str, Counter],
     actor_totals: Dict[str, int],
-    prior_strength: float = 1.0,
+    prior_weight: float = 0.01,
 ) -> pd.DataFrame:
     """
     Compare each actor against all others combined (one-vs-rest).
@@ -462,15 +476,15 @@ def compare_one_vs_rest(
         {actor: Counter({term: count})}
     actor_totals : dict
         {actor: total_count}
-    prior_strength : float
-        Prior strength for Dirichlet prior
+    prior_weight : float
+        Controls shrinkage strength (default: 0.01)
 
     Returns
     -------
     pd.DataFrame
         DataFrame with columns: term, z_<actor1>, z_<actor2>, ..., distinctive_of
     """
-    actors = sorted(actor_counts.keys())
+    actors = [a for a in ACTOR_ORDER if a in actor_counts]
     all_terms = set()
     for counts in actor_counts.values():
         all_terms.update(counts.keys())
@@ -498,14 +512,15 @@ def compare_one_vs_rest(
                 for a in actors if a != actor
             )
 
-            # Compute log-odds with prior
-            pooled_freq = (count_actor + count_rest) / (total_actor + total_rest) if (total_actor + total_rest) > 0 else 0
-            alpha_i = max(pooled_freq * prior_strength, 1e-10)
+            # Monroe et al. with proper scaling
+            # α_i = pooled COUNT × prior_weight
+            alpha_i = max((count_actor + count_rest) * prior_weight, 1e-10)
+            alpha_0 = (total_actor + total_rest) * prior_weight
 
             numerator1 = count_actor + alpha_i
-            denominator1 = max(total_actor - count_actor + prior_strength - alpha_i, 1e-10)
+            denominator1 = max(total_actor + alpha_0 - count_actor - alpha_i, 1e-10)
             numerator2 = count_rest + alpha_i
-            denominator2 = max(total_rest - count_rest + prior_strength - alpha_i, 1e-10)
+            denominator2 = max(total_rest + alpha_0 - count_rest - alpha_i, 1e-10)
 
             log_odds = np.log(numerator1 / denominator1) - np.log(numerator2 / denominator2)
             variance = 1 / (count_actor + alpha_i) + 1 / (count_rest + alpha_i)
@@ -579,14 +594,12 @@ def plot_all_actors_distinctiveness(
         ax.set_yticks(range(len(actor_df)))
         ax.set_yticklabels([translate_term(t) for t in actor_df['term']], fontsize=10)
         ax.invert_yaxis()
-        ax.axvline(x=1.96, color='red', linestyle='--', alpha=0.5, label='p<0.05')
         ax.set_xlabel('Z-score (vs all others)', fontsize=11)
         ax.set_title(
             f'{ACTOR_DISPLAY_NAMES.get(actor, actor)}',
             fontsize=12,
             fontweight='bold',
         )
-        ax.legend(loc='lower right', fontsize=8)
 
     fig.suptitle(
         'Risk Term Distinctiveness: One-vs-Rest Comparison\n'
@@ -708,10 +721,10 @@ def main():
     )
 
     parser.add_argument(
-        '--prior-strength', '-p',
+        '--prior-weight', '-p',
         type=float,
-        default=1.0,
-        help='Dirichlet prior strength α_0 (default: 1.0)',
+        default=0.01,
+        help='Shrinkage weight for Dirichlet prior (default: 0.01). Higher = more shrinkage.',
     )
 
     parser.add_argument(
@@ -744,7 +757,7 @@ def main():
     print("=" * 70)
     print(f"Input: {args.input}")
     print(f"Output: {args.output}")
-    print(f"Prior strength: {args.prior_strength}")
+    print(f"Prior weight: {args.prior_weight}")
 
     # Load term-document matrix
     logger.info("\nLoading term-document matrix...")
@@ -759,7 +772,7 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
 
     # Run all pairwise comparisons
-    actors = sorted(actor_counts.keys())
+    actors = [a for a in ACTOR_ORDER if a in actor_counts]
 
     if len(actors) < 2:
         logger.error(f"Need at least 2 actors, found: {actors}")
@@ -773,7 +786,7 @@ def main():
         comparison_df = compare_actors(
             actor_counts, actor_totals,
             actor1, actor2,
-            args.prior_strength,
+            args.prior_weight,
         )
 
         if comparison_df.empty:
@@ -799,7 +812,7 @@ def main():
         logger.info("ONE-VS-REST COMPARISON")
         logger.info("-" * 70)
 
-        ovr_df = compare_one_vs_rest(actor_counts, actor_totals, args.prior_strength)
+        ovr_df = compare_one_vs_rest(actor_counts, actor_totals, args.prior_weight)
 
         # Print summary
         print_one_vs_rest_summary(ovr_df, actors, args.top)
@@ -832,7 +845,7 @@ def main():
                 comparison_df = compare_actors(
                     wave_actor_counts, wave_actor_totals,
                     actor1, actor2,
-                    args.prior_strength,
+                    args.prior_weight,
                 )
 
                 if comparison_df.empty:

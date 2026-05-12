@@ -172,6 +172,7 @@ def aggregate_to_paragraphs(df: pd.DataFrame) -> pd.DataFrame:
         rows.append({
             'doc_id': doc_id,
             'paragraph_id': para_id,
+            'entity': first.get('municipality', 'unknown'),
             'actor_type': first.get('actor_type', 'unknown'),
             'year': year,
             'wave': map_year_to_wave(year) if pd.notna(year) else None,

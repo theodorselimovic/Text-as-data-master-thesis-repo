@@ -46,6 +46,7 @@ RISK_TRANSLATIONS: Dict[str, str] = {
     'skred': 'Landslide',
     'erosion': 'Erosion',
     'jordbaevning': 'Earthquake',
+    'jordbavning': 'Earthquake',
     'tsunami': 'Tsunami',
     'vulkanutbrott': 'Volcanic eruption',
 
@@ -122,6 +123,7 @@ RISK_TRANSLATIONS: Dict[str, str] = {
     'fjarrvarmebrott': 'District heating failure',
     'vattenforsorjning': 'Water supply disruption',
     'avloppsbrott': 'Sewage system failure',
+    'avfallshantering': 'Waste management disruption',
     'it_teleavbrott': 'IT/telecom outage',
     'transportavbrott': 'Transport disruption',
     'drivmedelsbrist': 'Fuel shortage',
@@ -161,6 +163,7 @@ RISK_TRANSLATIONS: Dict[str, str] = {
     # =========================================================================
     'sabotage': 'Sabotage',
     'spionage': 'Espionage',
+    'insiderhot': 'Insider threats',
     'desinformation': 'Disinformation',
     'hybridhot': 'Hybrid threats',
     'hot_mot_demokrati': 'Threats to democracy',
@@ -183,6 +186,9 @@ RISK_TRANSLATIONS: Dict[str, str] = {
     'manniskohandel': 'Human trafficking',
     'narkotikabrottslighet': 'Drug crime',
     'gangkriminalitet': 'Gang crime',
+    'sexualbrott': 'Sexual crime',
+    'stold_ran': 'Theft/robbery',
+    'trafikbrott': 'Traffic offense',
 
     # =========================================================================
     # SOCIAL RISKS
@@ -190,6 +196,11 @@ RISK_TRANSLATIONS: Dict[str, str] = {
     'social_oro': 'Social unrest',
     'flyktingstrom': 'Refugee influx',
     'forsvunnen_person': 'Missing person',
+    'befolkningsokning': 'Population growth',
+    'suicid': 'Suicide',
+    'drunkning': 'Drowning',
+    'fallolycka': 'Fall accident',
+    'forgiftning': 'Poisoning',
 
     # =========================================================================
     # ENVIRONMENTAL POLLUTION

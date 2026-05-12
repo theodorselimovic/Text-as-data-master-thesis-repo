@@ -261,9 +261,8 @@ def compute_first_appearances(
     """
     records = []
 
-    for entity, group in df.groupby('entity'):
+    for (entity, actor), group in df.groupby(['entity', 'actor']):
         group = group.sort_values('year')
-        actor = group['actor'].iloc[0]
         earliest_year = group['year'].min()
         lan = get_lan_for_entity(entity, actor)
 
@@ -286,7 +285,50 @@ def compute_first_appearances(
 
 
 # =============================================================================
-# ADOPTION CURVES
+# ENTITY COVERAGE (what % of dictionary terms does each entity mention?)
+# =============================================================================
+
+def compute_entity_coverage(
+    df: pd.DataFrame,
+    term_cols: list,
+) -> pd.DataFrame:
+    """
+    For each entity-year, compute what fraction of dictionary terms are mentioned.
+
+    This is the entity-centric view: "how comprehensive is each RSA?"
+    Unlike term-centric adoption curves, this isn't dragged down by rare terms.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Term-document matrix with metadata columns.
+    term_cols : list
+        List of term column names.
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns: entity, actor, year, terms_mentioned, total_terms, coverage_rate.
+    """
+    records = []
+    total_terms = len(term_cols)
+
+    for _, row in df.iterrows():
+        terms_mentioned = (row[term_cols] > 0).sum()
+        records.append({
+            'entity': row['entity'],
+            'actor': row['actor'],
+            'year': row['year'],
+            'terms_mentioned': terms_mentioned,
+            'total_terms': total_terms,
+            'coverage_rate': terms_mentioned / total_terms if total_terms > 0 else 0,
+        })
+
+    return pd.DataFrame(records)
+
+
+# =============================================================================
+# ADOPTION CURVES (term-centric, kept for individual term analysis)
 # =============================================================================
 
 def compute_adoption_curves(
@@ -588,8 +630,11 @@ def compute_within_lan_lag(
     -------
     pd.DataFrame
         Columns: lan, lan_name, term, prefecture_year, prefecture_first_doc_year,
-        municipality_median_year, municipality_mean_year, n_municipalities, lag.
+        prefecture_left_censored, municipality_median_year, municipality_mean_year,
+        n_municipalities, lag.
         Positive lag = municipalities adopt after their prefecture.
+        prefecture_left_censored = True if prefecture's first mention is in their
+        earliest document (we can't tell if they mentioned it earlier).
     """
     records = []
 
@@ -632,6 +677,7 @@ def compute_within_lan_lag(
                 continue
 
             pref_year = pref_term['first_year'].iloc[0]
+            pref_censored = pref_term['is_left_censored'].iloc[0]
 
             # Only include municipality adoptions >= prefecture's first doc year
             # This avoids counting municipalities as "earlier" when we simply
@@ -655,6 +701,7 @@ def compute_within_lan_lag(
                 'term': term,
                 'prefecture_year': pref_year,
                 'prefecture_first_doc_year': pref_first_doc_year,
+                'prefecture_left_censored': pref_censored,
                 'municipality_median_year': muni_median,
                 'municipality_mean_year': muni_mean,
                 'n_municipalities': n_muni,
@@ -662,6 +709,113 @@ def compute_within_lan_lag(
             })
 
     return pd.DataFrame(records)
+
+
+def compute_municipal_national_lag(first_appearances: pd.DataFrame) -> dict:
+    """
+    Compare municipality adoptions to the earliest prefecture adoption nationally.
+
+    Returns dict with:
+    - n_pairs: number of municipality-term pairs analyzed
+    - mean_lag, median_lag: lag to earliest prefecture (any, including left-censored)
+    - pct_before: % of municipal adoptions before any prefecture
+    - pct_same: % same year
+    - pct_after: % after some prefecture
+    """
+    prefs = first_appearances[first_appearances['actor'] == 'lansstyrelse']
+    first_pref = prefs.groupby('term')['first_year'].min().reset_index()
+    first_pref.columns = ['term', 'earliest_pref_year']
+
+    munis = first_appearances[first_appearances['actor'] == 'kommun'].copy()
+    merged = munis.merge(first_pref, on='term', how='inner')
+    merged['lag'] = merged['first_year'] - merged['earliest_pref_year']
+
+    n = len(merged)
+    return {
+        'n_pairs': n,
+        'mean_lag': merged['lag'].mean(),
+        'median_lag': merged['lag'].median(),
+        'pct_before': (merged['lag'] < 0).sum() / n * 100,
+        'pct_same': (merged['lag'] == 0).sum() / n * 100,
+        'pct_after': (merged['lag'] > 0).sum() / n * 100,
+    }
+
+
+def compute_prefecture_influence(first_appearances: pd.DataFrame) -> pd.DataFrame:
+    """
+    Analyze which prefectures municipalities follow when adopting risk terms.
+
+    For each municipality-term pair, credits the first (earliest) prefecture to
+    adopt the term. This reveals whether municipalities follow their own
+    prefecture or copy from national leaders.
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns: prefecture, times_followed, terms_led, influence_ratio, pct_own_region.
+        influence_ratio = times_followed / terms_led (higher = more influential per term).
+        pct_own_region = % of followers that are from the same region.
+    """
+    # Only non-left-censored prefectures (valid first adoptions)
+    prefs_valid = first_appearances[
+        (first_appearances['actor'] == 'lansstyrelse') &
+        (first_appearances['is_left_censored'] == False)
+    ][['term', 'entity', 'lan', 'first_year']].copy()
+    prefs_valid.columns = ['term', 'pref_entity', 'pref_lan', 'pref_year']
+
+    munis = first_appearances[first_appearances['actor'] == 'kommun'].copy()
+
+    results = []
+    for _, muni_row in munis.iterrows():
+        term = muni_row['term']
+        muni_year = muni_row['first_year']
+        muni_lan = muni_row['lan']
+
+        # Find prefectures that adopted this term before/same year as municipality
+        prefs_before = prefs_valid[
+            (prefs_valid['term'] == term) &
+            (prefs_valid['pref_year'] <= muni_year)
+        ]
+
+        if len(prefs_before) > 0:
+            # Find first (earliest) prefecture to adopt this term
+            earliest_idx = prefs_before['pref_year'].idxmin()
+            earliest = prefs_before.loc[earliest_idx]
+            results.append({
+                'followed_prefecture': earliest['pref_entity'],
+                'followed_lan': earliest['pref_lan'],
+                'follower_lan': muni_lan,
+                'is_own_region': muni_lan == earliest['pref_lan'],
+            })
+
+    if not results:
+        return pd.DataFrame()
+
+    results_df = pd.DataFrame(results)
+
+    # Aggregate by prefecture
+    followed_counts = results_df['followed_prefecture'].value_counts().reset_index()
+    followed_counts.columns = ['prefecture', 'times_followed']
+
+    # Own-region percentage
+    own_region = results_df.groupby('followed_prefecture')['is_own_region'].mean().reset_index()
+    own_region.columns = ['prefecture', 'pct_own_region']
+
+    # Terms led (opportunities)
+    terms_led = prefs_valid.groupby('pref_entity')['term'].nunique().reset_index()
+    terms_led.columns = ['prefecture', 'terms_led']
+
+    # Merge
+    summary = followed_counts.merge(terms_led, on='prefecture', how='left')
+    summary = summary.merge(own_region, on='prefecture', how='left')
+    summary['influence_ratio'] = (summary['times_followed'] / summary['terms_led']).round(1)
+    summary['pct_own_region'] = (summary['pct_own_region'] * 100).round(1)
+
+    # Add overall stats
+    total_follows = len(results_df)
+    own_prefecture_pct = results_df['is_own_region'].mean() * 100
+
+    return summary.sort_values('influence_ratio', ascending=False), total_follows, own_prefecture_pct
 
 
 # =============================================================================
@@ -694,67 +848,108 @@ def _get_actor_style() -> tuple[dict, dict]:
 
 
 def plot_aggregate_adoption_curves(
-    adoption_curves: pd.DataFrame,
+    entity_coverage: pd.DataFrame,
     output_dir: Path,
 ) -> None:
     """
-    Aggregate adoption curves: one line per actor type showing mean adoption
-    across all risk terms over time.
+    Aggregate coverage curves: one line per actor type showing mean dictionary
+    coverage rate over time.
 
-    Note: MCF is excluded because n=1 entity makes adoption fraction meaningless
-    (always 0% or 100% per term).
+    Entity-centric metric: "what fraction of dictionary terms does the average
+    entity mention?" Entities without documents in a given year are excluded
+    (not coded as zero).
+
+    Municipalities: aggregated by wave (3 data points).
+    Prefectures: aggregated by year.
+
+    Note: MCF is excluded because n=1 entity makes the average meaningless.
     """
     from matplotlib.lines import Line2D
 
-    # Filter to actor-specific curves and 2015+
-    # Exclude MCF (n=1 entity, adoption fraction not meaningful)
-    actor_curves = adoption_curves[adoption_curves['actor'] != 'all'].copy()
-    actor_curves = actor_curves[~actor_curves['actor'].isin(['MCF'])]
-    actor_curves = actor_curves[actor_curves['year'] >= 2015]
-    actor_curves['actor'] = actor_curves['actor'].replace('länsstyrelse', 'lansstyrelse')
+    # Filter to 2015+ and exclude MCF
+    df = entity_coverage[entity_coverage['year'] >= 2015].copy()
+    df = df[~df['actor'].isin(['MCF'])]
+    df['actor'] = df['actor'].replace('länsstyrelse', 'lansstyrelse')
 
-    if len(actor_curves) == 0:
+    if len(df) == 0:
         return
+
+    # Assign waves
+    def get_wave(year):
+        if year <= 2018:
+            return 1
+        elif year <= 2022:
+            return 2
+        else:
+            return 3
+
+    def get_wave_midpoint(wave):
+        return {1: 2015, 2: 2019, 3: 2023}[wave]
+
+    df['wave'] = df['year'].apply(get_wave)
 
     actor_styles, actor_colors = _get_actor_style()
 
-    # Compute mean and std adoption fraction per actor per year
-    agg = actor_curves.groupby(['actor', 'year'])['cumulative_fraction'].agg(['mean', 'std']).reset_index()
-
     fig, ax = plt.subplots(figsize=(10, 6))
 
-    for actor in ['kommun', 'lansstyrelse']:
-        data = agg[agg['actor'] == actor].sort_values('year')
-        if len(data) == 0:
-            continue
+    # Municipalities: aggregate by wave (3 data points)
+    muni = df[df['actor'] == 'kommun']
+    if len(muni) > 0:
+        muni_agg = muni.groupby('wave').agg(
+            mean_coverage=('coverage_rate', 'mean'),
+            std_coverage=('coverage_rate', 'std'),
+            n_entities=('entity', 'nunique'),
+        ).reset_index()
+        muni_agg['x'] = muni_agg['wave'].apply(get_wave_midpoint)
 
-        ls, marker = actor_styles[actor]
-        color = actor_colors[actor]
+        ls, marker = actor_styles['kommun']
+        color = actor_colors['kommun']
 
         ax.plot(
-            data['year'], data['mean'],
-            linestyle=ls, marker=marker, markersize=5,
-            color=color, linewidth=2, label=translate_actor(actor),
+            muni_agg['x'], muni_agg['mean_coverage'],
+            linestyle=ls, marker=marker, markersize=8,
+            color=color, linewidth=2, label=translate_actor('kommun'),
         )
-        # Add confidence band (±1 std)
         ax.fill_between(
-            data['year'],
-            data['mean'] - data['std'],
-            data['mean'] + data['std'],
+            muni_agg['x'],
+            muni_agg['mean_coverage'] - muni_agg['std_coverage'],
+            muni_agg['mean_coverage'] + muni_agg['std_coverage'],
             color=color, alpha=0.15,
         )
 
-    # Event annotations
-    for year, label in EXTERNAL_EVENTS.items():
-        ax.axvline(x=year, color='gray', linestyle=':', alpha=0.5, linewidth=0.8)
-        ax.text(year + 0.1, 0.02, label, fontsize=8, rotation=90, va='bottom', color='gray')
+    # Prefectures: aggregate by 2-year periods (2019→2018, 2023→2022)
+    pref = df[df['actor'] == 'lansstyrelse'].copy()
+    if len(pref) > 0:
+        # Group sparse years with prior year
+        pref['year_grouped'] = pref['year'].replace({2019: 2018, 2023: 2022})
+
+        pref_agg = pref.groupby('year_grouped').agg(
+            mean_coverage=('coverage_rate', 'mean'),
+            std_coverage=('coverage_rate', 'std'),
+            n_entities=('entity', 'nunique'),
+        ).reset_index()
+
+        ls, marker = actor_styles['lansstyrelse']
+        color = actor_colors['lansstyrelse']
+
+        ax.plot(
+            pref_agg['year_grouped'], pref_agg['mean_coverage'],
+            linestyle=ls, marker=marker, markersize=5,
+            color=color, linewidth=2, label=translate_actor('lansstyrelse'),
+        )
+        ax.fill_between(
+            pref_agg['year_grouped'],
+            pref_agg['mean_coverage'] - pref_agg['std_coverage'],
+            pref_agg['mean_coverage'] + pref_agg['std_coverage'],
+            color=color, alpha=0.15,
+        )
 
     ax.set_xlabel('Year', fontsize=12)
-    ax.set_ylabel('Mean cumulative adoption fraction', fontsize=12)
-    ax.set_ylim(-0.05, 1.05)
+    ax.set_ylabel('Mean dictionary coverage rate', fontsize=12)
+    ax.set_ylim(0, None)  # Start at 0, auto-scale upper bound
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))
     ax.legend(title='Actor type', loc='lower right')
-    ax.set_title('Aggregate risk term adoption by actor type', fontsize=14, fontweight='bold')
+    ax.set_title('Risk dictionary coverage by actor type', fontsize=14, fontweight='bold')
 
     plt.tight_layout()
     plt.savefig(output_dir / 'adoption_curves_aggregate.png', dpi=150, bbox_inches='tight')
@@ -1128,10 +1323,20 @@ def plot_within_lan(within_lan_df: pd.DataFrame, output_dir: Path) -> None:
     """
     Visualize within-prefecture adoption patterns:
     Histogram of lag between prefecture and municipality adoption.
+
+    Only uses valid comparisons where prefecture is NOT left-censored.
     """
-    df = within_lan_df.dropna(subset=['lag'])
+    # Filter to valid comparisons only (prefecture not left-censored)
+    df = within_lan_df[
+        (within_lan_df['prefecture_left_censored'] == False) &
+        (within_lan_df['lag'].notna())
+    ].copy()
+
     if len(df) < 10:
         return
+
+    total_pairs = len(within_lan_df)
+    valid_pairs = len(df)
 
     fig, ax = plt.subplots(figsize=(8, 6))
 
@@ -1145,8 +1350,9 @@ def plot_within_lan(within_lan_df: pd.DataFrame, output_dir: Path) -> None:
     ax.set_xlabel('Lag (years, positive = municipalities adopt later)', fontsize=12)
     ax.set_ylabel('Count', fontsize=12)
     ax.set_title(
-        'Within-prefecture diffusion:\nDo municipalities follow their own prefecture?',
-        fontsize=14, fontweight='bold'
+        f'Within-prefecture diffusion (valid pairs only)\n'
+        f'n={valid_pairs} of {total_pairs} pairs (prefecture not left-censored)',
+        fontsize=12, fontweight='bold'
     )
     ax.legend(loc='upper right')
 
@@ -1168,6 +1374,7 @@ def generate_report(
     lead_lag_df: pd.DataFrame,
     within_lan_df: pd.DataFrame,
     output_dir: Path,
+    national_lag_stats: dict = None,
 ) -> None:
     """Generate comprehensive text report."""
     report = []
@@ -1237,14 +1444,19 @@ def generate_report(
                 f"Simultaneous: {simultaneous}"
             )
 
-    # Within-prefecture summary
+    # Within-prefecture summary (valid pairs only - prefecture not left-censored)
     if len(within_lan_df) > 0:
-        wl = within_lan_df.dropna(subset=['lag'])
+        total_pairs = len(within_lan_df)
+        wl = within_lan_df[
+            (within_lan_df['prefecture_left_censored'] == False) &
+            (within_lan_df['lag'].notna())
+        ].copy()
         if len(wl) > 0:
             report.append(f"\nWithin-prefecture analysis (municipality vs own prefecture):")
             report.append(f"  Comparing when municipalities adopt a term vs when their")
             report.append(f"  own regional prefecture adopted the same term.")
-            report.append(f"  N = {len(wl)} (term, prefecture) pairs")
+            report.append(f"  Valid pairs: {len(wl)} of {total_pairs} (prefecture NOT left-censored)")
+            report.append(f"  Left-censored pairs excluded: {total_pairs - len(wl)} ({100*(total_pairs-len(wl))/total_pairs:.1f}%)")
             report.append("")
 
             # Descriptive statistics
@@ -1276,7 +1488,7 @@ def generate_report(
             )
 
             # Per-prefecture summary
-            report.append("\n  Per-prefecture mean lag (sorted by lag):")
+            report.append("\n  Per-prefecture mean lag (sorted by lag, valid pairs only):")
             lan_stats = wl.groupby('lan_name')['lag'].agg(['mean', 'median', 'std', 'count'])
             lan_stats = lan_stats.sort_values('mean')
             for lan_name, row in lan_stats.iterrows():
@@ -1284,6 +1496,21 @@ def generate_report(
                     f"    {lan_name:20s}: mean={row['mean']:+.1f}y, "
                     f"median={row['median']:+.1f}y, std={row['std']:.1f}y (n={int(row['count'])})"
                 )
+
+    # Municipal lag to national leaders
+    if national_lag_stats:
+        report.append(f"\nMunicipal lag to NATIONAL leaders (any prefecture):")
+        report.append(f"  Comparing each municipality adoption to the earliest prefecture")
+        report.append(f"  adoption of the same term nationally (including left-censored).")
+        report.append(f"  N = {national_lag_stats['n_pairs']} municipality-term pairs")
+        report.append("")
+        report.append(f"  Mean lag:   {national_lag_stats['mean_lag']:+.2f} years")
+        report.append(f"  Median lag: {national_lag_stats['median_lag']:+.2f} years")
+        report.append("")
+        report.append("  Direction:")
+        report.append(f"    Municipality BEFORE any prefecture: {national_lag_stats['pct_before']:.1f}%")
+        report.append(f"    Same year as earliest prefecture:   {national_lag_stats['pct_same']:.1f}%")
+        report.append(f"    Municipality AFTER some prefecture: {national_lag_stats['pct_after']:.1f}%")
 
     # Save
     report_text = '\n'.join(report)
@@ -1375,8 +1602,15 @@ def main():
     n_censored = first_appearances['is_left_censored'].sum()
     print(f"  Left-censored: {n_censored} ({n_censored / len(first_appearances) * 100:.1f}%)")
 
-    # For adoption curves: only balanced panel (municipalities + MCF that have all 3 waves)
-    # Prefectures excluded from aggregate curve since most don't have balanced coverage
+    # Entity coverage: what % of dictionary terms does each entity mention?
+    # Uses all entities with data (not balanced panel) - entities without docs
+    # in a given year are simply excluded, not coded as zero
+    print("\nComputing entity coverage (all entities)...")
+    entity_coverage = compute_entity_coverage(df_full, term_cols)
+    print(f"  {len(entity_coverage)} entity-year observations")
+    print(f"  Mean coverage: {entity_coverage['coverage_rate'].mean():.1%}")
+
+    # Adoption curves for individual term analysis (balanced panel)
     print("\nComputing adoption curves (balanced panel only)...")
     df_balanced = df_full[df_full['entity'].isin(balanced_entities)]
     fa_balanced = first_appearances[first_appearances['entity'].isin(balanced_entities)]
@@ -1408,49 +1642,85 @@ def main():
     print(f"  {n_matched} first appearances matched to prefecture")
     print(f"  {len(within_lan_df)} (prefecture, term) pairs analyzed")
 
+    # Prefecture influence analysis (which prefectures do municipalities follow?)
+    print("\nComputing prefecture influence analysis...")
+    influence_result = compute_prefecture_influence(first_appearances)
+    if influence_result:
+        influence_df, total_follows, own_pref_pct = influence_result
+        print(f"  {total_follows} municipality-term pairs with prior prefecture adoption")
+        print(f"  Municipalities follow own prefecture: {own_pref_pct:.1f}%")
+        print(f"  Most influential: {influence_df['prefecture'].iloc[0]} ({influence_df['influence_ratio'].iloc[0]}x)")
+    else:
+        influence_df = pd.DataFrame()
+
+    # Municipal lag to national leaders
+    print("\nComputing municipal lag to national leaders...")
+    national_lag_stats = compute_municipal_national_lag(first_appearances)
+    print(f"  {national_lag_stats['n_pairs']} municipality-term pairs")
+    print(f"  Mean lag to earliest prefecture: {national_lag_stats['mean_lag']:.2f} years")
+    print(f"  Municipality before any prefecture: {national_lag_stats['pct_before']:.1f}%")
+    print(f"  Municipality after some prefecture: {national_lag_stats['pct_after']:.1f}%")
+
+    # Create output subdirectories
+    national_dir = args.output / 'national'
+    within_dir = args.output / 'within_prefecture'
+    national_dir.mkdir(parents=True, exist_ok=True)
+    within_dir.mkdir(parents=True, exist_ok=True)
+
     # Save data
     print("\nSaving data...")
+
+    # Base data (root)
     first_appearances.to_csv(
         args.output / 'first_appearances.csv', index=False, encoding='utf-8'
     )
     print(f"  Saved: first_appearances.csv")
 
+    # National diffusion data
     spikes_df.to_csv(
-        args.output / 'adoption_spikes.csv', index=False, encoding='utf-8'
+        national_dir / 'adoption_spikes.csv', index=False, encoding='utf-8'
     )
-    print(f"  Saved: adoption_spikes.csv")
+    print(f"  Saved: national/adoption_spikes.csv")
 
     gini_df.to_csv(
-        args.output / 'gini_coefficients.csv', index=False, encoding='utf-8'
+        national_dir / 'gini_coefficients.csv', index=False, encoding='utf-8'
     )
-    print(f"  Saved: gini_coefficients.csv")
+    print(f"  Saved: national/gini_coefficients.csv")
 
     lead_lag_df.to_csv(
-        args.output / 'lead_lag.csv', index=False, encoding='utf-8'
+        national_dir / 'lead_lag.csv', index=False, encoding='utf-8'
     )
-    print(f"  Saved: lead_lag.csv")
+    print(f"  Saved: national/lead_lag.csv")
 
+    if len(influence_df) > 0:
+        influence_df.to_csv(
+            national_dir / 'prefecture_influence.csv', index=False, encoding='utf-8'
+        )
+        print(f"  Saved: national/prefecture_influence.csv")
+
+    # Within-prefecture data
     within_lan_df.to_csv(
-        args.output / 'within_prefecture_lag.csv', index=False, encoding='utf-8'
+        within_dir / 'within_prefecture_lag.csv', index=False, encoding='utf-8'
     )
-    print(f"  Saved: within_prefecture_lag.csv")
+    print(f"  Saved: within_prefecture/within_prefecture_lag.csv")
 
     # Visualisations
     print("\nGenerating visualisations...")
-    plot_aggregate_adoption_curves(adoption_curves, args.output)
+    plot_aggregate_adoption_curves(entity_coverage, national_dir)
     plot_individual_adoption_curves(
-        adoption_curves, args.output,
+        adoption_curves, national_dir,
         gini_df=gini_df, first_appearances=first_appearances,
         selection='top_adopted'
     )
-    plot_gini_chart(gini_df, args.output)
-    plot_lead_lag(lead_lag_df, args.output)
-    plot_within_lan(within_lan_df, args.output)
+    plot_gini_chart(gini_df, national_dir)
+    plot_lead_lag(lead_lag_df, national_dir)
+    plot_within_lan(within_lan_df, within_dir)
 
     # Report
     print("\nGenerating report...")
     generate_report(
-        first_appearances, spikes_df, gini_df, lead_lag_df, within_lan_df, args.output
+        first_appearances, spikes_df, gini_df, lead_lag_df, within_lan_df, args.output,
+        national_lag_stats=national_lag_stats
     )
 
     print(f"\n{'=' * 60}")
