@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "Text-as-Data Analysis of Swedish Risk & Vulnerability Analyses"
+authors:
+  - family-names: Selimovic
+    given-names: Theodor
+    email: theoselimovic@gmail.com
+    affiliation: Sciences Po Paris
+abstract: >-
+  Text-as-data analysis of Swedish municipal Risk & Vulnerability Analyses (RSA)
+  to study why risk governance has been increasingly adopted by municipalities
+  and why security is treated as risk. Combines bag-of-words analysis with
+  Sentence-BERT semantic similarity to measure institutional isomorphism.
+keywords:
+  - risk governance
+  - text-as-data
+  - Swedish municipalities
+  - institutional isomorphism
+  - BERT
+  - natural language processing
+license: MIT
+repository-code: https://github.com/theodorselimovic/Text-as-data-master-thesis-repo
+date-released: 2025-01-01
