@@ -294,7 +294,7 @@ def analyze_qualifications_by_risk_type(
 
 
 def compute_statistics(results_df: pd.DataFrame) -> Dict:
-    """Compute chi-square tests comparing security vs other distributions."""
+    """Compute descriptive statistics comparing security vs other distributions."""
     stats_results = {}
 
     for concept in ['sannolikhet', 'konsekvens', 'risk']:
@@ -311,18 +311,15 @@ def compute_statistics(results_df: pd.DataFrame) -> Dict:
             stats_results[concept] = {'error': 'Insufficient data'}
             continue
 
-        # Chi-square test
-        chi2, p_value, dof, expected = stats.chi2_contingency(contingency)
+        # Compute chi2 for Cramér's V (effect size only, not for inference)
+        chi2, _, dof, _ = stats.chi2_contingency(contingency)
 
-        # Effect size (Cramér's V)
+        # Effect size (Cramér's V) - descriptive measure of association
         n = contingency.sum().sum()
         min_dim = min(contingency.shape) - 1
         cramers_v = np.sqrt(chi2 / (n * min_dim)) if min_dim > 0 else 0
 
         stats_results[concept] = {
-            'chi2': chi2,
-            'p_value': p_value,
-            'dof': dof,
             'cramers_v': cramers_v,
             'n_security': contingency.loc['security'].sum() if 'security' in contingency.index else 0,
             'n_other': contingency.loc['other'].sum() if 'other' in contingency.index else 0,
@@ -427,18 +424,18 @@ def create_distribution_violin(results_df: pd.DataFrame, output_dir: Path):
 
 
 def save_statistical_results(stats_results: Dict, output_dir: Path):
-    """Save statistical comparison results."""
+    """Save descriptive comparison results."""
 
-    with open(output_dir / 'statistical_comparison.txt', 'w') as f:
+    with open(output_dir / 'descriptive_comparison.txt', 'w') as f:
         f.write("=" * 70 + "\n")
-        f.write("SECURITY RISKIFICATION ANALYSIS: STATISTICAL COMPARISON\n")
+        f.write("SECURITY RISKIFICATION ANALYSIS: DESCRIPTIVE COMPARISON\n")
         f.write("=" * 70 + "\n\n")
 
-        f.write("Hypothesis: Security risks use the same qualification vocabulary\n")
-        f.write("as other risks (no significant difference in distributions).\n\n")
+        f.write("Question: Do security risks use the same qualification vocabulary\n")
+        f.write("as other risks?\n\n")
 
-        f.write("Chi-square tests compare qualification level distributions\n")
-        f.write("between security and other risk paragraphs.\n\n")
+        f.write("Cramér's V measures association strength between risk type and\n")
+        f.write("qualification level (0 = identical distributions, 1 = completely different).\n\n")
 
         for concept, result in stats_results.items():
             f.write("-" * 50 + "\n")
@@ -452,32 +449,27 @@ def save_statistical_results(stats_results: Dict, output_dir: Path):
             f.write(f"N (security): {result['n_security']}\n")
             f.write(f"N (other):    {result['n_other']}\n\n")
 
-            f.write(f"Chi-square:   {result['chi2']:.3f}\n")
-            f.write(f"p-value:      {result['p_value']:.4f}\n")
-            f.write(f"df:           {result['dof']}\n")
             f.write(f"Cramér's V:   {result['cramers_v']:.3f}\n\n")
 
-            if result['p_value'] > 0.05:
-                f.write("RESULT: No significant difference (p > 0.05)\n")
-                f.write("=> Security uses same qualification pattern as other risks\n")
+            if result['cramers_v'] < 0.1:
+                f.write("INTERPRETATION: Negligible association (V < 0.1)\n")
+                f.write("=> Security and other risks use very similar qualification patterns\n")
+            elif result['cramers_v'] < 0.3:
+                f.write("INTERPRETATION: Small association (0.1 < V < 0.3)\n")
+                f.write("=> Minor differences in qualification patterns\n")
             else:
-                f.write("RESULT: Significant difference (p < 0.05)\n")
-                if result['cramers_v'] < 0.1:
-                    f.write("=> But effect size is negligible (V < 0.1)\n")
-                elif result['cramers_v'] < 0.3:
-                    f.write("=> Small effect size (0.1 < V < 0.3)\n")
-                else:
-                    f.write("=> Moderate/large effect size (V > 0.3)\n")
+                f.write("INTERPRETATION: Moderate/large association (V > 0.3)\n")
+                f.write("=> Notable differences in qualification patterns\n")
             f.write("\n")
 
         f.write("=" * 70 + "\n")
         f.write("INTERPRETATION\n")
         f.write("=" * 70 + "\n\n")
-        f.write("Non-significant differences OR negligible effect sizes support\n")
-        f.write("the 'riskification' hypothesis: security threats are processed\n")
-        f.write("through the same analytical framework as other risks.\n")
+        f.write("Small Cramér's V values support the 'riskification' hypothesis:\n")
+        f.write("security threats are processed through the same analytical\n")
+        f.write("framework as other risks.\n")
 
-    logger.info(f"Saved statistical_comparison.txt")
+    logger.info(f"Saved descriptive_comparison.txt")
 
 
 # =============================================================================

@@ -260,7 +260,7 @@ ACTOR_TRANSLATIONS: Dict[str, str] = {
     'kommun': 'Municipality',
     'länsstyrelse': 'Prefecture',
     'lansstyrelse': 'Prefecture',
-    'MCF': 'MSB',
+    'MCF': 'MCF',
 }
 
 

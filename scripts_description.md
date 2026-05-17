@@ -87,9 +87,7 @@ python preprocessing_bow.py \
 
 **Output:** Sentence-level parquet with columns: `doc_id`, `municipality`, `year`, `maskad`, `actor_type`, `sentence_id`, `paragraph_id`, `sentence_text`, `word_count`, `doc_quality`.
 
-**Note:** Chapter removal is disabled — use `risk_term_filter.py` for paragraph-level filtering instead, which handles irrelevant content more precisely.
-
-`merge_all_actors.py` merges data across actor types.
+**Note:** Chapter removal is disabled. The PDF extraction stage now handles multi-actor merging directly via the `--merge-with` flag.
 
 #### Quality Audit: `quality_audit.py`
 
@@ -132,6 +130,7 @@ python quality_audit.py \
 - `actor_similarity_analysis.py` — Measures within-group and between-group similarity across actor types using three-level variance decomposition and PERMANOVA testing.
 - `allvarliga_storningar_analysis.py` — Analyzes co-occurrence of individual risks with serious-disruption/consequence phrases to reveal how different actors frame risks in terms of operational impact.
 - `security_riskification_analysis.py` — Compares analytical language (probability/consequence/risk qualifications) between security risks and other risks to test whether security threats have been absorbed into the standard risk framework (Q6).
+- `security_adoption_timing.py` — Computes timing metrics showing security risk concentration by wave; tracks when entities first adopted security risks to support thesis argument about recent absorption.
 - `risk_clustering_analysis.py` — Clusters entities by risk profile using hierarchical clustering per wave.
 - `visualize_rsa_results.py` — Generates visualizations for analysis results.
 - `dictionary_diagnostics.py` — Diagnostic tool: classifies each dictionary term's matching status in the stemmed corpus (stopword conflicts, n-gram length issues, non-appearance).
@@ -139,52 +138,13 @@ python quality_audit.py \
 
 See [BOW Analysis Details](#bow-analysis-details) below for full documentation.
 
-### 4. Sampling (`04_sampling/`)
+### 4. Sampling — ARCHIVED
 
-#### Risk Term Filtering: `risk_term_filter.py`
+**Location:** `archive/04_sampling/`
 
-**Purpose:** Filters the sentence corpus to only include paragraphs containing at least one risk term. This removes methodology, boilerplate, and irrelevant sections while preserving full paragraph context around risk mentions.
+Scripts for creating stratified samples and filtering by risk terms have been archived. The methodology shifted to full-corpus BoW analysis + BERT similarity, making sampling for hand-coding unnecessary.
 
-**What it does:**
-1. Loads sentence corpus with `paragraph_id` column
-2. Builds regex pattern from risk terms across 11 categories (including 'riskfamilj' following Boholm 2016)
-3. Identifies paragraphs containing ≥N risk terms (default: 1)
-4. Keeps all sentences from qualifying paragraphs
-
-**Filtering results (full corpus):**
-- Before: 99,053 paragraphs / 380,097 sentences
-- After: 26,090 paragraphs / 190,690 sentences (26.3% of paragraphs, 50.2% of sentences retained)
-
-**CLI options:**
-- `--categories` — filter by specific risk categories
-- `--min-terms` — require multiple risk terms per paragraph (default: 1)
-
-#### Corrupted Sample Recovery: `recover_corrupted_sample.py`
-
-**Purpose:** One-time utility that recovered a corrupted CSV by fixing garbled Swedish characters, stripping control characters, and rejoining to source data while preserving hand-coded annotations. Not part of the regular pipeline.
-
-#### Stratified Sampling: `stratified_sample.py`
-
-**Purpose:** Creates reproducible stratified sample for hand-coding theoretical mechanisms.
-
-**What it does:**
-1. Two-stage stratified sampling: documents by (actor_type, wave), then sentences within documents
-2. Train/test split at document level (prevents data leakage)
-3. Outputs CSV files with coding columns for hand-coding
-
-**Sample generated (2025-02-17):**
-- 500 sentences from 58 documents
-- Train: 338 sentences (67.6%), Test: 162 sentences (32.4%)
-- Stratified by actor (MCF/kommun/länsstyrelse) and wave (0-3)
-
-**Output files in `results/sampling/`:**
-- `sample_train.csv` — training set for BERT fine-tuning
-- `sample_test.csv` — held-out test set for evaluation
-- `sample_full.csv` — complete sample
-- `sampling_report.json` — metadata and diagnostics
-
-**Coding columns:**
-- `mechanism_legitimacy`, `mechanism_functional`, `mechanism_equivalence`, `mechanism_complexity`, `coder_notes`
+Archived scripts: `risk_term_filter.py`, `stratified_sample.py`, `recover_corrupted_sample.py`
 
 ### 5. Named Entity Recognition (`05_ner/`)
 
@@ -211,12 +171,12 @@ See [BOW Analysis Details](#bow-analysis-details) below for full documentation.
 ```bash
 # Full corpus (M1 Mac ~4.5 hours, Colab T4 ~1 hour)
 python ner_extraction.py \
-    --input data/processed/bert_corpus_filtered.parquet \
+    --input data/processed/bert_corpus.parquet \
     --output results/ner/
 
 # Test on small sample
 python ner_extraction.py \
-    --input data/processed/bert_corpus_filtered.parquet \
+    --input data/processed/bert_corpus.parquet \
     --output results/ner/ \
     --max-sentences 1000
 ```
@@ -297,71 +257,13 @@ from scripts.dictionaries import get_all_sampling_terms, RISKFAMILJ
 
 ---
 
-### 6. BERT Mechanism Classification (`06_bert_classification/`)
+### 6. BERT Mechanism Classification — ARCHIVED
 
-**Main script:** `mechanism_classifier.py`
+**Location:** `archive/06_bert_classification/`
 
-**Purpose:** Fine-tunes Swedish BERT to classify theoretical mechanisms in RSA sentences. Multi-label classification for two mechanisms:
-- **mechanism_legitimacy** — defining parameters of blame / institutional risk management legitimization (Borraz, 2008)
-- **mechanism_complexity** — complexity empowerment of local actors
+The BERT fine-tuning approach for mechanism classification has been archived. The project now uses BERT only for similarity analysis (isomorphism), not classification.
 
-**Model:** `KBLab/bert-base-swedish-cased` (Hugging Face)
-
-**Features:**
-- Three modes: `train`, `evaluate`, `predict`
-- Multi-label classification with weighted BCE loss for class imbalance
-- Auto-detects device: CUDA > MPS (Apple Silicon) > CPU
-- Automatic threshold calibration per mechanism
-- Saves model checkpoints, training history, and evaluation metrics
-
-**Usage:**
-```bash
-# Train model
-python mechanism_classifier.py --mode train \
-    --train-data results/sampling/sample_train.csv \
-    --test-data results/sampling/sample_test.csv \
-    --output results/bert_classification/ \
-    --model-dir models/mechanism_classifier/ \
-    --epochs 5 --learning-rate 2e-5
-
-# Evaluate model
-python mechanism_classifier.py --mode evaluate \
-    --test-data results/sampling/sample_test.csv \
-    --model-dir models/mechanism_classifier/ \
-    --output results/bert_classification/ \
-    --calibrate-thresholds
-
-# Predict on full corpus
-python mechanism_classifier.py --mode predict \
-    --input data/processed/bert_corpus_filtered.parquet \
-    --model-dir models/mechanism_classifier/ \
-    --output results/bert_classification/
-```
-
-**Input data format:**
-- Training/test CSV with columns: `sentence_text`, `mechanism_legitimacy`, `mechanism_complexity`
-- Labels: `1` = present, empty = absent (recoded to 0 automatically)
-- Metadata columns preserved: `doc_id`, `actor_type`, `year`, `wave`, `sentence_id`
-
-**Output files:**
-- `models/mechanism_classifier/` — Model checkpoint, tokenizer, thresholds.json
-- `results/bert_classification/training_report.json` — Training metadata and config
-- `results/bert_classification/training_history.csv` — Per-epoch loss and F1
-- `results/bert_classification/evaluation_report.json` — Per-mechanism metrics, confusion matrices
-- `results/bert_classification/predictions.csv` — Full corpus with `prob_*` and `pred_*` columns
-- `results/bert_classification/predictions_report.json` — Summary statistics
-
-**Hyperparameters:**
-| Parameter | Default | Notes |
-|-----------|---------|-------|
-| base_model | KBLab/bert-base-swedish-cased | Swedish BERT |
-| max_length | 512 | Full BERT context |
-| epochs | 5 | Small dataset |
-| learning_rate | 2e-5 | Standard for BERT |
-| batch_size | 8 (MPS), 16 (CUDA) | Auto-detect |
-| gradient_accumulation | 2 | Effective batch = 16-32 |
-| warmup_ratio | 0.1 | ~10% of steps |
-| threshold | 0.5 | Calibrated per mechanism |
+Archived scripts: `mechanism_classifier.py`
 
 ---
 
@@ -525,11 +427,9 @@ See `docs/implementation-wave-lemma-lown.md` for detailed documentation.
 - `transition_matrix_*.png` — Cluster transition matrices between waves
 
 ### Remaining work:
-1. **Write the codebook** — defining coding categories for hand-coding the sample.
-2. **Hand-code the sample** — code 338 training sentences using the codebook.
-3. ~~**BERT fine-tuning script**~~ — **DONE**: `mechanism_classifier.py` with `--mode train`
-4. ~~**BERT evaluation script**~~ — **DONE**: `mechanism_classifier.py` with `--mode evaluate`
-5. **Results visualisation script** — visualise the final classification results (mechanism prevalence by actor/wave, etc.).
+1. **Interpret BoW results** — synthesize findings from persistence, convergence, distinctiveness analyses.
+2. **Interpret isomorphism results** — analyze BERT similarity scores for security risk framing.
+3. **Write results chapter** — combine quantitative findings with theoretical framework.
 
 ## Language & Key Dependencies
 
@@ -537,7 +437,7 @@ See `docs/implementation-wave-lemma-lown.md` for detailed documentation.
 - NLP: `stanza` (Swedish lemmatisation)
 - PDF: `pypdf`, `pdfplumber`, `pdfminer.six`, `pytesseract`, `ocrmypdf` (optional, for OCR preprocessing)
 - Data: `pandas`, `numpy`, `pyarrow`
-- ML: `transformers`, `torch` (for BERT fine-tuning)
+- ML: `transformers`, `torch`, `sentence-transformers` (for BERT similarity)
 - Stats: `scipy`, `scikit-learn`
 - Viz: `matplotlib`, `seaborn`
 

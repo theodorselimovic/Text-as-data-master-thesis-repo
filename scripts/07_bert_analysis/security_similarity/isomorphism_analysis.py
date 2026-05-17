@@ -43,6 +43,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import torch
+from scipy import stats
 from tqdm import tqdm
 
 # =============================================================================
@@ -775,6 +776,276 @@ def extract_example_pairs(
 
 
 # =============================================================================
+# EFFECT SIZE COMPUTATION
+# =============================================================================
+
+def compute_cohens_d(a: np.ndarray, b: np.ndarray) -> float:
+    """
+    Compute Cohen's d effect size between two distributions.
+
+    d = (mean_a - mean_b) / pooled_SD
+
+    Interpretation (conventional thresholds):
+        |d| < 0.2: negligible
+        0.2 <= |d| < 0.5: small
+        0.5 <= |d| < 0.8: medium
+        |d| >= 0.8: large
+    """
+    a = np.asarray(a)
+    b = np.asarray(b)
+    a = a[~np.isnan(a)]
+    b = b[~np.isnan(b)]
+
+    if len(a) < 2 or len(b) < 2:
+        return np.nan
+
+    n_a, n_b = len(a), len(b)
+    var_a, var_b = np.var(a, ddof=1), np.var(b, ddof=1)
+
+    # Pooled standard deviation
+    pooled_std = np.sqrt(((n_a - 1) * var_a + (n_b - 1) * var_b) / (n_a + n_b - 2))
+
+    if pooled_std < 1e-10:
+        return np.nan
+
+    return (np.mean(a) - np.mean(b)) / pooled_std
+
+
+def compute_probability_of_superiority(a: np.ndarray, b: np.ndarray) -> float:
+    """
+    Compute probability of superiority (common language effect size).
+
+    P(A > B) = proportion of all pairwise comparisons where a value from A exceeds B.
+
+    Interpretation:
+        0.50: no difference (chance)
+        0.56: small effect
+        0.64: medium effect
+        0.71: large effect
+
+    Note: For large arrays, uses sampling to avoid O(n²) computation.
+    """
+    a = np.asarray(a)
+    b = np.asarray(b)
+    a = a[~np.isnan(a)]
+    b = b[~np.isnan(b)]
+
+    if len(a) == 0 or len(b) == 0:
+        return np.nan
+
+    # For large arrays, sample to avoid O(n²)
+    max_comparisons = 100000
+    n_comparisons = len(a) * len(b)
+
+    if n_comparisons <= max_comparisons:
+        # Exact computation
+        count_superior = 0
+        count_ties = 0
+        for val_a in a:
+            count_superior += np.sum(val_a > b)
+            count_ties += np.sum(val_a == b)
+        # Ties count as 0.5
+        return (count_superior + 0.5 * count_ties) / n_comparisons
+    else:
+        # Sample-based approximation
+        rng = np.random.default_rng(42)
+        n_samples = max_comparisons
+        idx_a = rng.integers(0, len(a), size=n_samples)
+        idx_b = rng.integers(0, len(b), size=n_samples)
+        samples_a = a[idx_a]
+        samples_b = b[idx_b]
+        return np.mean(samples_a > samples_b) + 0.5 * np.mean(samples_a == samples_b)
+
+
+def compute_effect_sizes(results_df: pd.DataFrame) -> Dict:
+    """
+    Compute effect sizes for key distribution comparisons.
+
+    Comparisons:
+    1. Target vs baseline (MSB/Prefecture vs within-doc)
+    2. Security vs other risks (for each similarity metric)
+
+    Returns dict with effect sizes and interpretations.
+    """
+    effect_sizes = {}
+
+    # 1. Target vs baseline comparisons
+    comparisons = [
+        ("msb_max_match", "within_doc_max_match", "MSB vs Within-doc baseline (max-match)"),
+        ("prefecture_max_match", "within_doc_max_match", "Prefecture vs Within-doc baseline (max-match)"),
+        ("msb_emd", "within_doc_emd", "MSB vs Within-doc baseline (EMD)"),
+        ("prefecture_emd", "within_doc_emd", "Prefecture vs Within-doc baseline (EMD)"),
+    ]
+
+    for col_a, col_b, label in comparisons:
+        if col_a in results_df.columns and col_b in results_df.columns:
+            a = results_df[col_a].dropna().values
+            b = results_df[col_b].dropna().values
+
+            if len(a) > 0 and len(b) > 0:
+                d = compute_cohens_d(a, b)
+                ps = compute_probability_of_superiority(a, b)
+                # Mann-Whitney U test
+                stat, p_value = stats.mannwhitneyu(a, b, alternative='two-sided')
+
+                effect_sizes[label] = {
+                    "cohens_d": d,
+                    "prob_superiority": ps,
+                    "mann_whitney_p": p_value,
+                    "n_a": len(a),
+                    "n_b": len(b),
+                    "mean_a": np.mean(a),
+                    "mean_b": np.mean(b),
+                }
+
+    # 2. Security vs other risks
+    # Theory predicts: security risks show HIGHER similarity to MSB (more copying)
+    # For max-match: higher = more similar, so test security > other
+    # For EMD: lower = more similar, so test security < other
+    if "risk_type" in results_df.columns:
+        security = results_df[results_df["risk_type"] == "security"]
+        other = results_df[results_df["risk_type"] == "other"]
+
+        metrics = ["msb_max_match", "prefecture_max_match", "msb_emd", "prefecture_emd"]
+
+        for metric in metrics:
+            if metric in results_df.columns:
+                a = security[metric].dropna().values
+                b = other[metric].dropna().values
+
+                if len(a) > 0 and len(b) > 0:
+                    d = compute_cohens_d(a, b)
+                    ps = compute_probability_of_superiority(a, b)
+
+                    # One-tailed Mann-Whitney U test (directional hypothesis)
+                    # max-match: security > other (greater similarity)
+                    # EMD: security < other (lower distance = greater similarity)
+                    if "emd" in metric:
+                        alt = "less"  # security < other means more similar
+                    else:
+                        alt = "greater"  # security > other means more similar
+
+                    stat, p_value = stats.mannwhitneyu(a, b, alternative=alt)
+
+                    label = f"Security vs Other ({metric})"
+                    effect_sizes[label] = {
+                        "cohens_d": d,
+                        "prob_superiority": ps,
+                        "mann_whitney_p": p_value,
+                        "test_direction": alt,
+                        "n_security": len(a),
+                        "n_other": len(b),
+                        "mean_security": np.mean(a),
+                        "mean_other": np.mean(b),
+                    }
+
+    return effect_sizes
+
+
+def interpret_cohens_d(d: float) -> str:
+    """Interpret Cohen's d magnitude."""
+    if np.isnan(d):
+        return "n/a"
+    d_abs = abs(d)
+    if d_abs < 0.2:
+        return "negligible"
+    elif d_abs < 0.5:
+        return "small"
+    elif d_abs < 0.8:
+        return "medium"
+    else:
+        return "large"
+
+
+def interpret_prob_superiority(ps: float) -> str:
+    """Interpret probability of superiority."""
+    if np.isnan(ps):
+        return "n/a"
+    if ps < 0.56:
+        return "negligible"
+    elif ps < 0.64:
+        return "small"
+    elif ps < 0.71:
+        return "medium"
+    else:
+        return "large"
+
+
+def save_effect_sizes(effect_sizes: Dict, output_dir: Path):
+    """Save effect sizes to CSV and text report."""
+
+    # Save as CSV
+    rows = []
+    for label, values in effect_sizes.items():
+        row = {"comparison": label}
+        row.update(values)
+        rows.append(row)
+
+    df = pd.DataFrame(rows)
+    df.to_csv(output_dir / "effect_sizes.csv", index=False)
+
+    # Save as text report
+    with open(output_dir / "effect_sizes_report.txt", "w") as f:
+        f.write("=" * 70 + "\n")
+        f.write("EFFECT SIZE REPORT\n")
+        f.write("=" * 70 + "\n\n")
+
+        f.write("Effect sizes and significance tests for distribution comparisons.\n\n")
+
+        f.write("Cohen's d interpretation:\n")
+        f.write("  |d| < 0.2: negligible, 0.2-0.5: small, 0.5-0.8: medium, ≥0.8: large\n\n")
+
+        f.write("Probability of Superiority (PS) interpretation:\n")
+        f.write("  PS = probability that a random value from A exceeds one from B\n")
+        f.write("  0.50: no difference, 0.56: small, 0.64: medium, 0.71: large\n\n")
+
+        f.write("Mann-Whitney U test:\n")
+        f.write("  Non-parametric test for difference in distributions\n")
+        f.write("  p < 0.05: significant, p < 0.01: highly significant\n\n")
+
+        f.write("-" * 70 + "\n\n")
+
+        for label, values in effect_sizes.items():
+            f.write(f"{label}\n")
+            f.write("-" * len(label) + "\n")
+
+            d = values.get("cohens_d", np.nan)
+            ps = values.get("prob_superiority", np.nan)
+            p_val = values.get("mann_whitney_p", np.nan)
+
+            f.write(f"  Cohen's d:               {d:+.3f} ({interpret_cohens_d(d)})\n")
+            f.write(f"  Prob. of Superiority:    {ps:.3f} ({interpret_prob_superiority(ps)})\n")
+            if not np.isnan(p_val):
+                test_dir = values.get("test_direction", "two-sided")
+                tail_str = " (one-tailed)" if test_dir in ["greater", "less"] else ""
+                if p_val < 0.001:
+                    f.write(f"  Mann-Whitney p:          <0.001 ***{tail_str}\n")
+                elif p_val < 0.01:
+                    f.write(f"  Mann-Whitney p:          {p_val:.3f} **{tail_str}\n")
+                elif p_val < 0.05:
+                    f.write(f"  Mann-Whitney p:          {p_val:.3f} *{tail_str}\n")
+                else:
+                    f.write(f"  Mann-Whitney p:          {p_val:.3f} (ns){tail_str}\n")
+
+            # Report sample sizes and means
+            if "n_a" in values:
+                f.write(f"  N (group A):             {values['n_a']}\n")
+                f.write(f"  N (group B):             {values['n_b']}\n")
+                f.write(f"  Mean A:                  {values['mean_a']:.3f}\n")
+                f.write(f"  Mean B:                  {values['mean_b']:.3f}\n")
+            elif "n_security" in values:
+                f.write(f"  N (security):            {values['n_security']}\n")
+                f.write(f"  N (other):               {values['n_other']}\n")
+                f.write(f"  Mean (security):         {values['mean_security']:.3f}\n")
+                f.write(f"  Mean (other):            {values['mean_other']:.3f}\n")
+
+            f.write("\n")
+
+    logger.info(f"Saved effect sizes to {output_dir / 'effect_sizes.csv'}")
+    logger.info(f"Saved effect size report to {output_dir / 'effect_sizes_report.txt'}")
+
+
+# =============================================================================
 # MAIN ANALYSIS PIPELINE
 # =============================================================================
 
@@ -1052,8 +1323,7 @@ def create_visualizations(results_df: pd.DataFrame, output_dir: Path):
             order=order,
             hue_order=order,
             palette=palette,
-            inner="quartile",
-            cut=0,
+            inner="box",
             legend=False,
         )
         ax.set_title("Similarity Distributions by Comparison Type")
@@ -1091,8 +1361,7 @@ def create_visualizations(results_df: pd.DataFrame, output_dir: Path):
             order=order,
             hue_order=order,
             palette=palette,
-            inner="quartile",
-            cut=0,
+            inner="box",
             legend=False,
         )
         ax.set_title("EMD Similarity Distributions (Higher = More Similar)")
@@ -1165,6 +1434,78 @@ def create_visualizations(results_df: pd.DataFrame, output_dir: Path):
 
         plt.tight_layout()
         plt.savefig(output_dir / "security_vs_other.png", dpi=300, bbox_inches="tight")
+        plt.close()
+
+        # 3b. Security vs Other: 2x2 violin plot with Mann-Whitney p-values
+        fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+
+        metrics_config = [
+            ("msb_max_match", "Max-Match Similarity to MSB", axes[0, 0]),
+            ("prefecture_max_match", "Max-Match Similarity to Prefecture", axes[0, 1]),
+            ("msb_emd", "EMD Similarity to MSB", axes[1, 0]),
+            ("prefecture_emd", "EMD Similarity to Prefecture", axes[1, 1]),
+        ]
+
+        for metric, title, ax in metrics_config:
+            if metric not in results_df.columns:
+                continue
+
+            valid_data = results_df[results_df[metric].notna()]
+            if len(valid_data) == 0:
+                continue
+
+            security_vals = valid_data[valid_data["risk_type"] == "security"][metric].values
+            other_vals = valid_data[valid_data["risk_type"] == "other"][metric].values
+
+            # For EMD, invert so higher = more similar
+            if "emd" in metric:
+                y_col = f"{metric}_inv"
+                valid_data = valid_data.copy()
+                valid_data[y_col] = 1 - valid_data[metric]
+                ylabel = "EMD Similarity (higher = more similar)"
+                security_vals_test = 1 - security_vals
+                other_vals_test = 1 - other_vals
+            else:
+                y_col = metric
+                ylabel = "Max-Match (higher = more similar)"
+                security_vals_test = security_vals
+                other_vals_test = other_vals
+
+            # One-tailed Mann-Whitney U test (directional hypothesis)
+            # Theory: security risks show higher similarity (more copying from MSB)
+            # For max-match (higher = more similar): test security > other
+            # For EMD (inverted, so higher = more similar): test security > other
+            if len(security_vals) > 0 and len(other_vals) > 0:
+                # After inversion, both metrics: higher = more similar
+                # So we test security > other with alternative='greater'
+                stat, p_val = stats.mannwhitneyu(security_vals_test, other_vals_test, alternative='greater')
+                if p_val < 0.001:
+                    p_str = "p < 0.001 ***"
+                elif p_val < 0.01:
+                    p_str = f"p = {p_val:.3f} **"
+                elif p_val < 0.05:
+                    p_str = f"p = {p_val:.2f} *"
+                else:
+                    p_str = f"p = {p_val:.2f} (ns)"
+                p_str += " (one-tailed)"
+            else:
+                p_str = ""
+
+            sns.violinplot(
+                data=valid_data,
+                x="risk_type",
+                y=y_col,
+                ax=ax,
+                palette={"security": "#e41a1c", "other": "#377eb8"},
+                order=["security", "other"],
+                inner="box",
+            )
+            ax.set_title(f"{title}\n{p_str}")
+            ax.set_xlabel("Risk Type")
+            ax.set_ylabel(ylabel)
+
+        plt.tight_layout()
+        plt.savefig(output_dir / "similarity_measures.png", dpi=300, bbox_inches="tight")
         plt.close()
 
     # 4. Temporal trends
@@ -1254,6 +1595,11 @@ def main():
     # Create visualizations
     create_visualizations(results_df, args.output)
 
+    # Compute and save effect sizes
+    logger.info("\nComputing effect sizes...")
+    effect_sizes = compute_effect_sizes(results_df)
+    save_effect_sizes(effect_sizes, args.output)
+
     # Print summary
     logger.info("\n=== Summary ===")
     logger.info(f"Total comparisons: {len(results_df)}")
@@ -1280,6 +1626,15 @@ def main():
             logger.info(f"  → Prefecture similarity: {subset['prefecture_max_match'].mean():.3f}")
             logger.info(f"  Isomorphism index (MSB): {subset['isomorphism_index_msb'].mean():.3f}")
             logger.info(f"  Isomorphism index (Prefecture): {subset['isomorphism_index_prefecture'].mean():.3f}")
+
+    # Effect sizes summary
+    logger.info("\n=== Effect Sizes (Distribution Comparisons) ===")
+    for label, values in effect_sizes.items():
+        d = values.get("cohens_d", np.nan)
+        ps = values.get("prob_superiority", np.nan)
+        logger.info(f"\n{label}:")
+        logger.info(f"  Cohen's d: {d:+.3f} ({interpret_cohens_d(d)})")
+        logger.info(f"  P(A > B):  {ps:.3f} ({interpret_prob_superiority(ps)})")
 
 
 if __name__ == "__main__":

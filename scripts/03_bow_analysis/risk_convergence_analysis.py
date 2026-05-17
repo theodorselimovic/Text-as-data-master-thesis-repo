@@ -216,8 +216,8 @@ def compute_convergence_drivers(eta_df: pd.DataFrame) -> pd.DataFrame:
     Returns
     -------
     pd.DataFrame
-        Columns: risk, eta_slope, p_value, mean_proportion,
-                 eta_w1, eta_w2, eta_w3, convergence_magnitude
+        Columns: risk, eta_slope, mean_proportion,
+                 eta_w1, eta_w2, eta_w3, eta_drop
         Sorted by eta_slope ascending (most negative = strongest convergence)
     """
     results = []
@@ -229,15 +229,15 @@ def compute_convergence_drivers(eta_df: pd.DataFrame) -> pd.DataFrame:
         waves = group['wave'].values
         eta_values = group['eta_squared'].values
 
-        # Linear regression
-        slope, intercept, r_value, p_value, std_err = stats.linregress(waves, eta_values)
+        # Linear regression (slope only, no inference)
+        slope, intercept, r_value, _, _ = stats.linregress(waves, eta_values)
 
         # Get per-wave values
         wave_eta = dict(zip(group['wave'], group['eta_squared']))
         mean_prop = group['mean_proportion'].mean()
         mean_var = group['ss_total'].mean()
 
-        # Convergence magnitude: how much did eta drop, weighted by importance
+        # Convergence magnitude: how much did eta drop
         eta_w1 = wave_eta.get(1, np.nan)
         eta_w3 = wave_eta.get(3, np.nan)
         if not np.isnan(eta_w1) and not np.isnan(eta_w3):
@@ -248,7 +248,6 @@ def compute_convergence_drivers(eta_df: pd.DataFrame) -> pd.DataFrame:
         results.append({
             'risk': risk,
             'eta_slope': slope,
-            'p_value': p_value,
             'mean_proportion': mean_prop,
             'mean_variance': mean_var,
             'eta_w1': wave_eta.get(1, np.nan),
@@ -346,20 +345,19 @@ def generate_report(
     report.append("(risks where actors became MORE similar)")
     report.append(f"{'=' * 60}")
     report.append("")
-    report.append(f"{'Rank':<5} {'Risk':<28} {'Slope':>8} {'p':>8} {'Eta W1':>8} {'Eta W3':>8} {'Drop':>8}")
-    report.append("-" * 75)
+    report.append(f"{'Rank':<5} {'Risk':<28} {'Slope':>8} {'Eta W1':>8} {'Eta W3':>8} {'Drop':>8}")
+    report.append("-" * 67)
 
     for idx, row in drivers_df.head(top_n).iterrows():
         eta_w1 = f"{row['eta_w1']:.2f}" if not np.isnan(row['eta_w1']) else "n/a"
         eta_w3 = f"{row['eta_w3']:.2f}" if not np.isnan(row['eta_w3']) else "n/a"
         drop = f"{row['eta_drop']:.2f}" if not np.isnan(row['eta_drop']) else "n/a"
 
-        report.append(f"{idx+1:<5} {row['risk']:<28} {row['eta_slope']:>+8.4f} {row['p_value']:>8.3f} {eta_w1:>8} {eta_w3:>8} {drop:>8}")
+        report.append(f"{idx+1:<5} {row['risk']:<28} {row['eta_slope']:>+8.4f} {eta_w1:>8} {eta_w3:>8} {drop:>8}")
 
     # Summary stats
     n_converging = (drivers_df['eta_slope'] < 0).sum()
     n_diverging = (drivers_df['eta_slope'] > 0).sum()
-    n_sig_converging = ((drivers_df['eta_slope'] < 0) & (drivers_df['p_value'] < 0.05)).sum()
 
     report.append(f"\n{'=' * 60}")
     report.append("SUMMARY")
@@ -367,7 +365,6 @@ def generate_report(
     report.append(f"\nTotal risks analyzed: {len(drivers_df)}")
     report.append(f"Risks with decreasing eta² (convergence): {n_converging}")
     report.append(f"Risks with increasing eta² (divergence): {n_diverging}")
-    report.append(f"Significant convergence (p<0.05): {n_sig_converging}")
 
     # Interpretation
     report.append(f"\n{'=' * 60}")

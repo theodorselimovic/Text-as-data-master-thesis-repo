@@ -703,7 +703,7 @@ def plot_rank_correlation(prevalence_df: pd.DataFrame, output_dir: Path) -> dict
 
     ax1.set_xlabel('Rank by Mentions', fontsize=14, fontweight='bold')
     ax1.set_ylabel('Rank by Text Devoted', fontsize=14, fontweight='bold')
-    ax1.set_title(f'Rank Correlation: Mentions vs Text Devoted\nSpearman r={spearman_r:.3f}, p={spearman_p:.2e}',
+    ax1.set_title(f'Rank Correlation: Mentions vs Text Devoted\nSpearman r={spearman_r:.3f}',
                   fontsize=14, fontweight='bold')
     ax1.legend(loc='lower left', fontsize=11)
     ax1.grid(True, alpha=0.3)
@@ -786,8 +786,8 @@ def print_distribution_analysis(prevalence_df: pd.DataFrame, fit_results: dict, 
 
     # Rank correlation
     print(f"\nRank Correlation (mentions vs text devoted):")
-    print(f"  Spearman r = {correlations['spearman']['r']:.4f} (p={correlations['spearman']['p']:.2e})")
-    print(f"  Kendall tau = {correlations['kendall']['tau']:.4f} (p={correlations['kendall']['p']:.2e})")
+    print(f"  Spearman r = {correlations['spearman']['r']:.4f}")
+    print(f"  Kendall tau = {correlations['kendall']['tau']:.4f}")
 
 
 # =============================================================================

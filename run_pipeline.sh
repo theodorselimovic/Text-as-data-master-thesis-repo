@@ -96,36 +96,20 @@ python scripts/02_preprocessing/preprocessing_bow.py \
     --verbose \
     || die "BOW preprocessing failed"
 
-step "7 · Risk-term filter (for isomorphism input)"
-python scripts/04_sampling/risk_term_filter.py \
-    --input  data/processed/bert_corpus.parquet \
-    --output data/processed/bert_corpus_filtered.parquet \
-    || die "Risk term filter failed"
-
 # ── 4. BOW ANALYSIS ──────────────────────────────────────────────────────────
 TERM_MATRIX="results/01_bow_analysis/term_matrices/term_document_matrix.csv"
 CAT_MATRIX="results/01_bow_analysis/term_matrices/category_document_matrix.csv"
 
 step "8 · BOW analysis"
 
-log "8a · Dictionary counter — category matrices"
+log "8a · Dictionary counter — term and category matrices"
 python scripts/03_bow_analysis/risk_dictionary_counter.py \
     --input   data/processed/bow_corpus_stemmed.parquet \
-    --use-stems \
     --output  results/01_bow_analysis/term_matrices/ \
     --verbose \
-    || die "Dictionary counter (category) failed"
+    || die "Dictionary counter failed"
 
-log "8b · Dictionary counter — individual risk matrices"
-python scripts/03_bow_analysis/risk_dictionary_counter.py \
-    --input      data/processed/bow_corpus_stemmed.parquet \
-    --use-stems \
-    --individual \
-    --output     results/01_bow_analysis/term_matrices/ \
-    --verbose \
-    || warn "Dictionary counter (individual) failed"
-
-log "8c · Persistence analysis"
+log "8b · Persistence analysis"
 python scripts/03_bow_analysis/risk_persistence_analysis.py \
     --input  "$TERM_MATRIX" \
     --output results/01_bow_analysis/persistence/ \
@@ -186,6 +170,16 @@ python scripts/03_bow_analysis/security_riskification_analysis.py \
     --output results/01_bow_analysis/security_riskification/ \
     --verbose \
     || warn "Security riskification analysis failed"
+
+log "8l · Security adoption timing analysis"
+python scripts/03_bow_analysis/security_adoption_timing.py \
+    || warn "Security adoption timing analysis failed"
+
+log "8m · Risk context analysis (qualifications)"
+python scripts/03_bow_analysis/risk_context_analysis.py \
+    --corpus data/processed/bow_corpus_stemmed.parquet \
+    --output results/01_bow_analysis/context/ \
+    || warn "Risk context analysis failed"
 
 # ── 5. ISOMORPHISM ───────────────────────────────────────────────────────────
 step "9 · Isomorphism analysis  (slow — BERT embeddings)"

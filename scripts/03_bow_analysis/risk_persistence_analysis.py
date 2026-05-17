@@ -1420,7 +1420,8 @@ def plot_jaccard_by_actor(jaccard_df: pd.DataFrame, output_dir: Path) -> None:
         data=df, y='actor_en', x='jaccard',
         ax=ax, palette='Set1', width=0.5,
         orient='h',
-        showfliers=False,  # Hide boxplot outliers since stripplot shows all points
+        showfliers=False,
+        whis=[0, 100],  # Extend whiskers to full data range
     )
     sns.stripplot(
         data=df, y='actor_en', x='jaccard',
@@ -1499,7 +1500,8 @@ def plot_actor_persistence_comparison(
         data=rates_df, y='actor_en', x='persistence_rate',
         ax=ax, palette='Set1', width=0.5,
         orient='h',
-        showfliers=False,  # Hide boxplot outliers since stripplot shows all points
+        showfliers=False,
+        whis=[0, 100],  # Extend whiskers to full data range
     )
     sns.stripplot(
         data=rates_df, y='actor_en', x='persistence_rate',

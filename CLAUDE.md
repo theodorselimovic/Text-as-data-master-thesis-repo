@@ -2,13 +2,14 @@
 
 ## Project Overview
 
-Sciences Po master thesis by Theodor Selimovic. Text-as-data analysis of Swedish Risk & Vulnerability Analyses (RSA) to study how risk analysis instruments structure politics in the Swedish multi-level polity.
-
+Sciences Po master thesis by Theodor Selimovic. Text-as-data analysis of Swedish Risk & Vulnerability Analyses (RSA) to study of why explains risk governance adoption.
 ## Research Questions
 
 **Main questions:**
-1. What explains the increasing rate of de facto adoption of risk analyses as an instrument of civil defence by different actors in the Swedish multi-level polity?
-2. What are the structural effects of the adoption on politics within and without the administration?
+Q1: Why have risk analyses become increasingly adopted by municipalities?
+Q2: Why do municipalities treat security as risk?
+
+Q2 applies the general answer of q1 to the specific case of security risks. 
 
 **Empirical questions (text-as-data):**
 
@@ -17,20 +18,14 @@ Sciences Po master thesis by Theodor Selimovic. Text-as-data analysis of Swedish
 Subquestions enabling Q1:
 - **Q2:** What risks matter? What risks are only mentioned, and what risks are analysed?
 - **Q3:** How are probability, consequence, and risk linked in the analyses?
-- **Q4:** How have risk analyses changed over time? Do risks persist? Have the analyses diverged or converged?
+- **Q4:** Do risks persist? Have the analyses diverged or converged?
 - **Q5:** Who leads? Are risks diffused bottom-up (municipalities lead) or top-down (prefectures and central government agency lead)?
-- **Q6:** How do security threats become riskified? How do they interact with previous risk clusters?
 
 ## Theoretical Framework
 
-Risk analyses are theorised as instruments with structuring effects (Salamon, 2002; Kassim & Le Galès, 2010; Le Galès, 2011; Balzaq, 2008). Four core mechanisms:
-
-1. **Functional aptness** — the instrument may be genuinely apt for handling social risks (Paul, 2021).
-2. **Institutional legitimacy** — allows institutions to manage risks to their own legitimacy by delimiting responsibilities (Borraz, 2008), potentially spiralling via risk colonisation (Beck, 1998; Rothstein et al., 2006).
-3. **Spaces of equivalence** — creates commensurability enabling more effective central control in a Foucauldian fashion (Desrosières, 2011; Foucault, 2009; Borraz et al., 2022).
-4. **Complexity empowerment** — may complexify the view of the world, empowering local actors. Closely related to resilience discourse. The actual effects of resilience discourse and how it relates to risk and security remains to be seen and is one of the questions to be answered by the thesis.
-
-The main empirical finding so far has been on the **legitimacy** angle. Evidence for the other three mechanisms remains to be found.
+Two main explanations: 
+1. Functionality: Risk analysis is adopted as an instrument to deal with external developments of risk (climate change, pandemics, ageing infrastructure. Risk analyses allow for the coordination of actors and improve the cost-effectiveness of public action (Paul, 2021).
+1. Legitimacy.Risk analysis is adopted to adress internal problems: the legitimacy of the institution, the distribution of responsibility across the multi-level polity and set up the “parameters of blame”, or to prove appropriateness by copying more prestigious institutions in a process of institutional isomorphism.
 
 ## Material
 

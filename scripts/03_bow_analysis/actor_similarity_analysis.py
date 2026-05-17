@@ -11,7 +11,7 @@ Three levels:
     2. Between-entity, within-actor: Different entities, same actor type (homogeneity)
     3. Between-actor: Different actor types (distinctiveness)
 
-Also runs PERMANOVA to test whether actor groups differ significantly.
+Also runs PERMANOVA to measure variance explained by actor grouping (R²).
 
 Input:  category_document_matrix.csv (from term_document_matrix.py)
 Output: similarity metrics, heatmaps, bar charts, temporal trends
@@ -260,16 +260,16 @@ def compute_actor_pair_similarities(
 def run_permanova(
     df: pd.DataFrame,
     risk_cols: list[str],
-    n_permutations: int = 999,
 ) -> dict:
     """
-    Permutational multivariate ANOVA on distance matrix.
+    Compute variance decomposition for actor groups (PERMANOVA-style).
 
-    Tests whether actor-type centroids differ significantly.
+    Returns R² = proportion of variance in distance matrix explained by actor type.
+    No permutation test is run due to non-independence of observations.
 
     Returns
     -------
-    dict with pseudo_f, p_value, r_squared
+    dict with pseudo_f, r_squared
     """
     X = df[risk_cols].values
     groups = df['actor'].values
@@ -278,25 +278,14 @@ def run_permanova(
     dist_matrix = 1 - cosine_similarity(X)
     np.fill_diagonal(dist_matrix, 0)
 
-    # Compute observed F statistic
+    # Compute F statistic and variance components
     observed_f, ss_between, ss_total = _permanova_f(dist_matrix, groups)
 
-    # Permutation test
-    n_greater = 0
-    for _ in range(n_permutations):
-        perm_groups = np.random.permutation(groups)
-        perm_f, _, _ = _permanova_f(dist_matrix, perm_groups)
-        if perm_f >= observed_f:
-            n_greater += 1
-
-    p_value = (n_greater + 1) / (n_permutations + 1)
     r_squared = ss_between / ss_total if ss_total > 0 else 0
 
     return {
         'pseudo_f': observed_f,
-        'p_value': p_value,
         'r_squared': r_squared,
-        'n_permutations': n_permutations,
     }
 
 
@@ -496,20 +485,18 @@ def plot_permanova_over_time(
 
     waves = [s['wave'] for s in wave_stats]
     r2s = [s.get('permanova_r_squared', 0) for s in wave_stats]
-    p_vals = [s.get('permanova_p_value', 1) for s in wave_stats]
 
     fig, ax = plt.subplots(figsize=(8, 5))
 
     bars = ax.bar([f"Wave {w}" for w in waves], r2s, color='#8da0cb', edgecolor='black', alpha=0.8)
 
-    # Add significance markers
-    for bar, p in zip(bars, p_vals):
-        marker = '***' if p < 0.001 else '**' if p < 0.01 else '*' if p < 0.05 else 'ns'
+    # Add R² value labels
+    for bar, r2 in zip(bars, r2s):
         ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.005,
-                marker, ha='center', va='bottom', fontsize=12)
+                f'{r2:.2f}', ha='center', va='bottom', fontsize=11)
 
     ax.set_ylabel('R² (variance explained by actor type)', fontsize=12)
-    ax.set_title('PERMANOVA: Actor effect over time', fontsize=14, fontweight='bold')
+    ax.set_title('Variance explained by actor type over time', fontsize=14, fontweight='bold')
     ax.set_ylim(0, max(r2s) * 1.3 if max(r2s) > 0 else 0.1)
 
     plt.tight_layout()
@@ -561,18 +548,13 @@ def generate_report(
             else:
                 report.append("  → Actors are NOT more similar internally than externally")
 
-        # PERMANOVA
+        # PERMANOVA (descriptive only)
         f_stat = stats.get('permanova_pseudo_f', np.nan)
         if not np.isnan(f_stat):
-            report.append(f"\nPERMANOVA:")
+            report.append(f"\nVariance decomposition:")
             report.append(f"  pseudo-F = {f_stat:.2f}")
-            report.append(f"  p-value = {stats.get('permanova_p_value', np.nan):.4f}")
             report.append(f"  R² = {stats.get('permanova_r_squared', np.nan):.3f}")
-
-            if stats.get('permanova_p_value', 1) < 0.05:
-                report.append("  → Actor types differ SIGNIFICANTLY")
-            else:
-                report.append("  → Actor types do NOT differ significantly")
+            report.append(f"  (R² = proportion of variance explained by actor type)")
 
     report_text = '\n'.join(report)
     report_path = output_dir / 'similarity_report.txt'
@@ -613,12 +595,6 @@ def main():
         help='Wave numbers to analyze (default: 1 2 3)'
     )
 
-    parser.add_argument(
-        '--n-permutations',
-        type=int,
-        default=999,
-        help='Number of permutations for PERMANOVA (default: 999)'
-    )
 
     parser.add_argument(
         '--verbose',
@@ -651,11 +627,11 @@ def main():
     stats['n_documents'] = len(df)
     stats['wave'] = 'pooled'
 
-    # PERMANOVA
-    print("  Running PERMANOVA...")
-    permanova = run_permanova(df, risk_cols, args.n_permutations)
+    # Variance decomposition
+    print("  Computing variance decomposition...")
+    permanova = run_permanova(df, risk_cols)
     stats.update({f'permanova_{k}': v for k, v in permanova.items()})
-    print(f"  pseudo-F = {permanova['pseudo_f']:.2f}, p = {permanova['p_value']:.4f}, R² = {permanova['r_squared']:.3f}")
+    print(f"  pseudo-F = {permanova['pseudo_f']:.2f}, R² = {permanova['r_squared']:.3f}")
 
     all_stats.append(stats)
 
@@ -687,11 +663,11 @@ def main():
         stats_wave['n_documents'] = len(df_wave)
         stats_wave['wave'] = wave
 
-        # PERMANOVA
-        print("  Running PERMANOVA...")
-        permanova_wave = run_permanova(df_wave, risk_cols, args.n_permutations)
+        # Variance decomposition
+        print("  Computing variance decomposition...")
+        permanova_wave = run_permanova(df_wave, risk_cols)
         stats_wave.update({f'permanova_{k}': v for k, v in permanova_wave.items()})
-        print(f"  pseudo-F = {permanova_wave['pseudo_f']:.2f}, p = {permanova_wave['p_value']:.4f}, R² = {permanova_wave['r_squared']:.3f}")
+        print(f"  pseudo-F = {permanova_wave['pseudo_f']:.2f}, R² = {permanova_wave['r_squared']:.3f}")
 
         all_stats.append(stats_wave)
         wave_stats.append(stats_wave)

@@ -348,9 +348,6 @@ def compare_actors(
     result['actor1_total'] = total1
     result['actor2_total'] = total2
 
-    # Add significance flag
-    result['significant'] = result['z_score'].abs() > 1.96
-
     return result
 
 
@@ -391,47 +388,40 @@ def plot_distinctive_terms(
     top_actor1 = comparison_df.nlargest(top_n, 'z_score')
     top_actor2 = comparison_df.nsmallest(top_n, 'z_score')
 
-    # Filter to significant only (for visual clarity)
-    top_actor1_sig = top_actor1[top_actor1['significant']]
-    top_actor2_sig = top_actor2[top_actor2['significant']]
-
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 8))
 
-    # Get actor colors (with lighter version for non-significant)
     color1 = ACTOR_COLORS.get(actor1, '#666666')
     color2 = ACTOR_COLORS.get(actor2, '#666666')
 
     # Left panel: Actor 1 distinctive terms
-    if len(top_actor1_sig) > 0:
-        colors1 = [color1 if sig else '#cccccc'
-                   for sig in top_actor1_sig['significant']]
+    if len(top_actor1) > 0:
         ax1.barh(
-            range(len(top_actor1_sig)),
-            top_actor1_sig['z_score'],
-            color=colors1,
+            range(len(top_actor1)),
+            top_actor1['z_score'],
+            color=color1,
             edgecolor='white',
             linewidth=0.5,
+            alpha=0.8,
         )
-        ax1.set_yticks(range(len(top_actor1_sig)))
-        ax1.set_yticklabels([translate_term(t) for t in top_actor1_sig['term']], fontsize=10)
+        ax1.set_yticks(range(len(top_actor1)))
+        ax1.set_yticklabels([translate_term(t) for t in top_actor1['term']], fontsize=10)
         ax1.invert_yaxis()
     ax1.set_xlabel('Z-score (log-odds ratio)', fontsize=11)
     ax1.set_title(f'Distinctive of {name1}', fontsize=12, fontweight='bold')
 
     # Right panel: Actor 2 distinctive terms (flip sign for display)
-    if len(top_actor2_sig) > 0:
-        colors2 = [color2 if sig else '#cccccc'
-                   for sig in top_actor2_sig['significant']]
-        z_scores_flipped = -top_actor2_sig['z_score']
+    if len(top_actor2) > 0:
+        z_scores_flipped = -top_actor2['z_score']
         ax2.barh(
-            range(len(top_actor2_sig)),
+            range(len(top_actor2)),
             z_scores_flipped,
-            color=colors2,
+            color=color2,
             edgecolor='white',
             linewidth=0.5,
+            alpha=0.8,
         )
-        ax2.set_yticks(range(len(top_actor2_sig)))
-        ax2.set_yticklabels([translate_term(t) for t in top_actor2_sig['term']], fontsize=10)
+        ax2.set_yticks(range(len(top_actor2)))
+        ax2.set_yticklabels([translate_term(t) for t in top_actor2['term']], fontsize=10)
         ax2.invert_yaxis()
     ax2.set_xlabel('Z-score (log-odds ratio)', fontsize=11)
     ax2.set_title(f'Distinctive of {name2}', fontsize=12, fontweight='bold')
@@ -537,7 +527,6 @@ def compare_one_vs_rest(
     z_cols = [f'z_{a}' for a in actors]
     df['max_z'] = df[z_cols].max(axis=1)
     df['distinctive_of'] = df[z_cols].idxmax(axis=1).str.replace('z_', '')
-    df['significant'] = df['max_z'].abs() > 1.96
 
     # Sort by maximum distinctiveness
     df = df.sort_values('max_z', ascending=False).reset_index(drop=True)
@@ -579,17 +568,16 @@ def plot_all_actors_distinctiveness(
 
         # Get top terms for this actor (positive z-scores = distinctive of this actor)
         actor_df = ovr_df[ovr_df[z_col] > 0].nlargest(top_n, z_col)
-        sig_mask = actor_df[z_col].abs() > 1.96
 
         color = ACTOR_COLORS.get(actor, '#666666')
-        bar_colors = [color if sig else '#cccccc' for sig in sig_mask]
 
         ax.barh(
             range(len(actor_df)),
             actor_df[z_col],
-            color=bar_colors,
+            color=color,
             edgecolor='white',
             linewidth=0.5,
+            alpha=0.8,
         )
         ax.set_yticks(range(len(actor_df)))
         ax.set_yticklabels([translate_term(t) for t in actor_df['term']], fontsize=10)
@@ -634,7 +622,7 @@ def print_one_vs_rest_summary(
         name = ACTOR_DISPLAY_NAMES.get(actor, actor)
 
         # Top distinctive terms for this actor
-        top_terms = ovr_df[ovr_df[z_col] > 1.96].nlargest(top_n, z_col)
+        top_terms = ovr_df[ovr_df[z_col] > 0].nlargest(top_n, z_col)
 
         print(f"\n{name} (vs all others):")
         print(f"  {'Risk':<30} {'z-score':>8} {'Count':>8}")
@@ -662,16 +650,15 @@ def print_comparison_summary(
     name1 = ACTOR_DISPLAY_NAMES.get(actor1, actor1)
     name2 = ACTOR_DISPLAY_NAMES.get(actor2, actor2)
 
-    n_significant = comparison_df['significant'].sum()
     n_total = len(comparison_df)
 
     print("\n" + "=" * 70)
     print(f"DISTINCTIVENESS: {name1} vs {name2}")
     print("=" * 70)
-    print(f"Significant terms (|z| > 1.96): {n_significant}/{n_total}")
+    print(f"Total terms compared: {n_total}")
 
     # Top distinctive of actor1
-    top1 = comparison_df[comparison_df['significant']].nlargest(top_n, 'z_score')
+    top1 = comparison_df.nlargest(top_n, 'z_score')
     print(f"\nTop risks distinctive of {name1}:")
     print(f"  {'Risk':<30} {'z-score':>8} {'Count₁':>8} {'Count₂':>8}")
     print("  " + "-" * 56)
@@ -680,7 +667,7 @@ def print_comparison_summary(
               f"{row['count1']:>8,} {row['count2']:>8,}")
 
     # Top distinctive of actor2
-    top2 = comparison_df[comparison_df['significant']].nsmallest(top_n, 'z_score')
+    top2 = comparison_df.nsmallest(top_n, 'z_score')
     print(f"\nTop risks distinctive of {name2}:")
     print(f"  {'Risk':<30} {'z-score':>8} {'Count₁':>8} {'Count₂':>8}")
     print("  " + "-" * 56)
